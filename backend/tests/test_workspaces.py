@@ -1,4 +1,4 @@
-"""Workspace catalog persistence, policy, service, and HTTP tests."""
+"""Managed Workspace catalog, mount, migration, policy, and HTTP tests."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.runtime import create_system_app
 import opensprite_backend.workspaces.policy as workspace_policy
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_ID,
     JsonWorkspaceStore,
+    WorkspaceAvailability,
     WorkspaceCatalogService,
-    WorkspaceCatalogState,
     WorkspaceError,
     WorkspaceFailure,
+    WorkspaceMountAccess,
     WorkspaceRootPolicy,
-    WorkspaceRecord,
     WorkspaceStoreError,
     WorkspaceUsage,
 )
@@ -32,6 +32,7 @@ from opensprite_backend.workspaces import (
 
 WORKSPACE_ID = "11111111-1111-4111-8111-111111111111"
 SECOND_ID = "22222222-2222-4222-8222-222222222222"
+MOUNT_ID = "33333333-3333-4333-8333-333333333333"
 NOW = datetime(2026, 9, 4, 3, 0, tzinfo=timezone.utc)
 
 
@@ -48,15 +49,16 @@ def make_service(
     *,
     usage: UsageReader | None = None,
     identifiers: list[str] | None = None,
-) -> tuple[WorkspaceCatalogService, Path, Path]:
+) -> tuple[WorkspaceCatalogService, Path, Path, Path]:
     data_root = tmp_path / ".opensprite"
     install_root = tmp_path / "installed-app"
     user_home = tmp_path / "home"
-    project_root = tmp_path / "projects" / "alpha"
+    managed_root = tmp_path / "OpenSprite" / "workspace"
+    external_root = tmp_path / "projects" / "alpha"
     install_root.mkdir()
     user_home.mkdir()
-    project_root.mkdir(parents=True)
-    values = iter(identifiers or [WORKSPACE_ID, SECOND_ID])
+    external_root.mkdir(parents=True)
+    values = iter(identifiers or [WORKSPACE_ID, SECOND_ID, MOUNT_ID])
     return (
         WorkspaceCatalogService(
             JsonWorkspaceStore(data_root / "config" / "workspaces.json"),
@@ -65,48 +67,229 @@ def make_service(
                 install_root=install_root,
                 user_home=user_home,
             ),
+            managed_root,
             usage_reader=usage,
             clock=lambda: NOW,
             identifier_factory=lambda: next(values),
         ),
         data_root,
-        project_root,
+        managed_root,
+        external_root,
     )
 
 
-def test_missing_store_is_lazy_and_exposes_only_unassigned(tmp_path: Path) -> None:
-    service, data_root, _ = make_service(tmp_path)
+def test_startup_creates_fixed_default_workspace_without_catalog_file(tmp_path: Path) -> None:
+    service, data_root, managed_root, _ = make_service(tmp_path)
 
+    run(service.startup())
     catalog = run(service.list())
 
     assert catalog.revision == 0
-    assert catalog.active_workspace_id == UNASSIGNED_WORKSPACE_ID
-    assert [item.kind.value for item in catalog.workspaces] == ["unassigned"]
+    assert catalog.active_workspace_id == DEFAULT_WORKSPACE_ID
+    assert [item.kind.value for item in catalog.workspaces] == ["default"]
+    assert catalog.workspaces[0].name == "Default workspace"
+    assert catalog.workspaces[0].root_path == str((managed_root / "default").resolve())
+    assert catalog.workspaces[0].availability is WorkspaceAvailability.AVAILABLE
+    assert (managed_root / "default").is_dir()
     assert not data_root.exists()
 
 
-def test_create_normalizes_name_persists_atomically_and_sets_active(tmp_path: Path) -> None:
-    service, data_root, project_root = make_service(tmp_path)
+def test_default_root_creation_failure_keeps_text_workspace_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, _, managed_root, _ = make_service(tmp_path)
+    monkeypatch.setattr(service, "_ensure_directory", lambda _path: (_ for _ in ()).throw(WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE)))
 
-    created = run(
-        service.create(
-            name="  Cafe\u0301  ",
-            root_path=str(project_root),
-            expected_revision=0,
-        )
-    )
+    run(service.startup())
+    catalog = run(service.list())
+
+    assert catalog.workspaces[0].availability is WorkspaceAvailability.UNAVAILABLE
+    assert catalog.workspaces[0].unavailable_reason.value == "missing"
+    assert not managed_root.exists()
+
+
+def test_create_uses_name_as_managed_directory_and_sets_active(tmp_path: Path) -> None:
+    service, data_root, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
+
+    created = run(service.create(name="Test", expected_revision=0))
 
     assert created.revision == 1
     assert created.active_workspace_id == WORKSPACE_ID
     item = created.workspaces[1]
-    assert item.name == "Caf\u00e9"
-    assert item.root_path == str(project_root.resolve())
-    assert item.availability.value == "available"
+    assert item.name == "Test"
+    assert item.directory_name == "Test"
+    assert item.root_path == str((managed_root / "Test").resolve())
+    assert (managed_root / "Test").is_dir()
     payload = json.loads(
         (data_root / "config" / "workspaces.json").read_text(encoding="utf-8")
     )
-    assert payload["activeWorkspaceId"] == WORKSPACE_ID
-    assert payload["workspaces"][0]["rootPath"] == str(project_root.resolve())
+    assert payload["version"] == 2
+    assert payload["workspaces"][0]["directoryName"] == "Test"
+    assert "rootPath" not in payload["workspaces"][0]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [".", "..", "CON", "aux.txt", "bad/name", "bad\\name", "bad:name", "trailing.", "trailing "],
+)
+def test_create_rejects_unsafe_cross_platform_directory_names(
+    tmp_path: Path, name: str
+) -> None:
+    service, _, _, _ = make_service(tmp_path)
+
+    with pytest.raises(WorkspaceError) as raised:
+        run(service.create(name=name, expected_revision=0))
+
+    assert raised.value.failure is WorkspaceFailure.INVALID_DIRECTORY_NAME
+
+
+def test_create_does_not_adopt_existing_directory_and_import_is_explicit(
+    tmp_path: Path,
+) -> None:
+    service, _, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
+    existing = managed_root / "Existing"
+    existing.mkdir()
+
+    with pytest.raises(WorkspaceError) as raised:
+        run(service.create(name="Existing", expected_revision=0))
+    assert raised.value.failure is WorkspaceFailure.MANAGED_ROOT_EXISTS
+
+    page = run(service.import_candidates(limit=50, before=None))
+    assert [(item.directory_name, item.root_path) for item in page.candidates] == [
+        ("Existing", str(existing.resolve()))
+    ]
+    imported = run(
+        service.import_existing(directory_name="Existing", expected_revision=0)
+    )
+    assert imported.active_workspace_id == WORKSPACE_ID
+    assert imported.workspaces[1].directory_name == "Existing"
+
+
+def test_import_candidates_are_cursor_paginated(tmp_path: Path) -> None:
+    service, _, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
+    for name in ("Alpha", "Beta", "Gamma"):
+        (managed_root / name).mkdir()
+
+    first = run(service.import_candidates(limit=2, before=None))
+    second = run(service.import_candidates(limit=2, before=first.next_cursor))
+
+    assert [item.directory_name for item in first.candidates] == ["Alpha", "Beta"]
+    assert first.next_cursor is not None
+    assert [item.directory_name for item in second.candidates] == ["Gamma"]
+    assert second.next_cursor is None
+
+
+def test_v1_migration_creates_managed_root_and_preserves_external_root_as_mount(
+    tmp_path: Path,
+) -> None:
+    service, data_root, managed_root, external_root = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "revision": 1,
+                "activeWorkspaceId": WORKSPACE_ID,
+                "workspaces": [
+                    {
+                        "id": WORKSPACE_ID,
+                        "name": "Legacy",
+                        "rootPath": str(external_root.resolve()),
+                        "revision": 1,
+                        "createdAt": NOW.isoformat(),
+                        "updatedAt": NOW.isoformat(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run(service.startup())
+    catalog = run(service.list())
+
+    assert (managed_root / "Legacy").is_dir()
+    legacy = catalog.workspaces[1]
+    assert legacy.root_path == str((managed_root / "Legacy").resolve())
+    assert len(legacy.mounts) == 1
+    assert legacy.mounts[0].alias == "legacy-root"
+    assert legacy.mounts[0].root_path == str(external_root.resolve())
+    assert legacy.mounts[0].access_mode is WorkspaceMountAccess.READ_WRITE
+    assert legacy.mounts[0].enabled is True
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+    assert external_root.is_dir()
+
+
+def test_v1_nested_roots_migrate_as_disabled_mounts(tmp_path: Path) -> None:
+    service, data_root, _, external_root = make_service(tmp_path)
+    child = external_root / "child"
+    child.mkdir()
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    items = []
+    for identifier, name, root in (
+        (WORKSPACE_ID, "Parent", external_root),
+        (SECOND_ID, "Child", child),
+    ):
+        items.append({
+            "id": identifier,
+            "name": name,
+            "rootPath": str(root.resolve()),
+            "revision": 1,
+            "createdAt": NOW.isoformat(),
+            "updatedAt": NOW.isoformat(),
+        })
+    path.write_text(json.dumps({
+        "version": 1,
+        "revision": 2,
+        "activeWorkspaceId": WORKSPACE_ID,
+        "workspaces": items,
+    }), encoding="utf-8")
+
+    run(service.startup())
+    catalog = run(service.list())
+
+    assert [item.mounts[0].enabled for item in catalog.workspaces[1:]] == [False, False]
+    assert [item.mounts[0].availability.value for item in catalog.workspaces[1:]] == [
+        "unavailable", "unavailable"
+    ]
+    assert [item.mounts[0].unavailable_reason.value for item in catalog.workspaces[1:]] == [
+        "overlap", "overlap"
+    ]
+
+
+def test_v1_migration_write_failure_preserves_catalog_and_removes_new_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, data_root, managed_root, external_root = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    payload = {
+        "version": 1,
+        "revision": 1,
+        "activeWorkspaceId": WORKSPACE_ID,
+        "workspaces": [{
+            "id": WORKSPACE_ID,
+            "name": "Legacy",
+            "rootPath": str(external_root.resolve()),
+            "revision": 1,
+            "createdAt": NOW.isoformat(),
+            "updatedAt": NOW.isoformat(),
+        }],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    before = path.read_bytes()
+    monkeypatch.setattr(os, "replace", lambda *_args: (_ for _ in ()).throw(OSError("failure")))
+
+    run(service.startup())
+
+    assert path.read_bytes() == before
+    assert not (managed_root / "Legacy").exists()
+    assert external_root.is_dir()
 
 
 @pytest.mark.parametrize(
@@ -114,9 +297,8 @@ def test_create_normalizes_name_persists_atomically_and_sets_active(tmp_path: Pa
     [
         "not-json",
         "{}",
-        '{"version":1,"version":1,"revision":0,"activeWorkspaceId":"00000000-0000-4000-8000-000000000000","workspaces":[]}',
-        '{"version":2,"revision":0,"activeWorkspaceId":"00000000-0000-4000-8000-000000000000","workspaces":[]}',
-        '{"version":1,"revision":0,"activeWorkspaceId":"11111111-1111-4111-8111-111111111111","workspaces":[]}',
+        '{"version":2,"version":2,"revision":0,"activeWorkspaceId":"00000000-0000-4000-8000-000000000000","defaultWorkspace":{},"workspaces":[]}',
+        '{"version":3,"revision":0,"activeWorkspaceId":"00000000-0000-4000-8000-000000000000","workspaces":[]}',
     ],
 )
 def test_store_rejects_malformed_input(tmp_path: Path, payload: str) -> None:
@@ -130,13 +312,12 @@ def test_store_rejects_malformed_input(tmp_path: Path, payload: str) -> None:
     assert raised.value.__cause__ is None
 
 
-def test_atomic_failure_preserves_previous_catalog(
+def test_atomic_failure_removes_new_empty_root_and_preserves_catalog(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    service, data_root, project_root = make_service(tmp_path)
-    run(service.create(name="Alpha", root_path=str(project_root), expected_revision=0))
+    service, data_root, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
     path = data_root / "config" / "workspaces.json"
-    before = path.read_bytes()
 
     def fail_replace(source: Path, destination: Path) -> None:
         del source, destination
@@ -144,61 +325,197 @@ def test_atomic_failure_preserves_previous_catalog(
 
     monkeypatch.setattr(os, "replace", fail_replace)
     with pytest.raises(WorkspaceError) as raised:
-        run(
-            service.set_active(
-                UNASSIGNED_WORKSPACE_ID,
-                expected_revision=1,
-            )
-        )
+        run(service.create(name="Alpha", expected_revision=0))
 
     assert raised.value.failure is WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE
-    assert path.read_bytes() == before
-    assert list(path.parent.glob("*.tmp")) == []
+    assert not (managed_root / "Alpha").exists()
+    assert not path.exists()
 
 
-def test_root_policy_rejects_high_risk_and_duplicate_roots(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service, data_root, project_root = make_service(tmp_path)
-    run(service.create(name="Alpha", root_path=str(project_root), expected_revision=0))
-
-    for unsafe in (tmp_path / "home", data_root, tmp_path / "installed-app"):
-        unsafe.mkdir(parents=True, exist_ok=True)
-        with pytest.raises(WorkspaceError) as raised:
-            run(service.create(name="Unsafe", root_path=str(unsafe), expected_revision=1))
-        assert raised.value.failure is WorkspaceFailure.UNSAFE_ROOT
-
-    with pytest.raises(WorkspaceError) as duplicate:
-        run(service.create(name="Other", root_path=str(project_root), expected_revision=1))
-    assert duplicate.value.failure is WorkspaceFailure.DUPLICATE_ROOT
-
-    second_root = tmp_path / "projects" / "beta"
-    second_root.mkdir()
-    with pytest.raises(WorkspaceError) as duplicate_name:
-        run(service.create(name="alpha", root_path=str(second_root), expected_revision=1))
-    assert duplicate_name.value.failure is WorkspaceFailure.DUPLICATE_NAME
-
-    junction_root = tmp_path / "projects" / "junction"
-    junction_root.mkdir()
-    monkeypatch.setattr(
-        service._root_policy,
-        "_is_junction",
-        lambda path: path == junction_root,
+def test_mount_crud_defaults_read_only_and_blocks_overlap(tmp_path: Path) -> None:
+    service, _, managed_root, external_root = make_service(
+        tmp_path,
+        identifiers=[WORKSPACE_ID, MOUNT_ID],
     )
-    with pytest.raises(WorkspaceError) as junction:
-        run(service.create(name="Junction", root_path=str(junction_root), expected_revision=1))
-    assert junction.value.failure is WorkspaceFailure.UNSAFE_ROOT
+    run(service.startup())
+    created = run(service.create(name="Alpha", expected_revision=0))
+    added = run(service.add_mount(
+        WORKSPACE_ID,
+        alias="Docs",
+        root_path=str(external_root),
+        access_mode=WorkspaceMountAccess.READ_ONLY,
+        enabled=True,
+        expected_revision=created.workspaces[1].revision,
+    ))
+
+    assert added.mounts[0].access_mode is WorkspaceMountAccess.READ_ONLY
+    assert added.mounts[0].enabled is True
+    assert added.mounts[0].availability is WorkspaceAvailability.AVAILABLE
+
+    nested = external_root / "nested"
+    nested.mkdir()
+    with pytest.raises(WorkspaceError) as overlap:
+        run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias="Nested",
+            root_path=str(nested),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=1,
+        ))
+    assert overlap.value.failure is WorkspaceFailure.OVERLAPPING_ROOT
+
+    with pytest.raises(WorkspaceError) as managed_overlap:
+        run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias="Managed",
+            root_path=str(managed_root / "Alpha"),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=1,
+        ))
+    assert managed_overlap.value.failure is WorkspaceFailure.OVERLAPPING_ROOT
+
+    updated = run(service.update_mount(
+        WORKSPACE_ID,
+        added.mounts[0].id,
+        alias="Project",
+        root_path=str(external_root),
+        access_mode=WorkspaceMountAccess.READ_WRITE,
+        enabled=False,
+        expected_revision=added.revision,
+    ))
+    assert updated.mounts[0].alias == "Project"
+    assert updated.mounts[0].access_mode is WorkspaceMountAccess.READ_WRITE
+    assert updated.mounts[0].availability is WorkspaceAvailability.NOT_APPLICABLE
+
+    removed = run(service.delete_mount(
+        WORKSPACE_ID,
+        updated.mounts[0].id,
+        expected_revision=updated.revision,
+    ))
+    assert removed.mounts == ()
+    assert external_root.is_dir()
+
+
+def test_mount_mutation_is_blocked_while_run_is_active(tmp_path: Path) -> None:
+    usage = UsageReader()
+    usage.values[DEFAULT_WORKSPACE_ID] = WorkspaceUsage(active_run_count=1)
+    service, _, _, external_root = make_service(
+        tmp_path, usage=usage, identifiers=[MOUNT_ID]
+    )
+    run(service.startup())
+
+    with pytest.raises(WorkspaceError) as raised:
+        run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias="Docs",
+            root_path=str(external_root),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=1,
+        ))
+
+    assert raised.value.failure is WorkspaceFailure.WORKSPACE_BUSY
+
+
+def test_workspace_rejects_the_twenty_first_mount(tmp_path: Path) -> None:
+    identifiers = [f"{index:08x}-0000-4000-8000-{index:012x}" for index in range(1, 22)]
+    service, _, _, _ = make_service(tmp_path, identifiers=identifiers)
+    run(service.startup())
+    revision = 1
+    for index in range(20):
+        root = tmp_path / "mounts" / str(index)
+        root.mkdir(parents=True)
+        item = run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias=f"Mount {index}",
+            root_path=str(root),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=revision,
+        ))
+        revision = item.revision
+    extra = tmp_path / "mounts" / "extra"
+    extra.mkdir()
+
+    with pytest.raises(WorkspaceError) as raised:
+        run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias="Extra",
+            root_path=str(extra),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=revision,
+        ))
+
+    assert raised.value.failure is WorkspaceFailure.MOUNT_LIMIT_REACHED
+
+
+def test_missing_mount_is_reported_without_substituting_a_path(tmp_path: Path) -> None:
+    service, _, _, external_root = make_service(tmp_path, identifiers=[MOUNT_ID])
+    run(service.startup())
+    mounted = run(service.add_mount(
+        DEFAULT_WORKSPACE_ID,
+        alias="Docs",
+        root_path=str(external_root),
+        access_mode=WorkspaceMountAccess.READ_ONLY,
+        enabled=True,
+        expected_revision=1,
+    ))
+    external_root.rmdir()
+
+    refreshed = run(service.get(DEFAULT_WORKSPACE_ID))
+
+    assert refreshed.mounts[0].id == mounted.mounts[0].id
+    assert refreshed.mounts[0].root_path == str(external_root.resolve())
+    assert refreshed.mounts[0].availability is WorkspaceAvailability.UNAVAILABLE
+    assert refreshed.mounts[0].unavailable_reason.value == "missing"
+
+    disabled = run(service.update_mount(
+        DEFAULT_WORKSPACE_ID,
+        refreshed.mounts[0].id,
+        alias="Docs",
+        root_path=refreshed.mounts[0].root_path,
+        access_mode=WorkspaceMountAccess.READ_ONLY,
+        enabled=False,
+        expected_revision=refreshed.revision,
+    ))
+    assert disabled.mounts[0].enabled is False
+    assert disabled.mounts[0].availability is WorkspaceAvailability.NOT_APPLICABLE
+
+
+def test_delete_preserves_managed_directory_and_returns_to_default(tmp_path: Path) -> None:
+    service, _, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
+    created = run(service.create(name="Keep", expected_revision=0))
+    run(service.delete(WORKSPACE_ID, expected_revision=created.workspaces[1].revision))
+
+    catalog = run(service.list())
+    assert catalog.active_workspace_id == DEFAULT_WORKSPACE_ID
+    assert len(catalog.workspaces) == 1
+    assert (managed_root / "Keep").is_dir()
+
+
+def test_delete_still_requires_empty_workspace(tmp_path: Path) -> None:
+    usage = UsageReader()
+    service, _, _, _ = make_service(tmp_path, usage=usage)
+    run(service.startup())
+    created = run(service.create(name="Alpha", expected_revision=0))
+    usage.values[WORKSPACE_ID] = WorkspaceUsage(conversation_count=1)
+
+    with pytest.raises(WorkspaceError) as raised:
+        run(service.delete(WORKSPACE_ID, expected_revision=created.workspaces[1].revision))
+
+    assert raised.value.failure is WorkspaceFailure.WORKSPACE_NOT_EMPTY
 
 
 def test_windows_reparse_attribute_is_rejected(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    service, _, project_root = make_service(tmp_path)
-    fake_path = SimpleNamespace(
-        lstat=lambda: SimpleNamespace(st_file_attributes=0x400)
-    )
+    service, _, _, external_root = make_service(tmp_path, identifiers=[MOUNT_ID])
+    run(service.startup())
+    fake_path = SimpleNamespace(lstat=lambda: SimpleNamespace(st_file_attributes=0x400))
     original_os_name = workspace_policy.os.name
     monkeypatch.setattr(workspace_policy.os, "name", "nt")
     assert WorkspaceRootPolicy._is_reparse_point(fake_path) is True
@@ -206,173 +523,82 @@ def test_windows_reparse_attribute_is_rejected(
     monkeypatch.setattr(service._root_policy, "_is_reparse_point", lambda _path: True)
 
     with pytest.raises(WorkspaceError) as reparse:
-        run(service.create(name="Reparse", root_path=str(project_root), expected_revision=0))
-
+        run(service.add_mount(
+            DEFAULT_WORKSPACE_ID,
+            alias="Unsafe",
+            root_path=str(external_root),
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
+            expected_revision=1,
+        ))
     assert reparse.value.failure is WorkspaceFailure.UNSAFE_ROOT
 
 
-def test_symlink_root_is_rejected(tmp_path: Path) -> None:
-    service, _, project_root = make_service(tmp_path)
-    link = tmp_path / "projects" / "linked-root"
-    try:
-        link.symlink_to(project_root, target_is_directory=True)
-    except OSError as error:
-        pytest.skip(f"directory symlink is unavailable: {type(error).__name__}")
-
-    with pytest.raises(WorkspaceError) as symlink:
-        run(service.create(name="Symlink", root_path=str(link), expected_revision=0))
-
-    assert symlink.value.failure is WorkspaceFailure.UNSAFE_ROOT
-
-
-def test_workspace_limit_rejects_the_101st_user_workspace(tmp_path: Path) -> None:
-    store = JsonWorkspaceStore(tmp_path / ".opensprite" / "config" / "workspaces.json")
-    records = tuple(
-        WorkspaceRecord(
-            id=f"{index:08x}-0000-4000-8000-{index:012x}",
-            name=f"Workspace {index}",
-            root_path=str(tmp_path / "projects" / str(index)),
-            revision=1,
-            created_at=NOW,
-            updated_at=NOW,
-        )
-        for index in range(1, 101)
+def test_api_managed_create_import_mount_and_strict_delete(tmp_path: Path) -> None:
+    service, _, managed_root, external_root = make_service(
+        tmp_path,
+        identifiers=[WORKSPACE_ID, MOUNT_ID],
     )
-    store.set(WorkspaceCatalogState(100, UNASSIGNED_WORKSPACE_ID, records))
-    project_root = tmp_path / "project"
-    project_root.mkdir()
-    service = WorkspaceCatalogService(
-        store,
-        WorkspaceRootPolicy(
-            data_root=tmp_path / ".opensprite",
-            user_home=tmp_path / "home",
-            install_root=tmp_path / "installed-app",
-        ),
-    )
-
-    with pytest.raises(WorkspaceError) as maximum:
-        run(
-            service.create(
-                name="One too many",
-                root_path=str(project_root),
-                expected_revision=100,
-            )
-        )
-
-    assert maximum.value.failure is WorkspaceFailure.INVALID_REQUEST
-
-
-def test_update_delete_and_usage_guards(tmp_path: Path) -> None:
-    usage = UsageReader()
-    service, _, project_root = make_service(tmp_path, usage=usage)
-    run(service.create(name="Alpha", root_path=str(project_root), expected_revision=0))
-    replacement = tmp_path / "projects" / "beta"
-    replacement.mkdir()
-
-    usage.values[WORKSPACE_ID] = WorkspaceUsage(active_run_count=1)
-    with pytest.raises(WorkspaceError) as busy:
-        run(
-            service.update(
-                WORKSPACE_ID,
-                name="Beta",
-                root_path=str(replacement),
-                expected_revision=1,
-            )
-        )
-    assert busy.value.failure is WorkspaceFailure.WORKSPACE_BUSY
-
-    usage.values[WORKSPACE_ID] = WorkspaceUsage(conversation_count=1)
-    with pytest.raises(WorkspaceError) as not_empty:
-        run(service.delete(WORKSPACE_ID, expected_revision=1))
-    assert not_empty.value.failure is WorkspaceFailure.WORKSPACE_NOT_EMPTY
-
-    usage.values[WORKSPACE_ID] = WorkspaceUsage()
-    run(service.delete(WORKSPACE_ID, expected_revision=1))
-    catalog = run(service.list())
-    assert catalog.active_workspace_id == UNASSIGNED_WORKSPACE_ID
-    assert len(catalog.workspaces) == 1
-
-
-def test_api_crud_strict_json_and_sanitized_errors(tmp_path: Path) -> None:
-    service, _, project_root = make_service(tmp_path)
+    run(service.startup())
+    (managed_root / "Existing").mkdir()
     with TestClient(create_app(workspaces=service)) as client:
         initial = client.get("/api/workspaces")
-        duplicate_json = client.post(
-            "/api/workspaces",
-            content=(
-                '{"name":"Alpha","name":"Beta","rootPath":'
-                + json.dumps(str(project_root))
-                + ',"expectedRevision":0}'
-            ),
-            headers={"Content-Type": "application/json"},
-        )
-        created = client.post(
-            "/api/workspaces",
+        candidates = client.get("/api/workspaces/import-candidates?limit=50")
+        created = client.post("/api/workspaces", json={"name": "Alpha", "expectedRevision": 0})
+        mounted = client.post(
+            f"/api/workspaces/{WORKSPACE_ID}/mounts",
             json={
-                "name": "Alpha",
-                "rootPath": str(project_root),
-                "expectedRevision": 0,
+                "alias": "Docs",
+                "rootPath": str(external_root),
+                "accessMode": "read_only",
+                "enabled": True,
+                "expectedRevision": 1,
             },
         )
-        conflict = client.put(
-            "/api/workspaces/active",
-            json={
-                "workspaceId": UNASSIGNED_WORKSPACE_ID,
-                "expectedRevision": 0,
-            },
-        )
-        fetched = client.get(f"/api/workspaces/{WORKSPACE_ID}")
         invalid_deletes = [
             client.delete(f"/api/workspaces/{WORKSPACE_ID}"),
-            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1&unexpected=1"),
-            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1&expectedRevision=2"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=2&unexpected=1"),
             client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=0"),
-            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=-1"),
-            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=invalid"),
         ]
-        removed = client.delete(
-            f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1"
+        mount_removed = client.delete(
+            f"/api/workspaces/{WORKSPACE_ID}/mounts/{MOUNT_ID}?expectedRevision=2"
         )
+        removed = client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=3")
 
     assert initial.status_code == 200
-    assert initial.json()["workspaces"][0]["kind"] == "unassigned"
-    assert duplicate_json.status_code == 400
-    assert duplicate_json.json()["error"]["code"] == "invalid_request"
+    assert initial.json()["workspaces"][0]["kind"] == "default"
+    assert candidates.json()["candidates"][0]["directoryName"] == "Existing"
     assert created.status_code == 201
-    assert created.json()["activeWorkspaceId"] == WORKSPACE_ID
-    assert conflict.status_code == 409
-    assert conflict.json()["error"]["code"] == "revision_conflict"
-    assert fetched.status_code == 200
-    assert fetched.json()["rootPath"] == str(project_root.resolve())
+    assert created.json()["workspaces"][1]["rootPath"] == str((managed_root / "Alpha").resolve())
+    assert mounted.status_code == 201
+    assert mounted.json()["mounts"][0]["accessMode"] == "read_only"
     assert all(item.status_code == 400 for item in invalid_deletes)
-    assert all(item.json()["error"]["code"] == "invalid_request" for item in invalid_deletes)
+    assert mount_removed.status_code == 200
     assert removed.status_code == 204
+    assert (managed_root / "Alpha").is_dir()
 
 
 def test_workspace_api_obeys_same_origin_protection(tmp_path: Path) -> None:
-    service, _, project_root = make_service(tmp_path)
+    service, _, _, _ = make_service(tmp_path)
+    run(service.startup())
     app = create_app(workspaces=service, enforce_local_security=True)
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.post(
             "/api/workspaces",
             headers={"Origin": "http://evil.example"},
-            json={
-                "name": "Alpha",
-                "rootPath": str(project_root),
-                "expectedRevision": 0,
-            },
+            json={"name": "Alpha", "expectedRevision": 0},
         )
-
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_request"
 
 
-def test_app_paths_owns_workspace_config_location(tmp_path: Path) -> None:
+def test_app_paths_owns_managed_and_sensitive_workspace_locations(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     assert paths.workspace_settings_file == paths.home / "config" / "workspaces.json"
+    assert paths.managed_workspaces_dir == tmp_path / "OpenSprite" / "workspace"
 
 
-def test_system_runtime_exposes_lazy_unassigned_workspace(tmp_path: Path) -> None:
+def test_system_runtime_exposes_available_default_workspace(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     app = create_system_app(app_paths=paths, enforce_authentication=False)
 
@@ -380,10 +606,8 @@ def test_system_runtime_exposes_lazy_unassigned_workspace(tmp_path: Path) -> Non
         response = client.get("/api/workspaces")
 
     assert response.status_code == 200
-    assert response.json()["activeWorkspaceId"] == UNASSIGNED_WORKSPACE_ID
-    assert response.json()["workspaces"][0]["usage"] == {
-        "conversationCount": 0,
-        "scheduleCount": 0,
-        "activeRunCount": 0,
-    }
+    assert response.json()["activeWorkspaceId"] == DEFAULT_WORKSPACE_ID
+    assert response.json()["workspaces"][0]["kind"] == "default"
+    assert response.json()["workspaces"][0]["availability"] == "available"
+    assert paths.managed_workspaces_dir.joinpath("default").is_dir()
     assert not paths.workspace_settings_file.exists()

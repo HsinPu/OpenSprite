@@ -135,6 +135,7 @@ class _SystemRuntime:
         provider_starter = getattr(self._provider_runtime, "astart", None)
         if provider_starter is not None:
             await provider_starter()
+        await self.workspaces.startup()
         await self.mcp_connections.startup()
         await self.agent_chat.startup()
         await self._schedule_coordinator.start()
@@ -179,6 +180,7 @@ def create_system_runtime(
             user_home=paths.user_home,
             install_root=Path(__file__).resolve().parents[3],
         ),
+        paths.managed_workspaces_dir,
         usage_reader=repository,
         mutation_gate=workspace_mutation_gate,
     )

@@ -21,8 +21,12 @@ def test_workspace_contract_operations_and_strict_shapes() -> None:
     paths = contract["paths"]  # type: ignore[index]
     assert set(paths) == {
         "/api/workspaces",
+        "/api/workspaces/import-candidates",
+        "/api/workspaces/import",
         "/api/workspaces/active",
         "/api/workspaces/{workspace_id}",
+        "/api/workspaces/{workspace_id}/mounts",
+        "/api/workspaces/{workspace_id}/mounts/{mount_id}",
     }
     assert paths["/api/workspaces"]["get"]["operationId"] == "listWorkspaces"  # type: ignore[index]
     assert paths["/api/workspaces"]["post"]["operationId"] == "createWorkspace"  # type: ignore[index]
@@ -30,7 +34,9 @@ def test_workspace_contract_operations_and_strict_shapes() -> None:
     schemas = contract["components"]["schemas"]  # type: ignore[index]
     for name in (
         "CreateWorkspaceRequest",
+        "ImportWorkspaceRequest",
         "UpdateWorkspaceRequest",
+        "MountWorkspaceRequest",
         "SetActiveWorkspaceRequest",
         "WorkspaceUsage",
         "Workspace",
@@ -38,11 +44,8 @@ def test_workspace_contract_operations_and_strict_shapes() -> None:
         "WorkspaceError",
     ):
         assert schemas[name]["additionalProperties"] is False
-    assert schemas["Workspace"]["properties"]["availability"]["enum"] == [  # type: ignore[index]
-        "available",
-        "unavailable",
-        "not_applicable",
-    ]
+    assert schemas["Workspace"]["properties"]["kind"]["enum"] == ["default", "managed"]  # type: ignore[index]
+    assert schemas["WorkspaceMount"]["properties"]["accessMode"]["enum"] == ["read_only", "read_write"]  # type: ignore[index]
 
 
 def test_workspace_contract_has_explicit_conflict_and_store_failures() -> None:
@@ -50,11 +53,17 @@ def test_workspace_contract_has_explicit_conflict_and_store_failures() -> None:
     errors = contract["components"]["schemas"]["WorkspaceErrorCode"]["enum"]  # type: ignore[index]
     assert errors == [
         "invalid_request",
+        "invalid_directory_name",
         "unsafe_root",
         "duplicate_name",
         "duplicate_root",
+        "managed_root_exists",
+        "mount_limit_reached",
+        "duplicate_mount_alias",
+        "overlapping_root",
         "revision_conflict",
         "not_found",
+        "mount_not_found",
         "workspace_busy",
         "workspace_not_empty",
         "workspace_store_unavailable",

@@ -65,6 +65,12 @@ class AppPaths:
         return self.config_dir / "workspaces.json"
 
     @property
+    def managed_workspaces_dir(self) -> Path:
+        """User-visible project roots, separate from sensitive app data."""
+
+        return self.home.parent / "OpenSprite" / "workspace"
+
+    @property
     def data_dir(self) -> Path:
         return self.home / "data"
 

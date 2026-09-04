@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import os
 import stat
 from pathlib import Path
+import unicodedata
 
 from .models import WorkspaceAvailability, WorkspaceUnavailableReason
 
@@ -16,6 +17,10 @@ class UnsafeWorkspaceRoot(ValueError):
 
 class InvalidWorkspaceRoot(ValueError):
     """Raised when a requested root is not a usable directory."""
+
+
+class InvalidWorkspaceDirectoryName(ValueError):
+    """Raised when a managed Workspace directory segment is unsafe."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +42,10 @@ class WorkspaceRootPolicy:
             None if install_root is None else install_root.resolve(strict=False)
         )
         self._user_home = user_home.resolve(strict=False)
+
+    @property
+    def user_home(self) -> Path:
+        return self._user_home
 
     def validate_new_root(self, value: str) -> str:
         path = self._parse_absolute(value)
@@ -114,6 +123,40 @@ class WorkspaceRootPolicy:
     @staticmethod
     def comparison_key(value: str) -> str:
         return os.path.normcase(os.path.normpath(value))
+
+    @staticmethod
+    def directory_name(value: str) -> str:
+        if type(value) is not str:
+            raise InvalidWorkspaceDirectoryName
+        normalized = unicodedata.normalize("NFC", value)
+        invalid = '<>:"/\\|?*'
+        stem = normalized.split(".", 1)[0].casefold()
+        reserved = {
+            "con", "prn", "aux", "nul",
+            *(f"com{index}" for index in range(1, 10)),
+            *(f"lpt{index}" for index in range(1, 10)),
+        }
+        if (
+            not normalized
+            or len(normalized) > 80
+            or normalized != normalized.strip()
+            or normalized in {".", ".."}
+            or normalized.endswith((" ", "."))
+            or any(character in invalid or ord(character) < 32 for character in normalized)
+            or stem in reserved
+        ):
+            raise InvalidWorkspaceDirectoryName
+        return normalized
+
+    @classmethod
+    def paths_overlap(cls, left: str, right: str) -> bool:
+        left_path = Path(left)
+        right_path = Path(right)
+        return (
+            cls._same(left_path, right_path)
+            or cls._within(left_path, right_path)
+            or cls._within(right_path, left_path)
+        )
 
     @staticmethod
     def _parse_absolute(value: str) -> Path:

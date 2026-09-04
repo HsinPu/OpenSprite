@@ -207,10 +207,31 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ),
         ("/api/workspaces", "get", "listWorkspaces"),
         ("/api/workspaces", "post", "createWorkspace"),
+        (
+            "/api/workspaces/import-candidates",
+            "get",
+            "listWorkspaceImportCandidates",
+        ),
+        ("/api/workspaces/import", "post", "importWorkspace"),
         ("/api/workspaces/active", "put", "setActiveWorkspace"),
         ("/api/workspaces/{workspace_id}", "get", "getWorkspace"),
         ("/api/workspaces/{workspace_id}", "put", "updateWorkspace"),
         ("/api/workspaces/{workspace_id}", "delete", "deleteWorkspace"),
+        (
+            "/api/workspaces/{workspace_id}/mounts",
+            "post",
+            "addWorkspaceMount",
+        ),
+        (
+            "/api/workspaces/{workspace_id}/mounts/{mount_id}",
+            "put",
+            "updateWorkspaceMount",
+        ),
+        (
+            "/api/workspaces/{workspace_id}/mounts/{mount_id}",
+            "delete",
+            "deleteWorkspaceMount",
+        ),
         ("/api/providers", "get", "listProviders"),
         (
             "/api/providers/openrouter/models",
