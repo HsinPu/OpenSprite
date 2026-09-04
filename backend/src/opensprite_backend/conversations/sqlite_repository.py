@@ -40,14 +40,15 @@ from .models import (
 from .repository import ConversationStoreError
 from .event_notifier import RunEventNotifier
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
+    EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+    DEFAULT_WORKSPACE_ID,
     WorkspaceAvailability,
     WorkspaceUsage,
 )
-from opensprite_backend.workspaces.models import UNASSIGNED_WORKSPACE_NAME
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_NAME
 
 
-_SCHEMA_VERSION = 12
+_SCHEMA_VERSION = 13
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -132,6 +133,7 @@ CREATE TABLE runs (
     workspace_revision INTEGER NOT NULL CHECK(workspace_revision >= 1),
     workspace_name_snapshot TEXT NOT NULL CHECK(length(workspace_name_snapshot) BETWEEN 1 AND 80),
     workspace_root_hash TEXT CHECK(workspace_root_hash IS NULL OR length(workspace_root_hash) = 64),
+    workspace_mount_manifest_hash TEXT NOT NULL CHECK(length(workspace_mount_manifest_hash) = 64),
     client_request_id TEXT NOT NULL UNIQUE,
     request_fingerprint TEXT NOT NULL CHECK(length(request_fingerprint) = 64),
     user_message_id TEXT NOT NULL REFERENCES messages(id),
@@ -261,7 +263,7 @@ WHERE status IN ('queued', 'running', 'cancelling');
 CREATE INDEX schedules_by_workspace
 ON schedules(workspace_id, status, next_run_at, id);
 
-PRAGMA user_version = 12;
+PRAGMA user_version = 13;
 COMMIT;
 """
 
@@ -671,7 +673,7 @@ def _migrate_v11_to_v12(connection: sqlite3.Connection) -> None:
             ),
             "workspace_name_snapshot": (
                 "ALTER TABLE runs ADD COLUMN workspace_name_snapshot TEXT NOT NULL "
-                "DEFAULT 'Unassigned workspace' "
+                "DEFAULT 'Default workspace' "
                 "CHECK(length(workspace_name_snapshot) BETWEEN 1 AND 80)"
             ),
             "workspace_root_hash": (
@@ -710,6 +712,28 @@ def _migrate_v11_to_v12(connection: sqlite3.Connection) -> None:
         raise
 
 
+def _migrate_v12_to_v13(connection: sqlite3.Connection) -> None:
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(runs)")}
+        if "workspace_mount_manifest_hash" not in columns:
+            connection.execute(
+                "ALTER TABLE runs ADD COLUMN workspace_mount_manifest_hash TEXT "
+                f"NOT NULL DEFAULT '{EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH}' "
+                "CHECK(length(workspace_mount_manifest_hash) = 64)"
+            )
+        connection.execute(
+            "UPDATE runs SET workspace_name_snapshot = ? "
+            "WHERE workspace_id = ? AND workspace_name_snapshot = 'Unassigned workspace'",
+            (DEFAULT_WORKSPACE_NAME, DEFAULT_WORKSPACE_ID),
+        )
+        connection.execute("PRAGMA user_version = 13")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
 class SqliteConversationRepository:
     """Own four chat tables below one explicit AppPaths database file."""
 
@@ -739,7 +763,7 @@ class SqliteConversationRepository:
     def list_conversations(
         self,
         *,
-        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
         limit: int,
         before: str | None,
     ) -> ConversationPage:
@@ -1080,10 +1104,11 @@ class SqliteConversationRepository:
         log_full_prompts: bool = False,
         source: RunSource = "user",
         occurrence_id: str | None = None,
-        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
-        workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME,
+        workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
+        workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -1122,18 +1147,8 @@ class SqliteConversationRepository:
                     or re.fullmatch(r"[0-9a-f]{64}", workspace_root_hash) is None
                 )
             )
-            or (
-                workspace_id == UNASSIGNED_WORKSPACE_ID
-                and (
-                    workspace_revision != 1
-                    or normalized_workspace_name != UNASSIGNED_WORKSPACE_NAME
-                    or workspace_root_hash is not None
-                )
-            )
-            or (
-                workspace_id != UNASSIGNED_WORKSPACE_ID
-                and workspace_root_hash is None
-            )
+            or not isinstance(workspace_mount_manifest_hash, str)
+            or re.fullmatch(r"[0-9a-f]{64}", workspace_mount_manifest_hash) is None
         ):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         request_fingerprint = self._request_fingerprint(
@@ -1246,13 +1261,14 @@ class SqliteConversationRepository:
                     INSERT INTO runs(
                         id, conversation_id, workspace_id, workspace_revision,
                         workspace_name_snapshot, workspace_root_hash,
+                        workspace_mount_manifest_hash,
                         client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
                         response_mode, context_budget, output_budget, output_continuation,
                         log_full_prompts, source, occurrence_id,
                         status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
@@ -1261,6 +1277,7 @@ class SqliteConversationRepository:
                         workspace_revision,
                         normalized_workspace_name,
                         workspace_root_hash,
+                        workspace_mount_manifest_hash,
                         client_request_id,
                         request_fingerprint,
                         message_id,
@@ -1319,6 +1336,7 @@ class SqliteConversationRepository:
         self,
         run_id: str,
         workspace_availability: WorkspaceAvailability | None = None,
+        workspace_mounts: tuple[Mapping[str, object], ...] = (),
     ) -> RunSnapshot:
         self._require_identifier(run_id)
         if workspace_availability is not None and not isinstance(
@@ -1332,7 +1350,7 @@ class SqliteConversationRepository:
                 connection.execute("BEGIN IMMEDIATE")
                 row = self._require_run_row(connection, run_id)
                 if workspace_availability is None:
-                    if row["workspace_id"] != UNASSIGNED_WORKSPACE_ID:
+                    if row["workspace_id"] != DEFAULT_WORKSPACE_ID:
                         raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
                     workspace_availability = WorkspaceAvailability.NOT_APPLICABLE
                 if row["status"] != RunStatus.QUEUED.value:
@@ -1353,6 +1371,9 @@ class SqliteConversationRepository:
                         "workspaceName": row["workspace_name_snapshot"],
                         "workspaceRootHash": row["workspace_root_hash"],
                         "workspaceAvailability": workspace_availability.value,
+                        "workspaceMountManifestHash": row["workspace_mount_manifest_hash"],
+                        "workspaceMountCount": len(workspace_mounts),
+                        "workspaceMounts": list(workspace_mounts),
                     },
                     now,
                 )
@@ -2062,6 +2083,9 @@ class SqliteConversationRepository:
                     version = 11
                 if version == 11:
                     _migrate_v11_to_v12(connection)
+                    version = 12
+                if version == 12:
+                    _migrate_v12_to_v13(connection)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -2276,6 +2300,7 @@ class SqliteConversationRepository:
             workspace_revision=int(row["workspace_revision"]),
             workspace_name_snapshot=row["workspace_name_snapshot"],
             workspace_root_hash=row["workspace_root_hash"],
+            workspace_mount_manifest_hash=row["workspace_mount_manifest_hash"],
         )
 
     @staticmethod
@@ -2422,6 +2447,29 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
 
     @staticmethod
+    def _valid_mount_event(value: object) -> bool:
+        if not isinstance(value, dict) or set(value) != {
+            "id", "alias", "rootHash", "accessMode", "enabled", "availability"
+        }:
+            return False
+        try:
+            identifier = UUID(str(value["id"]))
+        except (TypeError, ValueError, AttributeError):
+            return False
+        return (
+            str(identifier) == value["id"]
+            and identifier.version in {4, 5}
+            and SqliteConversationRepository._is_bounded_text(value.get("alias"), maximum=40)
+            and isinstance(value.get("rootHash"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", str(value["rootHash"])) is not None
+            and value.get("accessMode") in {"read_only", "read_write"}
+            and type(value.get("enabled")) is bool
+            and value.get("availability") in {
+                item.value for item in WorkspaceAvailability
+            }
+        )
+
+    @staticmethod
     def _validate_event_data(
         event_type: RunEventType,
         data: dict[str, object],
@@ -2434,10 +2482,15 @@ class SqliteConversationRepository:
                 "workspaceName",
                 "workspaceRootHash",
                 "workspaceAvailability",
+                "workspaceMountManifestHash",
+                "workspaceMountCount",
+                "workspaceMounts",
             }
             if not keys:
                 return
             root_hash = data.get("workspaceRootHash")
+            manifest_hash = data.get("workspaceMountManifestHash")
+            mounts = data.get("workspaceMounts")
             if (
                 keys != expected
                 or not isinstance(data.get("workspaceId"), str)
@@ -2450,6 +2503,14 @@ class SqliteConversationRepository:
                 or data.get("workspaceAvailability") not in {
                     item.value for item in WorkspaceAvailability
                 }
+                or not isinstance(manifest_hash, str)
+                or re.fullmatch(r"[0-9a-f]{64}", manifest_hash) is None
+                or not isinstance(data.get("workspaceMountCount"), int)
+                or isinstance(data.get("workspaceMountCount"), bool)
+                or not isinstance(mounts, list)
+                or len(mounts) != data.get("workspaceMountCount")
+                or len(mounts) > 20
+                or any(not SqliteConversationRepository._valid_mount_event(item) for item in mounts)
                 or (
                     root_hash is not None
                     and (

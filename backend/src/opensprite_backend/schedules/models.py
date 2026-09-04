@@ -7,7 +7,7 @@ from datetime import datetime, time
 from enum import StrEnum
 
 from ..conversations.models import ContextBudget, OutputBudget, OutputContinuation, ProviderId, ResponseMode
-from ..workspaces import UNASSIGNED_WORKSPACE_ID
+from ..workspaces import DEFAULT_WORKSPACE_ID
 
 
 class CadenceType(StrEnum):
@@ -60,7 +60,7 @@ class ScheduleDraft:
     cadence: Cadence
     time_zone: str
     profile: ExecutionProfile
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    workspace_id: str = DEFAULT_WORKSPACE_ID
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +77,7 @@ class Schedule:
     revision: int
     created_at: datetime
     updated_at: datetime
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    workspace_id: str = DEFAULT_WORKSPACE_ID
 
 
 @dataclass(frozen=True, slots=True)

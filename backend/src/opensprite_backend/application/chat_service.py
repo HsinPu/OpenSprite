@@ -31,7 +31,7 @@ from opensprite_backend.provider_connections import (
 )
 from opensprite_backend.schedules.models import ExecutionProfile
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_ID,
     WorkspaceError,
     WorkspaceFailure,
     WorkspaceMutationGate,
@@ -351,7 +351,7 @@ class AgentChatService:
         occurrence_id: str,
         message: str,
         profile: ExecutionProfile,
-        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> StartRunResult:
         return await self._start_configured_run(
             conversation_id=conversation_id,
@@ -419,6 +419,7 @@ class AgentChatService:
                     workspace_revision=workspace.revision,
                     workspace_name_snapshot=workspace.name,
                     workspace_root_hash=workspace.root_hash,
+                    workspace_mount_manifest_hash=workspace.mount_manifest_hash,
                 )
             except WorkspaceError as error:
                 raise _workspace_error(error) from error

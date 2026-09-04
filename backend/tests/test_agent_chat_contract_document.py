@@ -81,6 +81,7 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "workspaceRevision",
         "workspaceName",
         "workspaceRootHash",
+        "workspaceMountManifestHash",
         "userMessageId",
         "assistantMessageId",
         "providerId",
@@ -110,7 +111,11 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "workspaceName",
         "workspaceRootHash",
         "workspaceAvailability",
+        "workspaceMountManifestHash",
+        "workspaceMountCount",
+        "workspaceMounts",
     ]
+    assert schemas["WorkspaceMountEventData"]["additionalProperties"] is False
     assert schemas["CompletionReason"]["enum"] == ["stop", "output_limit", "context_limit"]
     assert schemas["RunSnapshot"]["properties"]["completionReason"]["oneOf"][0]["$ref"].endswith("/CompletionReason")
     assert schemas["Message"]["additionalProperties"] is False

@@ -8,8 +8,9 @@ from enum import Enum
 from typing import Literal
 
 from opensprite_backend.workspaces.models import (
-    UNASSIGNED_WORKSPACE_ID,
-    UNASSIGNED_WORKSPACE_NAME,
+    EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+    DEFAULT_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_NAME,
 )
 
 
@@ -83,7 +84,7 @@ class ConversationSummary:
     latest_message_preview: str | None
     created_at: datetime
     updated_at: datetime
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    workspace_id: str = DEFAULT_WORKSPACE_ID
     revision: int = 1
     workspace_managed_by_schedule: bool = False
 
@@ -133,10 +134,11 @@ class RunSnapshot:
     completion_reason: CompletionReason | None = None
     source: RunSource = "user"
     occurrence_id: str | None = None
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    workspace_id: str = DEFAULT_WORKSPACE_ID
     workspace_revision: int = 1
-    workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME
+    workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME
     workspace_root_hash: str | None = None
+    workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH
 
 
 @dataclass(frozen=True, slots=True)

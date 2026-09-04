@@ -26,7 +26,7 @@ from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
-from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceAvailability
+from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, WorkspaceAvailability
 
 
 NOW = datetime(2026, 8, 21, 8, 30, tzinfo=UTC)
@@ -48,9 +48,9 @@ def start(
     context_budget: str = "auto",
     output_budget: str = "auto",
     output_continuation: OutputContinuation = "5",
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
     workspace_revision: int = 1,
-    workspace_name: str = "Unassigned workspace",
+    workspace_name: str = "Default workspace",
     workspace_root_hash: str | None = None,
 ):
     return store.start_run(
@@ -92,7 +92,7 @@ def test_workspace_scopes_conversations_runs_usage_and_safe_move(tmp_path: Path)
         workspace_id=workspace_id, limit=50, before=None
     ).items == (accepted.conversation,)
     assert store.list_conversations(
-        workspace_id=UNASSIGNED_WORKSPACE_ID, limit=50, before=None
+        workspace_id=DEFAULT_WORKSPACE_ID, limit=50, before=None
     ).items == ()
     assert store.workspace_usage(workspace_id).conversation_count == 1
     assert store.workspace_usage(workspace_id).active_run_count == 1
@@ -101,15 +101,15 @@ def test_workspace_scopes_conversations_runs_usage_and_safe_move(tmp_path: Path)
     store.complete_run(accepted.run.id, "done")
     moved = store.move_conversation(
         accepted.conversation.id,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         expected_revision=1,
     )
 
-    assert moved.workspace_id == UNASSIGNED_WORKSPACE_ID
+    assert moved.workspace_id == DEFAULT_WORKSPACE_ID
     assert moved.revision == 2
     assert store.get_run(accepted.run.id).workspace_id == workspace_id  # type: ignore[union-attr]
     assert store.workspace_usage(workspace_id).conversation_count == 0
-    assert store.workspace_usage(UNASSIGNED_WORKSPACE_ID).conversation_count == 1
+    assert store.workspace_usage(DEFAULT_WORKSPACE_ID).conversation_count == 1
 
 
 def test_schema_v11_migrates_workspace_identity_without_absolute_paths(
@@ -141,14 +141,14 @@ def test_schema_v11_migrates_workspace_identity_without_absolute_paths(
     conversation = upgraded.get_conversation(accepted.conversation.id)
     run_snapshot = upgraded.get_run(accepted.run.id)
     assert conversation is not None
-    assert conversation.workspace_id == UNASSIGNED_WORKSPACE_ID
+    assert conversation.workspace_id == DEFAULT_WORKSPACE_ID
     assert conversation.revision == 1
     assert run_snapshot is not None
-    assert run_snapshot.workspace_id == UNASSIGNED_WORKSPACE_ID
+    assert run_snapshot.workspace_id == DEFAULT_WORKSPACE_ID
     assert run_snapshot.workspace_revision == 1
     assert run_snapshot.workspace_root_hash is None
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schema_v11_workspace_migration_rolls_back_every_partial_change(
@@ -190,6 +190,28 @@ def test_schema_v11_workspace_migration_rolls_back_every_partial_change(
         assert "workspace_id" not in {
             row[1] for row in connection.execute("PRAGMA table_info(schedules)")
         }
+
+
+def test_schema_v12_adds_empty_mount_manifest_without_losing_runs(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    database = store.database_file
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("ALTER TABLE runs DROP COLUMN workspace_mount_manifest_hash")
+        connection.execute("PRAGMA user_version = 12")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.ensure_schema()
+    run_snapshot = upgraded.get_run(accepted.run.id)
+
+    assert run_snapshot is not None
+    assert run_snapshot.workspace_mount_manifest_hash == (
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    )
+    with closing(sqlite3.connect(database)) as connection, connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_construction_and_empty_reads_have_no_filesystem_side_effects(
@@ -681,7 +703,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -747,7 +769,7 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
@@ -786,7 +808,7 @@ def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
         "completionReason": "stop",
     }
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schema_v4_output_budget_and_model_event_are_upgraded(
@@ -823,7 +845,7 @@ def test_schema_v4_output_budget_and_model_event_are_upgraded(
     model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
     assert model_event.data["maxOutputTokens"] == 8_192
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schema_v5_adds_default_continuation_policy_without_losing_run(
@@ -844,7 +866,7 @@ def test_schema_v5_adds_default_continuation_policy_without_losing_run(
     assert run is not None
     assert run.output_continuation == "2"
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 @pytest.mark.parametrize(("enabled", "expected"), [(0, "off"), (1, "2")])
@@ -877,7 +899,7 @@ def test_schema_v7_converts_boolean_continuation_without_losing_run(
         }
         assert "output_continuation" in columns
         assert "auto_continue_output" not in columns
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schema_v9_expands_continuation_values_without_losing_run(
@@ -906,7 +928,7 @@ def test_schema_v9_expands_continuation_values_without_losing_run(
     expanded = start(upgraded, output_continuation="50")
     assert expanded.run.output_continuation == "50"
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
         runs_sql = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
         ).fetchone()[0]

@@ -107,7 +107,7 @@ class FileToolReceiptWriter:
                 previous_hash = self._previous_hash or self._read_previous_hash()
                 now = self._clock()
                 body = {
-                    "version": 3,
+                    "version": 4,
                     "receiptId": str(uuid4()),
                     "approvalId": grant.approval_id,
                     "actor": "local_user",
@@ -117,6 +117,18 @@ class FileToolReceiptWriter:
                     "workspaceRevision": context.workspace.revision,
                     "workspaceRootHash": context.workspace.root_hash,
                     "workspaceAvailability": context.workspace.availability.value,
+                    "workspaceMountManifestHash": context.workspace.mount_manifest_hash,
+                    "workspaceMounts": [
+                        {
+                            "id": mount.id,
+                            "alias": mount.alias,
+                            "rootHash": mount.root_hash,
+                            "accessMode": mount.access_mode.value,
+                            "enabled": mount.enabled,
+                            "availability": mount.availability.value,
+                        }
+                        for mount in context.workspace.mounts
+                    ],
                     "serverId": definition.source_id,
                     "toolId": definition.name,
                     "requestHash": grant.request_hash,

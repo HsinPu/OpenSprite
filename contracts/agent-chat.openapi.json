@@ -618,6 +618,7 @@
           "workspaceRevision",
           "workspaceName",
           "workspaceRootHash",
+          "workspaceMountManifestHash",
           "userMessageId",
           "assistantMessageId",
           "providerId",
@@ -655,6 +656,10 @@
               {"type": "string", "pattern": "^[0-9a-f]{64}$"},
               {"type": "null"}
             ]
+          },
+          "workspaceMountManifestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           },
           "userMessageId": {
             "$ref": "#/components/schemas/Identifier"
@@ -843,10 +848,23 @@
         "additionalProperties": false,
         "maxProperties": 0
       },
+      "WorkspaceMountEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "alias", "rootHash", "accessMode", "enabled", "availability"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "alias": {"type": "string", "minLength": 1, "maxLength": 40},
+          "rootHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "accessMode": {"type": "string", "enum": ["read_only", "read_write"]},
+          "enabled": {"type": "boolean"},
+          "availability": {"type": "string", "enum": ["available", "unavailable", "not_applicable"]}
+        }
+      },
       "RunStartedEventData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"],
+        "required": ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability", "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"],
         "properties": {
           "workspaceId": {"$ref": "#/components/schemas/Identifier"},
           "workspaceRevision": {"type": "integer", "minimum": 1},
@@ -860,7 +878,10 @@
           "workspaceAvailability": {
             "type": "string",
             "enum": ["available", "unavailable", "not_applicable"]
-          }
+          },
+          "workspaceMountManifestHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "workspaceMountCount": {"type": "integer", "minimum": 0, "maximum": 20},
+          "workspaceMounts": {"type": "array", "maxItems": 20, "items": {"$ref": "#/components/schemas/WorkspaceMountEventData"}}
         }
       },
       "ModelStartedEventData": {

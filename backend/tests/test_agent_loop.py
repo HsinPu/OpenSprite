@@ -60,6 +60,8 @@ from opensprite_backend.workspaces import (
     WorkspaceAvailability,
     WorkspaceExecutionContext,
     WorkspaceKind,
+    WorkspaceMountAccess,
+    WorkspaceMountExecutionContext,
 )
 
 
@@ -1008,15 +1010,28 @@ async def test_workspace_snapshot_reaches_prompt_and_tool_context(
     tmp_path: Path,
 ) -> None:
     repository = store(tmp_path)
+    mount = WorkspaceMountExecutionContext(
+        id="22222222-2222-4222-8222-222222222222",
+        alias="Docs",
+        root_path=str((tmp_path / "docs").resolve()),
+        root_hash="b" * 64,
+        access_mode=WorkspaceMountAccess.READ_ONLY,
+        enabled=True,
+        availability=WorkspaceAvailability.AVAILABLE,
+        unavailable_reason=None,
+    )
     workspace = WorkspaceExecutionContext(
         id="11111111-1111-4111-8111-111111111111",
-        kind=WorkspaceKind.DIRECTORY,
+        kind=WorkspaceKind.MANAGED,
         name="Alpha",
         root_path=str((tmp_path / "project").resolve()),
         revision=3,
         root_hash="a" * 64,
         availability=WorkspaceAvailability.AVAILABLE,
         unavailable_reason=None,
+        directory_name="Alpha",
+        mounts=(mount,),
+        mount_manifest_hash="c" * 64,
     )
     run = repository.start_run(
         conversation_id=None,
@@ -1029,6 +1044,7 @@ async def test_workspace_snapshot_reaches_prompt_and_tool_context(
         workspace_revision=workspace.revision,
         workspace_name_snapshot=workspace.name,
         workspace_root_hash=workspace.root_hash,
+        workspace_mount_manifest_hash=workspace.mount_manifest_hash,
     ).run
 
     tool = LookupTool()
@@ -1058,8 +1074,20 @@ async def test_workspace_snapshot_reaches_prompt_and_tool_context(
         "workspaceName": "Alpha",
         "workspaceRootHash": "a" * 64,
         "workspaceAvailability": "available",
+        "workspaceMountManifestHash": "c" * 64,
+        "workspaceMountCount": 1,
+        "workspaceMounts": [{
+            "id": mount.id,
+            "alias": "Docs",
+            "rootHash": "b" * 64,
+            "accessMode": "read_only",
+            "enabled": True,
+            "availability": "available",
+        }],
     }
     assert workspace.root_path not in json.dumps(started.data)
+    assert mount.root_path not in json.dumps(started.data)
+    assert mount.root_path.encode("utf-8") not in repository.database_file.read_bytes()
 
 
 @async_test

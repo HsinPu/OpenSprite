@@ -47,11 +47,12 @@ from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.schedules.models import ExecutionProfile
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_ID,
     JsonWorkspaceStore,
     WorkspaceCatalogService,
     WorkspaceError,
     WorkspaceFailure,
+    WorkspaceMountAccess,
     WorkspaceMutationGate,
     WorkspaceRootPolicy,
 )
@@ -203,7 +204,7 @@ async def test_start_run_persists_then_executes_and_lists_real_data(
 
     accepted = await chat.start_run(
         conversation_id=None,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
         message="整理今天的工作",
     )
@@ -213,7 +214,7 @@ async def test_start_run_persists_then_executes_and_lists_real_data(
     assert completed.status is RunStatus.COMPLETED
     assert completed.output_budget == "auto"
     conversations = await chat.list_conversations(
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         limit=50,
         before=None,
     )
@@ -240,13 +241,13 @@ async def test_start_is_idempotent_and_does_not_duplicate_execution(
 
     first = await chat.start_run(
         conversation_id=None,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         client_request_id=request_id,
         message="hello",
     )
     replay = await chat.start_run(
         conversation_id=None,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         client_request_id=request_id,
         message="hello",
     )
@@ -279,7 +280,7 @@ def test_start_requires_selected_connected_provider(
         with pytest.raises(AgentChatError) as captured:
             await chat.start_run(
                 conversation_id=None,
-                workspace_id=UNASSIGNED_WORKSPACE_ID,
+                workspace_id=DEFAULT_WORKSPACE_ID,
                 client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
                 message="hello",
             )
@@ -296,7 +297,7 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
     chat, _repository, manager, _workspaces = service(tmp_path)
     accepted = await chat.start_run(
         conversation_id=None,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
         message="hello",
     )
@@ -321,11 +322,8 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     chat, repository, manager, workspaces = service(tmp_path)
-    root = tmp_path / "project"
-    root.mkdir()
     catalog = await workspaces.create(
         name="Alpha",
-        root_path=str(root),
         expected_revision=0,
     )
     workspace = next(
@@ -349,7 +347,6 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     renamed = await workspaces.update(
         workspace.id,
         name="Beta",
-        root_path=str(root),
         expected_revision=workspace.revision,
     )
     await manager.wait(accepted.run.id)
@@ -364,7 +361,7 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     assert accepted.run.workspace_revision == workspace.revision
     assert accepted.run.workspace_name_snapshot == "Alpha"
     assert accepted.run.workspace_root_hash is not None
-    assert str(root).encode("utf-8") not in repository.database_file.read_bytes()
+    assert workspace.root_path.encode("utf-8") not in repository.database_file.read_bytes()
     page = await chat.list_conversations(
         workspace_id=workspace.id,
         limit=50,
@@ -374,10 +371,10 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
 
     moved = await chat.move_conversation(
         accepted.conversation.id,
-        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        workspace_id=DEFAULT_WORKSPACE_ID,
         expected_revision=accepted.conversation.revision,
     )
-    assert moved.workspace_id == UNASSIGNED_WORKSPACE_ID
+    assert moved.workspace_id == DEFAULT_WORKSPACE_ID
     assert moved.revision == 2
     persisted_run = repository.get_run(accepted.run.id)
     assert persisted_run is not None
@@ -386,7 +383,7 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
 
 
 @async_test
-async def test_shared_workspace_gate_serializes_run_start_and_root_change(
+async def test_shared_workspace_gate_serializes_run_start_and_mount_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -397,7 +394,6 @@ async def test_shared_workspace_gate_serializes_run_start_and_root_change(
     replacement.mkdir()
     catalog = await workspaces.create(
         name="Alpha",
-        root_path=str(root),
         expected_revision=0,
     )
     workspace = next(
@@ -424,10 +420,12 @@ async def test_shared_workspace_gate_serializes_run_start_and_root_change(
     )
     assert await asyncio.to_thread(entered.wait, 1)
     update_task = asyncio.create_task(
-        workspaces.update(
+        workspaces.add_mount(
             workspace.id,
-            name="Alpha",
             root_path=str(replacement),
+            alias="Replacement",
+            access_mode=WorkspaceMountAccess.READ_ONLY,
+            enabled=True,
             expected_revision=workspace.revision,
         )
     )

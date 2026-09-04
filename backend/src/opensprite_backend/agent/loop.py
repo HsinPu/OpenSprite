@@ -48,8 +48,8 @@ from opensprite_backend.tools.definition import ToolContext
 from opensprite_backend.tools.dynamic import DynamicToolProvider
 from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
-    UnassignedWorkspaceResolver,
+    DEFAULT_WORKSPACE_ID,
+    DefaultWorkspaceResolver,
     WorkspaceExecutionContext,
 )
 
@@ -214,9 +214,9 @@ class AgentLoop:
         if cancellation_event.is_set():
             return await asyncio.to_thread(self._repository.request_cancel, run_id)
         if workspace is None:
-            if run.workspace_id != UNASSIGNED_WORKSPACE_ID:
+            if run.workspace_id != DEFAULT_WORKSPACE_ID:
                 return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
-            workspace = UnassignedWorkspaceResolver().execution_context(run.workspace_id)
+            workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
             if (
@@ -224,12 +224,24 @@ class AgentLoop:
                 or workspace.revision != run.workspace_revision
                 or workspace.name != run.workspace_name_snapshot
                 or workspace.root_hash != run.workspace_root_hash
+                or workspace.mount_manifest_hash != run.workspace_mount_manifest_hash
             ):
                 return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
             run = await asyncio.to_thread(
                 self._repository.mark_run_started,
                 run_id,
                 workspace.availability,
+                tuple(
+                    {
+                        "id": mount.id,
+                        "alias": mount.alias,
+                        "rootHash": mount.root_hash,
+                        "accessMode": mount.access_mode.value,
+                        "enabled": mount.enabled,
+                        "availability": mount.availability.value,
+                    }
+                    for mount in workspace.mounts
+                ),
             )
             run_tools = (
                 self._tools.extended(await self._dynamic_tools.snapshot_tools())

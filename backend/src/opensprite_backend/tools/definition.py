@@ -10,8 +10,8 @@ from enum import Enum
 from typing import Protocol
 
 from opensprite_backend.workspaces import (
-    UNASSIGNED_WORKSPACE_ID,
-    UnassignedWorkspaceResolver,
+    DEFAULT_WORKSPACE_ID,
+    DefaultWorkspaceResolver,
     WorkspaceExecutionContext,
 )
 
@@ -102,8 +102,8 @@ class ToolContext:
     conversation_id: str
     cancellation_event: asyncio.Event
     workspace: WorkspaceExecutionContext = field(
-        default_factory=lambda: UnassignedWorkspaceResolver().execution_context(
-            UNASSIGNED_WORKSPACE_ID
+        default_factory=lambda: DefaultWorkspaceResolver().execution_context(
+            DEFAULT_WORKSPACE_ID
         )
     )
 

@@ -40,6 +40,8 @@ from opensprite_backend.workspaces import (
     WorkspaceAvailability,
     WorkspaceExecutionContext,
     WorkspaceKind,
+    WorkspaceMountAccess,
+    WorkspaceMountExecutionContext,
     WorkspaceUnavailableReason,
 )
 
@@ -152,11 +154,13 @@ async def test_allow_once_exposes_arguments_then_executes(tmp_path: Path) -> Non
     )
     assert "hello" not in receipt_text
     receipts = [json.loads(line) for line in receipt_text.splitlines()]
-    assert all(item["version"] == 3 for item in receipts)
+    assert all(item["version"] == 4 for item in receipts)
     assert all(item["workspaceId"] == context.workspace.id for item in receipts)
     assert all(item["workspaceRevision"] == 1 for item in receipts)
     assert all(item["workspaceRootHash"] is None for item in receipts)
     assert all(item["workspaceAvailability"] == "not_applicable" for item in receipts)
+    assert all(item["workspaceMountManifestHash"] == context.workspace.mount_manifest_hash for item in receipts)
+    assert all(item["workspaceMounts"] == [] for item in receipts)
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
     assert [event.type for event in events[-2:]] == [
         RunEventType.TOOL_APPROVAL_REQUESTED,
@@ -247,19 +251,33 @@ def test_receipt_verification_detects_tampering(tmp_path: Path) -> None:
     writer = FileToolReceiptWriter(paths)
     definition = tool().definition
     root = str((tmp_path / "workspace-root").resolve())
+    mount_root = str((tmp_path / "external-docs").resolve())
+    mount = WorkspaceMountExecutionContext(
+        id="55555555-5555-4555-8555-555555555555",
+        alias="Docs",
+        root_path=mount_root,
+        root_hash="c" * 64,
+        access_mode=WorkspaceMountAccess.READ_ONLY,
+        enabled=True,
+        availability=WorkspaceAvailability.AVAILABLE,
+        unavailable_reason=None,
+    )
     context = ToolContext(
         "11111111-1111-4111-8111-111111111111",
         "22222222-2222-4222-8222-222222222222",
         asyncio.Event(),
         WorkspaceExecutionContext(
             id="44444444-4444-4444-8444-444444444444",
-            kind=WorkspaceKind.DIRECTORY,
+            kind=WorkspaceKind.MANAGED,
             name="Alpha",
             root_path=root,
             revision=4,
             root_hash="b" * 64,
             availability=WorkspaceAvailability.UNAVAILABLE,
             unavailable_reason=WorkspaceUnavailableReason.MISSING,
+            directory_name="Alpha",
+            mounts=(mount,),
+            mount_manifest_hash="d" * 64,
         ),
     )
     grant = ToolApprovalGrant(
@@ -271,14 +289,20 @@ def test_receipt_verification_detects_tampering(tmp_path: Path) -> None:
 
     receipt = next(paths.tool_receipts_dir.glob("*.jsonl"))
     raw = json.loads(receipt.read_text(encoding="utf-8"))
-    assert raw["version"] == 3
+    assert raw["version"] == 4
     assert raw["workspaceAvailability"] == "unavailable"
+    assert raw["workspaceMountManifestHash"] == "d" * 64
+    assert raw["workspaceMounts"][0]["alias"] == "Docs"
     assert root not in receipt.read_text(encoding="utf-8")
+    assert mount_root not in receipt.read_text(encoding="utf-8")
 
-    for version in (2, 1):
+    for version in (3, 2, 1):
         legacy_body = {key: value for key, value in raw.items() if key != "signature"}
         legacy_body["version"] = version
-        legacy_body.pop("workspaceAvailability")
+        legacy_body.pop("workspaceMountManifestHash")
+        legacy_body.pop("workspaceMounts")
+        if version < 3:
+            legacy_body.pop("workspaceAvailability")
         if version == 1:
             for key in ("workspaceId", "workspaceRevision", "workspaceRootHash"):
                 legacy_body.pop(key)

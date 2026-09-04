@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
-from opensprite_backend.workspaces import WorkspaceAvailability
+from opensprite_backend.workspaces import (
+    EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+    WorkspaceAvailability,
+)
 
 from .models import (
     CompletedRun,
@@ -27,8 +30,8 @@ from .models import (
     RunSnapshot,
     StartRunResult,
     StoreFailure,
-    UNASSIGNED_WORKSPACE_ID,
-    UNASSIGNED_WORKSPACE_NAME,
+    DEFAULT_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_NAME,
 )
 
 
@@ -44,7 +47,7 @@ class ConversationRepository(Protocol):
     def list_conversations(
         self,
         *,
-        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
         limit: int,
         before: str | None,
     ) -> ConversationPage: ...
@@ -95,10 +98,11 @@ class ConversationRepository(Protocol):
         log_full_prompts: bool = False,
         source: RunSource = "user",
         occurrence_id: str | None = None,
-        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
-        workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME,
+        workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
+        workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(
@@ -123,6 +127,7 @@ class ConversationRepository(Protocol):
         self,
         run_id: str,
         workspace_availability: WorkspaceAvailability | None = None,
+        workspace_mounts: tuple[Mapping[str, object], ...] = (),
     ) -> RunSnapshot: ...
 
     def append_run_event(

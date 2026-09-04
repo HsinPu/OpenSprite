@@ -97,6 +97,7 @@ class RunResponse(ChatContractModel):
     workspace_revision: int = Field(ge=1)
     workspace_name: str
     workspace_root_hash: str | None
+    workspace_mount_manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     user_message_id: UUID
     assistant_message_id: UUID | None
     provider_id: Literal["openai", "anthropic", "openrouter"]
@@ -238,6 +239,7 @@ def run_response(item: RunSnapshot) -> RunResponse:
         workspaceRevision=item.workspace_revision,
         workspaceName=item.workspace_name_snapshot,
         workspaceRootHash=item.workspace_root_hash,
+        workspaceMountManifestHash=item.workspace_mount_manifest_hash,
         userMessageId=item.user_message_id,
         assistantMessageId=item.assistant_message_id,
         providerId=item.provider_id,

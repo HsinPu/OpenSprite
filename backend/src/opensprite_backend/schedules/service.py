@@ -10,7 +10,7 @@ from .models import CadenceType, Occurrence, OccurrencePage, OccurrenceStatus, O
 from .recurrence import RecurrenceError, next_occurrence
 from .repository import ScheduleFailure, ScheduleRepository, ScheduleStoreError
 from ..workspaces import (
-    UnassignedWorkspaceResolver,
+    DefaultWorkspaceResolver,
     WorkspaceError,
     WorkspaceFailure,
     WorkspaceMutationGate,
@@ -102,7 +102,7 @@ class ScheduleService:
         on_change: Callable[[], None] | None = None,
     ) -> None:
         self.repository = repository
-        self._workspaces = workspaces or UnassignedWorkspaceResolver()
+        self._workspaces = workspaces or DefaultWorkspaceResolver()
         self._workspace_mutation_gate = workspace_mutation_gate or WorkspaceMutationGate()
         self._clock = clock or (lambda: datetime.now(UTC))
         self._on_change = on_change or (lambda: None)

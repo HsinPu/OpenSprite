@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
-from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceAvailability
+from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, WorkspaceAvailability
 from opensprite_backend.schedules import (
     Cadence, CadenceType, ExecutionProfile, OccurrenceStatus, OccurrenceTrigger,
     ScheduleDraft, ScheduleFailure, ScheduleStatus, ScheduleStoreError,
@@ -22,7 +22,7 @@ IDS = tuple(f"00000000-0000-4000-8000-{index:012d}" for index in range(1, 30))
 
 def draft(
     cadence: Cadence | None = None,
-    workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> ScheduleDraft:
     return ScheduleDraft(
         "Morning brief",
@@ -88,7 +88,7 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
     assert created.name == "Morning brief"
     assert conversations.get_run(accepted.run.id) is not None
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 def test_schedule_workspace_change_moves_owned_conversation_atomically(
