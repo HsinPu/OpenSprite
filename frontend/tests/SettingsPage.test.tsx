@@ -58,8 +58,8 @@ const mcpConnections: McpConnectionsController = {
   stop: async () => null, loadTools: async () => null,
 };
 
-function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections">) {
-  return <ProductionSettingsPage {...props} toolSettings={toolSettings} mcpConnections={mcpConnections} />;
+function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections" | "active" | "onOpenScheduleConversation">) {
+  return <ProductionSettingsPage {...props} active toolSettings={toolSettings} mcpConnections={mcpConnections} onOpenScheduleConversation={() => undefined} />;
 }
 
 const disconnectedCatalog = {
@@ -264,7 +264,7 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具", "外觀Demo", "隱私", "關於"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具", "排程", "外觀Demo", "隱私", "關於"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
     expect(screen.getAllByText("Demo")).toHaveLength(2);
@@ -304,6 +304,22 @@ describe("provider settings", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("renders schedules as an implemented settings section", async () => {
+    vi.stubGlobal("fetch", vi.fn((path: string) => {
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(disconnectedCatalog)));
+      if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [], nextCursor: null })));
+      if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
+      throw new Error(`unexpected request ${path}`);
+    }));
+
+    render(<GeneralSettingsPageHarness section="schedules" />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
+    expect(screen.getByText("設定 OpenSprite 自動執行工作的時間與模型。")).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "排程" })).toBeNull();
+    expect(await screen.findByRole("heading", { name: "還沒有排程" })).toBeTruthy();
   });
 
   it("shows the real tool controls and keeps external tools as future items", () => {

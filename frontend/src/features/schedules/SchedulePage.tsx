@@ -19,12 +19,14 @@ import "./schedules.css";
 
 type Props = {
   active: boolean;
+  container: HTMLElement | null;
   defaultTimeZone: string;
   modelSelection: PersistedModelSelection | null;
   modelChoices: readonly ModelChoice[];
   responseMode: ResponseMode;
   outputContinuation: OutputContinuation;
   onOpenConversation: (conversationId: string) => void;
+  onOverlayChange?: (open: boolean) => void;
 };
 
 type FormState = {
@@ -84,7 +86,7 @@ function scheduleForm(schedule: Schedule): FormState {
   };
 }
 
-export function SchedulePage({ active, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation }: Props) {
+export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange }: Props) {
   const { t, locale } = useI18n();
   const controller = useSchedules(active);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -94,12 +96,19 @@ export function SchedulePage({ active, defaultTimeZone, modelSelection, modelCho
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [mobile, setMobile] = useState(() => window.innerWidth <= 767);
   const openerRef = useRef<HTMLElement | null>(null);
+  const historyOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const resize = () => setMobile(window.innerWidth <= 767);
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
+
+  useEffect(() => {
+    onOverlayChange?.(editorOpen || historyId !== null);
+  }, [editorOpen, historyId, onOverlayChange]);
+
+  useEffect(() => () => onOverlayChange?.(false), [onOverlayChange]);
 
   const grouped = useMemo(() => ({
     active: controller.schedules.filter((item) => item.status === "active"),
@@ -177,13 +186,12 @@ export function SchedulePage({ active, defaultTimeZone, modelSelection, modelCho
     ? t(`schedules.error.${controller.error.code}` as never)
     : controller.error ? t("schedules.error.load") : null;
 
-  const editor = <ScheduleEditor form={form} setForm={setForm} modelOptions={modelOptions} saving={controller.saving} error={formError} onCancel={closeEditor} onSave={() => void save()} />;
+  const editor = <ScheduleEditor container={container} form={form} setForm={setForm} modelOptions={modelOptions} saving={controller.saving} error={formError} onCancel={closeEditor} onSave={() => void save()} />;
 
-  return <section className="schedules-page" aria-labelledby="schedules-title">
-    <header className="schedules-header">
-      <div><p className="schedules-kicker"><CalendarOutlined /> {t("schedules.kicker")}</p><h1 id="schedules-title">{t("schedules.title")}</h1><p>{t("schedules.description")}</p></div>
+  return <section className="schedules-settings" aria-label={t("settings.category.schedules")}>
+    <div className="schedules-toolbar">
       <Button type="primary" icon={<PlusOutlined />} onClick={(event) => openEditor(null, event.currentTarget)} disabled={!modelSelection}>{t("schedules.create")}</Button>
-    </header>
+    </div>
     {controller.runtimeStatus?.continuity !== "linger_enabled" ? <div className="schedules-warning" role="status">{t(controller.runtimeStatus?.platform === "linux" ? "schedules.warning.linux" : "schedules.warning.windows")}</div> : null}
     {errorText ? <div className="schedules-error" role="alert"><span>{errorText}</span><Button onClick={() => void controller.refresh()}>{t("common.retry")}</Button></div> : null}
     {controller.loading ? <p className="schedules-state" role="status">{t("schedules.loading")}</p> : null}
@@ -196,31 +204,32 @@ export function SchedulePage({ active, defaultTimeZone, modelSelection, modelCho
         <Button icon={<PlayCircleOutlined />} onClick={() => void controller.runNow(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.runNow")}</Button>
         {item.status === "active" ? <Button icon={<PauseCircleOutlined />} onClick={() => void controller.pause(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.pause")}</Button> : item.status === "paused" ? <Button icon={<PlayCircleOutlined />} onClick={() => void controller.resume(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.resume")}</Button> : null}
         <Button icon={<EditOutlined />} onClick={(event) => openEditor(item, event.currentTarget)}>{t("schedules.edit")}</Button>
-        <Button icon={<HistoryOutlined />} onClick={() => { setHistoryId(item.id); void controller.loadOccurrences(item.id); }}>{t("schedules.history")}</Button>
+        <Button icon={<HistoryOutlined />} onClick={(event) => { historyOpenerRef.current = event.currentTarget; setHistoryId(item.id); void controller.loadOccurrences(item.id); }}>{t("schedules.history")}</Button>
         {item.conversationId ? <Button onClick={() => onOpenConversation(item.conversationId!)}>{t("schedules.openConversation")}</Button> : null}
-        <Popconfirm title={t("schedules.deleteConfirm")} description={t("schedules.deleteDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.remove(item).catch(() => undefined)}><Button danger>{t("common.remove")}</Button></Popconfirm>
+        <Popconfirm getPopupContainer={() => container ?? document.body} title={t("schedules.deleteConfirm")} description={t("schedules.deleteDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.remove(item).catch(() => undefined)}><Button danger>{t("common.remove")}</Button></Popconfirm>
       </div>
     </article>)}</div></section> : null)}
-    {mobile ? <Drawer open={editorOpen} placement="right" size="100vw" title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} onClose={closeEditor} destroyOnHidden>{editor}</Drawer> : <Modal open={editorOpen} title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} footer={null} onCancel={closeEditor} destroyOnHidden>{editor}</Modal>}
-    <Drawer open={historyId !== null} placement="right" size={mobile ? "100vw" : 480} title={t("schedules.historyTitle")} onClose={() => setHistoryId(null)}><OccurrenceHistory items={historyId ? controller.occurrences[historyId] ?? [] : []} formatDate={formatDate} /></Drawer>
+    {mobile ? <Drawer getContainer={container ?? false} rootStyle={container ? { position: "absolute" } : undefined} open={editorOpen} placement="right" size="100vw" title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} onClose={closeEditor} destroyOnHidden>{editor}</Drawer> : <Modal rootClassName="schedule-editor-modal" getContainer={container ?? false} open={editorOpen} title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} footer={null} onCancel={closeEditor} destroyOnHidden>{editor}</Modal>}
+    <Drawer getContainer={container ?? false} rootStyle={container ? { position: "absolute" } : undefined} open={historyId !== null} placement="right" size={mobile ? "100vw" : 480} title={t("schedules.historyTitle")} onClose={() => { setHistoryId(null); window.requestAnimationFrame(() => historyOpenerRef.current?.focus()); }}><OccurrenceHistory items={historyId ? controller.occurrences[historyId] ?? [] : []} formatDate={formatDate} /></Drawer>
   </section>;
 }
 
-function ScheduleEditor({ form, setForm, modelOptions, saving, error, onCancel, onSave }: { form: FormState; setForm: (next: FormState) => void; modelOptions: { value: string; label: string }[]; saving: boolean; error: string | null; onCancel: () => void; onSave: () => void }) {
+function ScheduleEditor({ container, form, setForm, modelOptions, saving, error, onCancel, onSave }: { container: HTMLElement | null; form: FormState; setForm: (next: FormState) => void; modelOptions: { value: string; label: string }[]; saving: boolean; error: string | null; onCancel: () => void; onSave: () => void }) {
   const { t } = useI18n();
   const patch = (next: Partial<FormState>) => setForm({ ...form, ...next });
+  const popupContainer = (trigger: HTMLElement) => container ?? trigger.parentElement ?? document.body;
   return <form className="schedule-editor" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
     <label>{t("schedules.field.name")}<Input value={form.name} maxLength={120} onChange={(event) => patch({ name: event.target.value })} /></label>
     <label>{t("schedules.field.prompt")}<Input.TextArea value={form.prompt} rows={7} maxLength={32768} showCount onChange={(event) => patch({ prompt: event.target.value })} /></label>
-    <label>{t("schedules.field.cadence")}<Select value={form.cadenceType} options={["once", "daily", "weekly"].map((value) => ({ value, label: t(`schedules.cadence.${value}` as never) }))} onChange={(cadenceType) => patch({ cadenceType })} /></label>
+    <label>{t("schedules.field.cadence")}<Select getPopupContainer={popupContainer} value={form.cadenceType} options={["once", "daily", "weekly"].map((value) => ({ value, label: t(`schedules.cadence.${value}` as never) }))} onChange={(cadenceType) => patch({ cadenceType })} /></label>
     {form.cadenceType === "once" ? <label>{t("schedules.field.runAt")}<Input type="datetime-local" value={form.runAt} onChange={(event) => patch({ runAt: event.target.value })} /></label> : <label>{t("schedules.field.localTime")}<Input type="time" value={form.localTime} onChange={(event) => patch({ localTime: event.target.value })} /></label>}
     {form.cadenceType === "weekly" ? <fieldset><legend>{t("schedules.field.weekdays")}</legend><div className="schedule-weekdays">{[1,2,3,4,5,6,7].map((day) => <button type="button" aria-pressed={form.weekdays.includes(day)} className={form.weekdays.includes(day) ? "is-selected" : ""} key={day} onClick={() => patch({ weekdays: form.weekdays.includes(day) ? form.weekdays.filter((item) => item !== day) : [...form.weekdays, day] })}>{t(`schedules.weekday.${day}` as never)}</button>)}</div></fieldset> : null}
     <label>{t("schedules.field.timeZone")}<Input value={form.timeZone} onChange={(event) => patch({ timeZone: event.target.value })} /></label>
-    <label>{t("schedules.field.model")}<Select showSearch value={form.providerModel || undefined} options={modelOptions} onChange={(providerModel) => patch({ providerModel })} /></label>
-    <label>{t("models.responseMode")}<Select value={form.responseMode} options={(["default", "fast", "balanced", "deep"] as const).map((value) => ({ value, label: t(`models.response.${value}`) }))} onChange={(value) => patch({ responseMode: value })} /></label>
-    <label>{t("models.contextBudget")}<Select value={form.contextBudget} options={(["auto", "32k", "64k", "128k", "256k", "max"] as const).map((value) => ({ value, label: t(`models.context.${value}`) }))} onChange={(value) => patch({ contextBudget: value })} /></label>
-    <label>{t("models.outputBudget")}<Select value={form.outputBudget} options={(["auto", "8k", "16k", "32k", "64k", "max"] as const).map((value) => ({ value, label: t(`models.output.${value}`) }))} onChange={(value) => patch({ outputBudget: value })} /></label>
-    <label>{t("models.outputContinuation")}<Select value={form.outputContinuation} options={(["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const).map((value) => ({ value, label: t(value === "off" || value === "unlimited" ? `models.outputContinuation.${value}` : `models.outputContinuation.${({ "1": "one", "2": "two", "3": "three", "5": "five", "10": "ten", "20": "twenty", "50": "fifty" } as const)[value]}`) }))} onChange={(value) => patch({ outputContinuation: value })} /></label>
+    <label>{t("schedules.field.model")}<Select getPopupContainer={popupContainer} showSearch value={form.providerModel || undefined} options={modelOptions} onChange={(providerModel) => patch({ providerModel })} /></label>
+    <label>{t("models.responseMode")}<Select getPopupContainer={popupContainer} value={form.responseMode} options={(["default", "fast", "balanced", "deep"] as const).map((value) => ({ value, label: t(`models.response.${value}`) }))} onChange={(value) => patch({ responseMode: value })} /></label>
+    <label>{t("models.contextBudget")}<Select getPopupContainer={popupContainer} value={form.contextBudget} options={(["auto", "32k", "64k", "128k", "256k", "max"] as const).map((value) => ({ value, label: t(`models.context.${value}`) }))} onChange={(value) => patch({ contextBudget: value })} /></label>
+    <label>{t("models.outputBudget")}<Select getPopupContainer={popupContainer} value={form.outputBudget} options={(["auto", "8k", "16k", "32k", "64k", "max"] as const).map((value) => ({ value, label: t(`models.output.${value}`) }))} onChange={(value) => patch({ outputBudget: value })} /></label>
+    <label>{t("models.outputContinuation")}<Select getPopupContainer={popupContainer} value={form.outputContinuation} options={(["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const).map((value) => ({ value, label: t(value === "off" || value === "unlimited" ? `models.outputContinuation.${value}` : `models.outputContinuation.${({ "1": "one", "2": "two", "3": "three", "5": "five", "10": "ten", "20": "twenty", "50": "fifty" } as const)[value]}`) }))} onChange={(value) => patch({ outputContinuation: value })} /></label>
     {error ? <p className="schedule-editor__error" role="alert">{error}</p> : null}
     <div className="schedule-editor__actions"><Button onClick={onCancel}>{t("common.cancel")}</Button><Button type="primary" htmlType="submit" loading={saving}>{t("schedules.save")}</Button></div>
   </form>;

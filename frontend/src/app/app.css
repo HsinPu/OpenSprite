@@ -183,7 +183,6 @@ button {
 }
 
 .new-chat-button:focus-visible,
-.schedules-nav-button:focus-visible,
 .conversation-link:focus-visible,
 .utility-nav button:focus-visible,
 .mobile-execution-button:focus-visible,
@@ -317,27 +316,6 @@ button {
   justify-content: center;
 }
 
-.schedules-nav-button {
-  display: flex;
-  min-height: 44px;
-  margin-top: 10px;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border: 1px solid var(--os-border);
-  border-radius: 11px;
-  background: var(--os-surface);
-  cursor: pointer;
-  font-weight: 650;
-}
-
-.schedules-nav-button:hover,
-.schedules-nav-button.is-active {
-  border-color: var(--os-primary);
-  background: var(--os-primary-soft);
-  color: var(--os-primary-strong);
-}
-
 .app-shell.is-sidebar-collapsed .brand {
   padding: 2px 0 0;
 }
@@ -379,11 +357,6 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.app-shell.is-sidebar-collapsed .schedules-nav-button {
-  width: 52px;
-  padding: 0;
 }
 
 .settings-dialog {
@@ -583,9 +556,6 @@ button {
     overflow: hidden;
   }
 
-  .app-shell.is-sidebar-collapsed .schedules-nav-button {
-    width: 100%;
-  }
 }
 
 @media (max-width: 767px) {

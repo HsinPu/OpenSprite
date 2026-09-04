@@ -23,7 +23,6 @@ export const zhTWMessages = {
   "app.features": "應用程式功能",
   "app.settings": "設定",
   "app.logout": "登出",
-  "app.schedules": "排程",
 
   "schedules.kicker": "自動執行",
   "schedules.title": "排程",
@@ -234,6 +233,7 @@ export const zhTWMessages = {
   "settings.category.models": "AI 模型",
   "settings.category.memory": "記憶與資料",
   "settings.category.tools": "工具",
+  "settings.category.schedules": "排程",
   "settings.category.appearance": "外觀",
   "settings.category.privacy": "隱私",
   "settings.category.about": "關於",
@@ -251,6 +251,7 @@ export const zhTWMessages = {
   "settings.generalIntro": "設定介面語言與時間顯示。",
   "settings.modelsIntro": "連接你要使用的 AI 服務，並選擇要使用的模型與回應模式。",
   "settings.toolsIntro": "管理 AI 可以使用的工具與權限。",
+  "settings.schedulesIntro": "設定 OpenSprite 自動執行工作的時間與模型。",
   "settings.saved": "已儲存",
   "settings.saving": "儲存中…",
   "settings.future": "未來上線",

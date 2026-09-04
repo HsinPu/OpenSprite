@@ -41,6 +41,7 @@ run schedules. Linux user services may continue after logout only when user
 lingering is enabled. The installer detects and warns but never invokes `sudo`
 or changes linger policy.
 
-The UI polls the authenticated schedule API every five seconds while the page is
-open. There is no WebSocket, OS notification, Email, or push notification in
-version 0.10.0.
+Schedule management lives under Settings rather than the primary conversation
+navigation. The UI polls the authenticated schedule API every five seconds only
+while Settings is open on the Schedules section. There is no WebSocket, OS
+notification, Email, or push notification in version 0.10.x.

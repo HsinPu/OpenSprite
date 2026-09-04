@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 
-export type IconName = "settings" | "robot" | "database" | "connections" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic" | "openrouter";
+export type IconName = "settings" | "robot" | "database" | "connections" | "schedules" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic" | "openrouter";
 
 export function Icon({ name }: { name: IconName }) {
   if (name === "openai") return <span className="settings-brand-icon settings-brand-icon--openai" aria-hidden="true">◎</span>;
@@ -13,6 +13,7 @@ export function Icon({ name }: { name: IconName }) {
     robot: "M8 8h8a4 4 0 0 1 4 4v5H4v-5a4 4 0 0 1 4-4Zm4-4v4m-5 9v2m10-2v2M9 13h.1M15 13h.1",
     database: "M5 6c0-1.1 3.1-2 7-2s7 .9 7 2-3.1 2-7 2-7-.9-7-2Zm0 0v6c0 1.1 3.1 2 7 2s7-.9 7-2V6m-14 6v6c0 1.1 3.1 2 7 2s7-.9 7-2v-6",
     connections: "M8 12h8m-9-4a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm10 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6ZM6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm3-9 7 3m-7-6 7-3",
+    schedules: "M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm7 7v4l3 2",
     appearance: "M12 3a9 9 0 0 0 0 18h1.2a1.8 1.8 0 0 0 1.7-2.4 1.8 1.8 0 0 1 1.7-2.4H19a2 2 0 0 0 2-2A9 9 0 0 0 12 3Zm-4 9h.1M8 8h.1m4-2h.1m4 3h.1",
     privacy: "M12 3 19 6v5c0 4.3-2.9 8.1-7 9-4.1-.9-7-4.7-7-9V6l7-3Zm-2 9 1.5 1.5L15 10",
     info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v5m0-8h.1",

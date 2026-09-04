@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/app/App";
@@ -284,14 +284,66 @@ describe("persisted AI settings", () => {
 });
 
 describe("conversation navigation", () => {
-  it("opens schedules from the sidebar and preserves the schedules hash", () => {
+  it("keeps schedules out of the main sidebar and opens them inside settings", () => {
+    const { container } = render(<App />);
+    const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
+
+    expect(within(sidebar).queryByRole("button", { name: "排程" })).toBeNull();
+    fireEvent.click(within(sidebar).getByRole("button", { name: "設定" }));
+    const dialog = container.querySelector<HTMLElement>(".settings-dialog")!;
+    fireEvent.click(within(dialog).getByRole("button", { name: "排程" }));
+
+    expect(within(dialog).getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
+    expect(window.location.hash).not.toBe("#schedules");
+  });
+
+  it("opens a scheduled conversation without reopening the mobile sidebar", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "balanced", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "Asia/Taipei" })));
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
+      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [{ id: "20000000-0000-4000-8000-000000000001", name: "晨間整理", prompt: "整理工作", timeZone: "Asia/Taipei", cadence: { type: "daily", localTime: "09:00" }, executionProfile: { providerId: "openai", modelId: "gpt-5.6", responseMode: "balanced", contextBudget: "64k", outputBudget: "16k", outputContinuation: "5" }, status: "active", conversationId, nextRunAt: "2026-09-05T01:00:00Z", revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", latestOccurrence: null }], nextCursor: null })));
+      if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    const dialog = container.querySelector<HTMLDialogElement>(".settings-dialog")!;
+    fireEvent.click(within(dialog).getByRole("button", { name: "排程" }));
+    await screen.findByRole("heading", { name: "晨間整理" });
+    fireEvent.click(screen.getByRole("button", { name: "開啟對話" }));
+
+    await waitFor(() => expect(dialog.open).toBe(false));
+    expect(window.location.hash).toBe(`#chat=${conversationId}`);
+    expect(container.querySelector("#main-navigation-sidebar")?.hasAttribute("inert")).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(container.querySelector(".app-content")));
+  });
+
+  it("normalizes the removed schedules hash through the configured startup view", async () => {
+    window.history.replaceState(null, "", "#schedules");
+    const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
+      if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "default", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify({ providers: [] })));
+      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "排程" }));
-
-    expect(window.location.hash).toBe("#schedules");
-    expect(screen.getByRole("heading", { level: 1, name: "排程" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { level: 1, name: "新對話" })).toBeNull();
+    await waitFor(() => expect(window.location.hash).toBe("#new-chat"));
+    expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
   });
 
   it.each([
