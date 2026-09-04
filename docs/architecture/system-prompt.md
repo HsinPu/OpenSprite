@@ -12,12 +12,20 @@ The initial dynamic surface is intentionally small:
 - fixed Role, Task, Constraints and Output sections;
 - confirmed interface locale;
 - confirmed time-zone setting; and
-- current date and time from an injectable clock.
+- current date and time from an injectable clock; and
+- the immutable Workspace execution snapshot for this Run.
 
 Tool definitions remain in the Provider's structured tool field. User
 messages, conversation history, credentials, Provider responses, hidden
-reasoning, memory, workspace paths, Skills, subagents and MCP catalogs are not
-inserted into this Prompt.
+reasoning, memory, Skills, subagents and MCP catalogs are not inserted into this
+Prompt.
+
+Prompt version 2 includes a delimited Workspace section containing ID, name,
+revision, availability and the canonical root when one exists. Workspace name
+and root are JSON-encoded untrusted metadata, not instructions. The fixed text
+also states that knowing a path grants no file capability; only tools actually
+provided to the Run may perform an action. The reserved unassigned Workspace
+has no root and uses `not_applicable` availability.
 
 ## Ownership and dependency direction
 
@@ -28,7 +36,7 @@ General Settings fallback, clock conversion and full-log writer. `runtime.py`
 composes the production provider.
 
 ```text
-General Settings + Clock + AppPaths
+General Settings + Workspace snapshot + Clock + AppPaths
                 -> DynamicSystemPromptProvider
                 -> SystemPromptProvider protocol
                 -> AgentLoop
@@ -65,10 +73,11 @@ time-zone sources, fallback status, SHA-256 digest and the complete rendered
 Prompt. It is create-only and cannot overwrite an earlier receipt. Linux uses
 `0700` directories and `0600` files; Windows relies on the user-profile ACL.
 
-These logs intentionally contain the complete current Prompt, so the entire
+These logs intentionally contain the complete current Prompt, including a
+Workspace's canonical root, so the entire
 `.opensprite` root remains sensitive. Full Prompt content is not copied into
 application logs, the database, HTTP responses or Run events.
 
-Future custom instructions, memory, workspace rules or other context must not
+Future custom instructions, memory, Workspace-specific instructions or other context must not
 enter the rendered Prompt until their trust, size, failure and full-log
 exposure policies are explicitly designed and tested.

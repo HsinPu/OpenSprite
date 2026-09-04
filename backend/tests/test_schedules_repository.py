@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import UTC, datetime, time
 import sqlite3
 from pathlib import Path
@@ -75,7 +76,7 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
     database = tmp_path / "opensprite.db"
     conversations = SqliteConversationRepository(database)
     accepted = conversations.start_run(conversation_id=None, client_request_id=IDS[20], message="keep", provider_id="openrouter", model_id="openrouter/auto", response_mode="default")
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("DROP INDEX runs_by_occurrence")
         connection.execute("DROP TABLE schedule_occurrences")
         connection.execute("DROP TABLE schedules")
@@ -86,7 +87,7 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
     created = schedules.create(draft(), next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC))
     assert created.name == "Morning brief"
     assert conversations.get_run(accepted.run.id) is not None
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
 
 

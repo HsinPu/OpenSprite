@@ -29,6 +29,7 @@ the user explicitly requests verified user-data deletion.
 │  ├─ settings.json
 │  ├─ general.json
 │  ├─ conversation.json
+│  ├─ workspaces.json
 │  ├─ tools.json
 │  ├─ mcp.json
 │  ├─ tool-receipt.key
@@ -59,7 +60,7 @@ create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
 `auth.json`, `config/access.json`, `config/access-policy.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
-`config/conversation.json`, `config/tools.json`, `config/mcp.json`,
+`config/conversation.json`, `config/workspaces.json`, `config/tools.json`, `config/mcp.json`,
 `state/providers.json`, the transient `state/provider-transaction.json`, and
 `data/opensprite.db` are implemented today. Each Run also writes one complete,
 create-only System Prompt receipt below `logs/system-prompts/<UTC-date>` before
@@ -144,16 +145,31 @@ collapsed execution-panel preference without rewriting the file; the next
 successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `config/general.json`.
 
+`config/workspaces.json` is a strict schema-v1 catalog containing a catalog
+revision, the backend-global active Workspace ID and at most 100 user Workspace
+records. A record contains UUID, NFC-normalized name, one canonical absolute
+root, item revision and UTC timestamps. The root is intentionally present only
+in this protected config boundary, process memory, and complete System Prompt
+logs; it is not copied into SQLite, ordinary runtime logs, Run events or tool
+receipts. A missing file exposes the fixed virtual unassigned Workspace without
+creating `config/`. The first create, update, active-selection or delete
+mutation performs an owner-only atomic write.
+
 `data/opensprite.db` is created only when the first user message, Run, or
 Schedule is successfully accepted. It owns Conversation, visible Message, Run,
 Schedule, ScheduleOccurrence, append-only conversation compaction, and safe
 semantic Run-event tables described by
-`agent-chat.md`. SQLite schema v10 snapshots each Run's requested output budget,
-strict output-continuation policy and full-Prompt logging preference
-and stores the resolved maximum in its `model.started` event. Empty reads,
-backend import, and service startup do not create `data/` or the database.
-SQLite schema v11 adds durable schedules, occurrence idempotency, fixed
-execution profiles, and Run source metadata. Schema v9 introduced the bounded `tool.approval_requested` and
+`agent-chat.md`. SQLite schema v12 adds Workspace identity and optimistic
+Conversation revision: Conversations and Schedules store a non-null Workspace
+ID, while Runs also snapshot Workspace revision, name and nullable root SHA-256.
+The complete root is never stored in the database. The v11-to-v12 migration
+assigns all existing rows to the fixed unassigned Workspace in one transaction.
+SQLite schema v11 added durable schedules, occurrence idempotency, fixed
+execution profiles and Run source metadata. Schema v10 snapshots each Run's
+requested output budget, strict output-continuation policy and full-Prompt
+logging preference and stores the resolved maximum in its `model.started`
+event. Empty reads, backend import, and service startup do not create `data/`
+or the database. Schema v9 introduced the bounded `tool.approval_requested` and
 `tool.approval_decided` semantic events. Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored
 relative to the data root; the database must not persist the absolute user

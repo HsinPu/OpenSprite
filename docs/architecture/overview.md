@@ -23,12 +23,13 @@ Frontend -> Contracts <- Backend
   `%LOCALAPPDATA%\OpenSprite\app` 下的程式、受限 PowerShell launcher 與 current-user Run entry
   擁有 lifecycle。
 - Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；目前的 feature boundaries
-  包含 `ai-settings`、`general-settings`、`conversation-settings`、`app-info`、`chat` 與
-  `settings`。Chat 與 Settings 可共同依賴 `features/ai-settings`，但不得互相 import，`api`
+  包含 `ai-settings`、`general-settings`、`conversation-settings`、`app-info`、`chat`、
+  `workspaces`、`schedules` 與 `settings`。Chat 與 Settings 可共同依賴已核准的 feature
+  controller，但不得互相 import，`api`
   與 `i18n` 不得反向依賴畫面功能。App shell 擁有全域導覽狀態與桌面側欄切換按鈕；
   該按鈕以 shell layout divider 為錨點，Chat workspace 只擁有聊天與執行面板控制。
 - Backend 的 `app.py` 只建立 FastAPI application、middleware、exception handlers、health route 與
-  feature router composition；Provider、AI Settings 與 Agent Chat 的 HTTP routes 分別由 `api/` 擁有。
+  feature router composition；Provider、Settings、Workspace、Schedule 與 Agent Chat 的 HTTP routes 分別由 `api/` 擁有。
 - Provider credential lifecycle policy、Protocol 與 fail-closed behavior 留在 `provider_connections.py`；
   `provider_runtime.py` 才能組裝 HTTP client、encrypted credential store、JSON metadata adapter 與
   native inference gateway。Application code 不得透過 Provider policy module 建立 concrete runtime。
@@ -75,6 +76,13 @@ General Settings schema。前端只在 application mount 時解析一次啟動�
 Conversation 清單中最近更新的一筆。`recent` 沒有可用對話或設定讀取失敗時安全回到新對話。
 輸入框的 `enter` 模式以 Enter 傳送、Shift + Enter 換行；`modifier-enter` 模式以
 Ctrl/Cmd + Enter 傳送、Enter 換行。IME composition 期間不觸發傳送，送出按鈕不受此偏好影響。
+
+Workspace 核心由 [`workspaces.md`](workspaces.md) 定義。Strict
+`config/workspaces.json` 保存使用者 Workspace catalog 與後端全域 active selection；
+Conversation 與 Schedule 在 SQLite schema v12 保存 Workspace ID，每個 Run 另保存 revision、
+名稱與 root hash 快照。完整 canonical root 不進 SQLite、一般 log、Run event 或 tool receipt，
+但會進入記憶體執行快照及完整 System Prompt log。Workspace 只提供範圍資訊，0.11.0
+不新增檔案、Git 或 Terminal 能力。
 
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
 對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。
@@ -145,8 +153,8 @@ Frontend localization 由 [`frontend-localization.md`](frontend-localization.md)
 控制日期分組及顯示時間；穩定 locale/time-zone ID 與 message key 不使用顯示文字作為
 狀態或 DOM identity。
 
-Durable Agent 排程由 [`schedules.md`](schedules.md) 定義。SQLite schema v11
-保存 once／daily／weekly schedule、固定 execution profile 與 occurrence；單一
+Durable Agent 排程由 [`schedules.md`](schedules.md) 定義。SQLite schema v12
+保存 once／daily／weekly schedule、固定 execution profile、Workspace 與 occurrence；單一
 runtime coordinator 負責補跑、重啟恢復、全域併發 1 與禁止人工核准工具。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
@@ -168,8 +176,9 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   `Referer` fallback。
 - Vite development proxy 必須使用 `changeOrigin: false`，保留原始 browser-facing Host 與
   Origin；兩者連 port 都必須同源，不為任意 localhost port 放寬 equality。
-- OpenAPI 明確宣告沒有 application-layer authentication；這依賴 loopback 與 same-origin
-  deployment control，若未來要放寬 network scope，必須先以 versioned migration 加入 auth。
+- `config/access-policy.json` 明確選擇 `trusted_local` 或 `password_required`。
+  Password 模式以 Argon2id 與 process-memory Session 保護非公開 API；trusted-local 只略過
+  Session 驗證，仍保留 loopback、Host、Origin、CSP 與 no-store 邊界。
 - `apiKey` 是 write-only secret，長度上限 4096，whitespace-only 無效。Validation error 使用
   固定訊息，不回傳 Pydantic detail 或輸入值。
 - Error envelope 固定為 `error.code/message/retryable`。Status mapping、retryability 與公開訊息
@@ -212,9 +221,11 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。
+- Workspace catalog 只在第一次實際 mutation 時建立 `config/workspaces.json`。根目錄完整值
+  不得進入 SQLite；資料庫只保存 Workspace identity、revision/name snapshot 與 SHA-256 hash。
 - `config/settings.json` 是 strict schema-v8 的非秘密 AI settings 檔，包含 nullable `model`、該模型的
   `contextBudget`、`outputBudget`、`responseMode`、`outputContinuation`、`responseDelivery` 與 `logFullPrompts`。舊 schema-v6 的
-  `autoContinueOutput` 只在讀取時轉換為 `2` 或 `off`，舊 schema-v7 的回覆顯示預設為 `stream`；不於 GET 寫檔，下一次成功 PUT 才寫成 canonical v8。`responseDelivery` 只控制瀏覽器顯示，Provider 與 SSE 仍持續串流；讀取不存在檔案不建立目錄，並回傳 null model、default、串流顯示與續接兩次；成功 PUT 才以 fsync
+  `autoContinueOutput` 只在讀取時轉換為 `2` 或 `off`，舊 schema-v7 的回覆顯示預設為 `stream`；不於 GET 寫檔，下一次成功 PUT 才寫成 canonical v8。`responseDelivery` 只控制瀏覽器顯示，Provider 與 SSE 仍持續串流；讀取不存在檔案不建立目錄，並回傳 null model、default、串流顯示與續接五次；成功 PUT 才以 fsync
   + atomic replacement 建立或替換整份設定。清除 model 仍保留 response mode，不接觸 credential
   或 provider model catalog。AI-settings route 以獨立 error enum 描述其可觀察錯誤，避免將
   settings-only code 洩漏到 provider API schema。

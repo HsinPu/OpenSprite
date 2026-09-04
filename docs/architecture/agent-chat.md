@@ -8,8 +8,8 @@ lifecycle, or alternate direct-to-model branch.
 
 ```text
 Browser UI
-  -> Conversation and Run HTTP API
-  -> Application orchestration
+  -> Workspace-scoped Conversation and Run HTTP API
+  -> Application orchestration + immutable Workspace snapshot
   -> Run manager
   -> Agent loop
      -> Model gateway -> one Provider adapter
@@ -21,13 +21,16 @@ Browser UI
 ## Domain ownership
 
 - A **Conversation** is a durable user-visible thread.
+  It belongs to exactly one Workspace and carries an optimistic revision.
 - A **Message** is durable visible user or assistant content. Internal prompts,
   raw Provider payloads, tool arguments, secrets, and hidden reasoning are not
   messages.
 - A **Run** is the execution caused by one user message. It snapshots Provider,
   model, response mode, Context budget, status, completion reason, safe error,
-  partial assistant text, and timing. Context budget remains internal and does
-  not expand the public Run payload.
+  partial assistant text, timing, and Workspace identity. SQLite keeps only the
+  Workspace ID, revision, name snapshot and nullable root hash; the canonical
+  path stays in the in-memory execution context. Context budget remains internal
+  and does not expand the public Run payload.
 - A **Run event** is a small durable semantic projection used for replay and UI
   status. Events never contain credentials, raw upstream bodies, or hidden
   chain-of-thought.
@@ -51,10 +54,12 @@ contract but does not implement model, tool or persistence behavior.
 
 ## Public workflow
 
-1. `POST /api/runs` receives a nullable conversation id, a client-generated
-   request id, and one non-empty user message.
-2. Backend settings select one connected Provider and model. The message,
-   conversation, and queued Run are committed in one SQLite transaction.
+1. `POST /api/runs` receives a required Workspace id, nullable conversation id,
+   client-generated request id, and one non-empty user message.
+2. The application resolves one immutable Workspace execution context, verifies
+   an existing Conversation has the same owner, and selects one connected
+   Provider and model. The message, Conversation and queued Run are committed in
+   one SQLite transaction.
 3. The Run manager starts the bounded Agent loop after the durable start
    transaction succeeds.
 4. The loop resolves the selected model capability, converts the Run's Context
@@ -74,9 +79,10 @@ contract but does not implement model, tool or persistence behavior.
 8. Cancellation, limits, Provider failure, or shutdown move the Run to an
    explicit terminal state. They do not fabricate an assistant success message.
 
-The request id is the idempotency boundary for retries. A conversation may have
+The request fingerprint includes the Workspace id, and the request id is the
+idempotency boundary for retries. A conversation may have
 only one queued, running, or cancelling Run. A new conversation is created only
-when the first user message is durably accepted.
+when the first user message is durably accepted into the requested Workspace.
 
 This workflow is now composed in the local system runtime. `AgentChatService`
 reads the atomic AI setting, verifies the selected Provider still has encrypted
@@ -85,16 +91,19 @@ credential metadata, commits the user Message and Run, and only then asks
 contract but does not call a Provider, execute a tool, or write SQLite directly.
 
 At Run start, the injected System Prompt provider renders one trusted snapshot
-from the confirmed locale, time-zone setting and current time. The exact same
-snapshot is used for every model round in that Run. Before the first Provider
+from the confirmed locale, time-zone setting, current time and delimited
+untrusted Workspace metadata. The exact same snapshot is used for every model
+round in that Run. Before the first Provider
 request, a complete create-only Prompt receipt must be fsynced below
 `.opensprite/logs/system-prompts`; logging failure prevents the Provider call.
 
 | Route | Responsibility |
 | --- | --- |
-| `GET /api/conversations` | Reverse-updated cursor page for the sidebar. |
+| `GET /api/conversations?workspaceId=...` | Reverse-updated cursor page scoped to one Workspace. |
+| `GET /api/conversations/{id}` | Resolve Conversation metadata and owning Workspace for a deep link. |
+| `PUT /api/conversations/{id}/workspace` | Optimistically move an idle normal Conversation. |
 | `GET /api/conversations/{id}/messages` | Visible Message page in ascending sequence. |
-| `POST /api/runs` | Idempotently accept one user message and queued Run. |
+| `POST /api/runs` | Idempotently accept one Workspace-bound user message and queued Run. |
 | `GET /api/runs/{id}` | Read the durable snapshot, partial text, completion reason, status, and safe error. |
 | `GET /api/runs/{id}/events` | Replay and follow events after `Last-Event-ID`. |
 | `POST /api/runs/{id}/cancel` | Bodyless cancellation of queued or running work. |
@@ -105,10 +114,14 @@ closes. The browser closes its EventSource after receiving a terminal event.
 
 ## Browser workflow
 
-The sidebar reads `GET /api/conversations` and identifies a selected
+The sidebar reads `GET /api/conversations` for the active Workspace and identifies a selected
 conversation only by its backend UUID in the URL hash. A new conversation has
 no durable identity until `POST /api/runs` accepts its first message; the
 returned conversation UUID then replaces the temporary new-chat state.
+Opening a `#chat=<uuid>` deep link first resolves its metadata; when its owner is
+not active, the browser updates the backend catalog selection before loading the
+Workspace-scoped Conversation list. Active Workspace state is not persisted in
+browser storage.
 
 The browser keeps the submitted user message visible while acceptance is in
 flight, follows named semantic events over SSE, and appends only
@@ -175,6 +188,9 @@ start the Agent adds one immutable snapshot of supported Tools from currently
 connected stdio or Streamable HTTP MCP Servers. The UI localizes the stable built-in id and
 uses the discovered MCP display name for MCP events; it does not advertise a
 capability unless an active Server actually provides it.
+Every ToolContext carries the same immutable Workspace execution context used by
+the Agent loop. Existing tools do not gain filesystem access from that metadata;
+a future path-dependent tool must check availability and fail closed.
 
 The Tools settings page reads the production catalog from `GET /api/tools` and
 persists the global switch plus enabled tool ids through
@@ -458,8 +474,8 @@ records interruption before closing the shared Provider HTTP client.
 
 ## Deliberate exclusions
 
-This first boundary does not restore archived Task delegation, workflow state,
-keyword routing, subagents, MCP, memory, search indexing, background processes,
-file rollback, approval workflows, attachments, or database FTS. Each can be
-designed later around the same Run, event, AppPaths, registry, and policy seams
-when an approved user workflow needs it.
+This boundary does not restore archived Task delegation, keyword routing,
+subagents, memory, search indexing, filesystem/Git/terminal tools, external
+channel adapters, file rollback, attachments, or database FTS. Each can be
+designed later around the same Run, event, Workspace snapshot, AppPaths,
+registry and policy seams when an approved user workflow needs it.

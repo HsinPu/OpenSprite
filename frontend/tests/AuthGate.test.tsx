@@ -33,7 +33,7 @@ describe("AuthGate", () => {
   it("does not mount protected application before authentication", async () => {
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response({ state: "unauthenticated" }));
-      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.10.1", revision: "development", buildType: "development", dirty: true, installedAt: null }));
+      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.11.0", revision: "development", buildType: "development", dirty: true, installedAt: null }));
       throw new Error(`unexpected protected request: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -47,7 +47,7 @@ describe("AuthGate", () => {
     window.history.replaceState(null, "", "#setup=abcdefghijklmnopqrstuvwxyzABCDEFGH12345678");
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response({ state: "setup_required" }));
-      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.10.1", revision: "development", buildType: "development", dirty: true, installedAt: null }));
+      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.11.0", revision: "development", buildType: "development", dirty: true, installedAt: null }));
       if (path === "/api/auth/setup") return Promise.resolve(response(authenticated()));
       if (path === "/api/conversations") return Promise.resolve(response({ conversations: [], nextCursor: null }));
       throw new Error(`unexpected request: ${path}`);
@@ -68,7 +68,7 @@ describe("AuthGate", () => {
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response(authenticated()));
       if (path === "/api/conversations") return Promise.resolve(response({ conversations: [], nextCursor: null }));
-      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.10.1", revision: "development", buildType: "development", dirty: true, installedAt: null }));
+      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.11.0", revision: "development", buildType: "development", dirty: true, installedAt: null }));
       throw new Error(`unexpected request: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -83,7 +83,7 @@ describe("AuthGate", () => {
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response({ state: "authenticated", expiresAt: new Date(Date.now() + 50).toISOString() }));
       if (path === "/api/conversations") return Promise.resolve(response({ conversations: [], nextCursor: null }));
-      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.10.1", revision: "development", buildType: "development", dirty: true, installedAt: null }));
+      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.11.0", revision: "development", buildType: "development", dirty: true, installedAt: null }));
       throw new Error(`unexpected request: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -97,7 +97,7 @@ describe("AuthGate", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response({ state: "unauthenticated" }));
-      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.10.1", revision: "development", buildType: "development", dirty: true, installedAt: null }));
+      if (path === "/api/app-info") return Promise.resolve(response({ version: "0.11.0", revision: "development", buildType: "development", dirty: true, installedAt: null }));
       if (path === "/api/auth/login") return Promise.resolve(response({ error: { code: "rate_limited", message: "Too many authentication attempts.", retryable: true } }, 429, { "Retry-After": "2" }));
       throw new Error(`unexpected request: ${path}`);
     });

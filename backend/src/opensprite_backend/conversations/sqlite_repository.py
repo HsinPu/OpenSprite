@@ -1971,6 +1971,10 @@ class SqliteConversationRepository:
             connection.execute("PRAGMA query_only = ON")
             self._validate_schema(connection)
             return connection
+        except ConversationStoreError:
+            if connection is not None:
+                connection.close()
+            raise
         except (sqlite3.Error, OSError, ValueError) as error:
             if connection is not None:
                 connection.close()
