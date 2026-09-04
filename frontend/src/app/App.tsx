@@ -425,14 +425,6 @@ export function App() {
           </div>
         </div>
 
-        <WorkspaceSwitcher
-          controller={workspaceController}
-          collapsed={sidebarCollapsed && !mobileNavigation}
-          onActivate={(workspaceId) => void activateWorkspace(workspaceId)}
-          onCreate={() => { setWorkspaceCreateRequest((value) => value + 1); openSettings("workspaces"); }}
-          onManage={() => openSettings("workspaces")}
-        />
-
         <button
           ref={newChatButtonRef}
           className="new-chat-button"
@@ -444,6 +436,14 @@ export function App() {
           <span aria-hidden="true">＋</span>
           <span className="new-chat-label">{t("app.newConversation")}</span>
         </button>
+
+        <WorkspaceSwitcher
+          controller={workspaceController}
+          collapsed={sidebarCollapsed && !mobileNavigation}
+          onActivate={(workspaceId) => void activateWorkspace(workspaceId)}
+          onCreate={() => { setWorkspaceCreateRequest((value) => value + 1); openSettings("workspaces"); }}
+          onManage={() => openSettings("workspaces")}
+        />
 
         <nav
           id="conversation-navigation"

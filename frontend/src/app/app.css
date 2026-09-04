@@ -117,7 +117,7 @@ button {
   margin-bottom: 16px;
 }
 
-.workspace-switcher { display: grid; gap: 5px; margin-bottom: 14px; }
+.workspace-switcher { display: grid; gap: 5px; }
 .workspace-switcher__button.ant-btn { display: grid; width: 100%; min-height: 44px; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 0 11px; border-color: var(--os-border); border-radius: 10px; background: var(--os-surface); text-align: left; }
 .workspace-switcher__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-switcher__chevron { color: var(--os-muted); font-size: 11px; }
@@ -175,6 +175,7 @@ button {
 .new-chat-button {
   display: flex;
   min-height: 54px;
+  margin-bottom: 14px;
   align-items: center;
   justify-content: center;
   gap: 9px;

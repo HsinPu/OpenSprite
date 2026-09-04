@@ -123,6 +123,16 @@ describe("settings dialog focus restoration", () => {
 });
 
 describe("Ant Design shell controls", () => {
+  it("places the new conversation action before the Workspace switcher", () => {
+    const { container } = render(<App />);
+    const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
+    const newConversation = within(sidebar).getByRole("button", { name: "新對話" });
+    const workspaceSwitcher = within(sidebar).getByRole("button", { name: /^切換工作區/ });
+
+    expect(newConversation.compareDocumentPosition(workspaceSwitcher) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   it("anchors the sidebar collapse control to the app shell divider", () => {
     const { container } = render(<App />);
 
