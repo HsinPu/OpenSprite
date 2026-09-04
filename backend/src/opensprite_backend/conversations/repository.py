@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
+from opensprite_backend.workspaces import WorkspaceAvailability
+
 from .models import (
     CompletedRun,
     CompletionReason,
@@ -117,7 +119,11 @@ class ConversationRepository(Protocol):
         output_tokens: int,
     ) -> ConversationCompaction: ...
 
-    def mark_run_started(self, run_id: str) -> RunSnapshot: ...
+    def mark_run_started(
+        self,
+        run_id: str,
+        workspace_availability: WorkspaceAvailability | None = None,
+    ) -> RunSnapshot: ...
 
     def append_run_event(
         self,

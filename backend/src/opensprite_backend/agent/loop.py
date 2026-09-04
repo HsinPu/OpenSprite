@@ -48,9 +48,9 @@ from opensprite_backend.tools.definition import ToolContext
 from opensprite_backend.tools.dynamic import DynamicToolProvider
 from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
 from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
     UnassignedWorkspaceResolver,
-    WorkspaceError,
-    WorkspaceResolver,
+    WorkspaceExecutionContext,
 )
 
 from .events import (
@@ -163,7 +163,6 @@ class AgentLoop:
         dynamic_tools: DynamicToolProvider | None = None,
         capability_resolver: ModelCapabilityResolver,
         system_prompt_provider: SystemPromptProvider | None = None,
-        workspaces: WorkspaceResolver | None = None,
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
         max_compactions_per_run: int | None = None,
@@ -195,7 +194,6 @@ class AgentLoop:
             if system_prompt_provider is not None
             else StaticSystemPromptProvider()
         )
-        self._workspaces = workspaces or UnassignedWorkspaceResolver()
         self._max_model_rounds = max_model_rounds
         self._max_tool_calls = max_tool_calls
         self._max_compactions_per_run = max_compactions_per_run
@@ -206,6 +204,7 @@ class AgentLoop:
         self,
         run_id: str,
         cancellation_event: asyncio.Event,
+        workspace: WorkspaceExecutionContext | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -214,12 +213,12 @@ class AgentLoop:
             return run
         if cancellation_event.is_set():
             return await asyncio.to_thread(self._repository.request_cancel, run_id)
+        if workspace is None:
+            if run.workspace_id != UNASSIGNED_WORKSPACE_ID:
+                return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
+            workspace = UnassignedWorkspaceResolver().execution_context(run.workspace_id)
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
-            try:
-                workspace = self._workspaces.execution_context(run.workspace_id)
-            except WorkspaceError:
-                return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
             if (
                 workspace.id != run.workspace_id
                 or workspace.revision != run.workspace_revision
@@ -227,7 +226,11 @@ class AgentLoop:
                 or workspace.root_hash != run.workspace_root_hash
             ):
                 return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
-            run = await asyncio.to_thread(self._repository.mark_run_started, run_id)
+            run = await asyncio.to_thread(
+                self._repository.mark_run_started,
+                run_id,
+                workspace.availability,
+            )
             run_tools = (
                 self._tools.extended(await self._dynamic_tools.snapshot_tools())
                 if self._dynamic_tools is not None

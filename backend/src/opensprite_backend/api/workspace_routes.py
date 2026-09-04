@@ -78,6 +78,19 @@ def workspace_error_response(failure: WorkspaceFailure) -> JSONResponse:
     )
 
 
+def _expected_revision(request: Request) -> int:
+    items = request.query_params.multi_items()
+    if len(items) != 1 or items[0][0] != "expectedRevision":
+        raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
+    try:
+        value = int(items[0][1])
+    except (TypeError, ValueError):
+        raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST) from None
+    if value < 1:
+        raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
+    return value
+
+
 @router.get("", operation_id="listWorkspaces", response_model=WorkspaceCatalogResponse)
 async def list_workspaces(
     workspaces: WorkspaceOperations = Depends(_workspaces),
@@ -164,13 +177,12 @@ async def update_workspace(
 async def delete_workspace(
     workspace_id: UUID,
     request: Request,
-    expectedRevision: int,
     workspaces: WorkspaceOperations = Depends(_workspaces),
 ) -> Response:
-    if await request.body() or expectedRevision < 1:
+    if await request.body():
         raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
     await workspaces.delete(
         str(workspace_id),
-        expected_revision=expectedRevision,
+        expected_revision=_expected_revision(request),
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

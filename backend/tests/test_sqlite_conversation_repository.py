@@ -26,7 +26,7 @@ from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
-from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceAvailability
 
 
 NOW = datetime(2026, 8, 21, 8, 30, tzinfo=UTC)
@@ -97,7 +97,7 @@ def test_workspace_scopes_conversations_runs_usage_and_safe_move(tmp_path: Path)
     assert store.workspace_usage(workspace_id).conversation_count == 1
     assert store.workspace_usage(workspace_id).active_run_count == 1
 
-    store.mark_run_started(accepted.run.id)
+    store.mark_run_started(accepted.run.id, WorkspaceAvailability.AVAILABLE)
     store.complete_run(accepted.run.id, "done")
     moved = store.move_conversation(
         accepted.conversation.id,
@@ -149,6 +149,47 @@ def test_schema_v11_migrates_workspace_identity_without_absolute_paths(
     assert run_snapshot.workspace_root_hash is None
     with closing(sqlite3.connect(database)) as connection, connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+
+
+def test_schema_v11_workspace_migration_rolls_back_every_partial_change(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    start(store)
+    database = store.database_file
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.executescript(
+            """
+            DROP INDEX conversations_by_workspace_updated;
+            DROP INDEX active_runs_by_workspace;
+            DROP INDEX schedules_by_workspace;
+            ALTER TABLE conversations DROP COLUMN workspace_id;
+            ALTER TABLE conversations DROP COLUMN revision;
+            ALTER TABLE runs DROP COLUMN workspace_id;
+            ALTER TABLE runs DROP COLUMN workspace_revision;
+            ALTER TABLE runs DROP COLUMN workspace_name_snapshot;
+            ALTER TABLE runs DROP COLUMN workspace_root_hash;
+            ALTER TABLE schedules DROP COLUMN workspace_id;
+            CREATE TABLE conversations_by_workspace_updated(value TEXT) STRICT;
+            PRAGMA user_version = 11;
+            """
+        )
+
+    with pytest.raises(ConversationStoreError) as migration:
+        SqliteConversationRepository(database, clock=lambda: NOW).ensure_schema()
+
+    assert migration.value.failure is StoreFailure.DATABASE_UNAVAILABLE
+    with closing(sqlite3.connect(database)) as connection, connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 11
+        assert "workspace_id" not in {
+            row[1] for row in connection.execute("PRAGMA table_info(conversations)")
+        }
+        assert "workspace_id" not in {
+            row[1] for row in connection.execute("PRAGMA table_info(runs)")
+        }
+        assert "workspace_id" not in {
+            row[1] for row in connection.execute("PRAGMA table_info(schedules)")
+        }
 
 
 def test_construction_and_empty_reads_have_no_filesystem_side_effects(

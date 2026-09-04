@@ -31,6 +31,11 @@ junctions or reparse points are rejected. Canonical roots are unique using the
 host platform's path-comparison rules; nested legitimate Workspaces remain
 allowed.
 
+Windows detects the complete reparse-point file attribute in addition to the
+portable symlink and junction checks. Workspace DELETE accepts exactly one
+`expectedRevision` query item; missing, duplicate, unknown or non-positive
+values fail as `invalid_request` before the service is called.
+
 A saved root that later disappears, becomes inaccessible, stops being a
 directory or becomes unsafe is reported as `unavailable` with a bounded reason
 code. The catalog never silently substitutes another path.
@@ -68,10 +73,13 @@ Conversations move only through the Schedule Workspace update transaction.
 
 Before accepting a Run, the chat service resolves one immutable
 `WorkspaceExecutionContext`: ID, name, revision, canonical root, root hash,
-availability and safe reason. The same object is passed through retries,
-compaction, continuation and tool rounds. SQLite, ordinary runtime logs, Run
-events and tool receipts receive only the ID, revision, status/name where
-contracted and root hash; they never receive the absolute root.
+availability and safe reason. That exact object is handed to RunManager and then
+the Agent loop; the loop never re-resolves the catalog. It remains fixed through
+retries, compaction, continuation and tool rounds even if the Workspace is
+renamed. SQLite and ordinary runtime logs never receive the absolute root.
+`run.started` and version-3 tool receipts record only Workspace ID, revision,
+availability, safe name where contracted and root hash. Receipt verification
+continues to accept the existing signed version-1 and version-2 records.
 
 The dynamic System Prompt version 2 contains a delimited, JSON-encoded
 Workspace section. Name and root are explicitly untrusted metadata, and the

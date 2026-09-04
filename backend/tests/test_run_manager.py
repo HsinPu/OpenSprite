@@ -29,6 +29,15 @@ from opensprite_backend.inference.models import (
 )
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
+from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
+    UnassignedWorkspaceResolver,
+)
+
+
+UNASSIGNED_WORKSPACE = UnassignedWorkspaceResolver().execution_context(
+    UNASSIGNED_WORKSPACE_ID
+)
 
 
 def async_test(function):
@@ -82,8 +91,8 @@ async def test_manager_owns_one_task_per_run_and_waits_for_completion(
         ),
     )
 
-    assert await manager.start(run.id) is True
-    assert await manager.start(run.id) is False
+    assert await manager.start(run.id, UNASSIGNED_WORKSPACE) is True
+    assert await manager.start(run.id, UNASSIGNED_WORKSPACE) is False
     result = await manager.wait(run.id)
 
     assert result is not None
@@ -117,7 +126,7 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
             capability_resolver=TestCapabilityResolver(),
         ),
     )
-    assert await manager.start(run.id) is True
+    assert await manager.start(run.id, UNASSIGNED_WORKSPACE) is True
     await asyncio.wait_for(entered.wait(), timeout=1)
 
     cancelling = await manager.cancel(run.id)
@@ -157,7 +166,7 @@ async def test_close_marks_abandoned_running_work_interrupted(
             capability_resolver=TestCapabilityResolver(),
         ),
     )
-    assert await manager.start(run.id) is True
+    assert await manager.start(run.id, UNASSIGNED_WORKSPACE) is True
     await asyncio.wait_for(entered.wait(), timeout=1)
 
     await manager.close()
@@ -209,7 +218,7 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
         ),
     )
 
-    assert await manager.start(run.id) is True
+    assert await manager.start(run.id, UNASSIGNED_WORKSPACE) is True
     result = await manager.wait(run.id)
 
     assert result is not None

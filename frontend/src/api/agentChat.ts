@@ -258,7 +258,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   const data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
   if (expectedType === "run.started" && !exactKeys(data, [])) {
-    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash)))) throw new AgentChatApiError("malformed_response");
+    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash))) || !["available", "unavailable", "not_applicable"].includes(data.workspaceAvailability as string)) throw new AgentChatApiError("malformed_response");
   }
   if (["context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {

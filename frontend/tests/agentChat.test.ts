@@ -217,9 +217,19 @@ describe("Agent chat SSE contract", () => {
       onError: (error) => errors.push(error),
     });
     const source = FakeEventSource.instance;
-    source.listeners.get("model.started")?.(new MessageEvent("model.started", {
+    source.listeners.get("run.started")?.(new MessageEvent("run.started", {
       data: JSON.stringify({
         sequence: 1,
+        type: "run.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:00Z",
+        data: { workspaceId: UNASSIGNED_WORKSPACE_ID, workspaceRevision: 1, workspaceName: "Unassigned workspace", workspaceRootHash: null, workspaceAvailability: "not_applicable" },
+      }),
+    }));
+    source.listeners.get("model.started")?.(new MessageEvent("model.started", {
+      data: JSON.stringify({
+        sequence: 2,
         type: "model.started",
         runId,
         conversationId,
@@ -229,7 +239,7 @@ describe("Agent chat SSE contract", () => {
     }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
       data: JSON.stringify({
-        sequence: 2,
+        sequence: 3,
         type: "context.compaction.started",
         runId,
         conversationId,
@@ -239,7 +249,7 @@ describe("Agent chat SSE contract", () => {
     }));
     source.listeners.get("assistant.delta")?.(new MessageEvent("assistant.delta", {
       data: JSON.stringify({
-        sequence: 4,
+        sequence: 5,
         type: "assistant.delta",
         runId,
         conversationId,
@@ -249,7 +259,7 @@ describe("Agent chat SSE contract", () => {
     }));
     source.listeners.get("response.continuation.started")?.(new MessageEvent("response.continuation.started", {
       data: JSON.stringify({
-        sequence: 3,
+        sequence: 4,
         type: "response.continuation.started",
         runId,
         conversationId,
@@ -259,7 +269,7 @@ describe("Agent chat SSE contract", () => {
     }));
     source.listeners.get("run.completed")?.(new MessageEvent("run.completed", {
       data: JSON.stringify({
-        sequence: 5,
+        sequence: 6,
         type: "run.completed",
         runId,
         conversationId,
@@ -269,11 +279,12 @@ describe("Agent chat SSE contract", () => {
     }));
 
     expect(source.url).toBe(`/api/runs/${runId}/events`);
-    expect(events).toHaveLength(5);
-    expect(events[0]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames: ["calculator"] } });
-    expect(events[1]).toMatchObject({ type: "context.compaction.started", data: {} });
-    expect(events[3]).toMatchObject({ type: "response.continuation.started", data: { attempt: 3, maxAttempts: 50 } });
-    expect(events[4]).toMatchObject({
+    expect(events).toHaveLength(6);
+    expect(events[0]).toMatchObject({ type: "run.started", data: { workspaceAvailability: "not_applicable" } });
+    expect(events[1]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames: ["calculator"] } });
+    expect(events[2]).toMatchObject({ type: "context.compaction.started", data: {} });
+    expect(events[4]).toMatchObject({ type: "response.continuation.started", data: { attempt: 3, maxAttempts: 50 } });
+    expect(events[5]).toMatchObject({
       type: "run.completed",
       data: { assistantMessageId, completionReason: "output_limit" },
     });
@@ -282,7 +293,7 @@ describe("Agent chat SSE contract", () => {
     expect(source.closed).toBe(true);
   });
 
-  it("closes and reports a malformed event with an uncontracted reasoning field", () => {
+  it("closes and reports malformed event data", () => {
     class FakeEventSource {
       static instance: FakeEventSource;
       listeners = new Map<string, (event: MessageEvent<string>) => void>();
@@ -310,5 +321,21 @@ describe("Agent chat SSE contract", () => {
 
     expect(source.closed).toBe(true);
     expect(errors[0]?.code).toBe("malformed_response");
+
+    openRunEventStream(runId, { onEvent: () => undefined, onError: (error) => errors.push(error) });
+    const missingAvailability = FakeEventSource.instance;
+    missingAvailability.listeners.get("run.started")?.(new MessageEvent("run.started", {
+      data: JSON.stringify({
+        sequence: 1,
+        type: "run.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:00Z",
+        data: { workspaceId: UNASSIGNED_WORKSPACE_ID, workspaceRevision: 1, workspaceName: "Unassigned workspace", workspaceRootHash: null },
+      }),
+    }));
+
+    expect(missingAvailability.closed).toBe(true);
+    expect(errors[1]?.code).toBe("malformed_response");
   });
 });

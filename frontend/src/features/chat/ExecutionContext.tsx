@@ -5,6 +5,7 @@ import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot 
 import type { MessageKey, Translator } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TimeZoneSetting } from "../../api/generalSettings";
+import type { WorkspaceAvailability } from "../../api/workspaces";
 import { formatTime } from "../general-settings/dateTime";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
 import { ToolApprovalCard } from "./ToolApprovalCard";
@@ -146,6 +147,12 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
     const event = [...events].reverse().find((item) => item.type === "model.started");
     return typeof event?.data.maxOutputTokens === "number" ? event.data.maxOutputTokens : null;
   }, [events]);
+  const workspaceAvailability = useMemo(() => {
+    const value = events.find((event) => event.type === "run.started")?.data.workspaceAvailability;
+    return ["available", "unavailable", "not_applicable"].includes(String(value))
+      ? value as WorkspaceAvailability
+      : null;
+  }, [events]);
   const status = run
     ? t(run.completionReason === "output_limit" ? "execution.status.outputLimit" : run.completionReason === "context_limit" ? "execution.status.contextLimit" : statusKeys[run.status])
     : t("execution.status.none");
@@ -211,6 +218,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
                 {maxOutputTokens !== null ? <div><dt>{t("execution.maxOutputTokens")}</dt><dd>{formatTokenLimit(maxOutputTokens)}</dd></div> : null}
+                {workspaceAvailability ? <div><dt>{t("execution.workspaceAvailability")}</dt><dd>{t(workspaceAvailability === "available" ? "workspaces.available" : workspaceAvailability === "unavailable" ? "workspaces.unavailable" : "workspaces.noRoot")}</dd></div> : null}
                 <div><dt>{t("execution.source")}</dt><dd>{t(historical ? "execution.history" : "execution.currentConversation")}</dd></div>
               </dl>
             </section>

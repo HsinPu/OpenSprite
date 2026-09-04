@@ -206,7 +206,6 @@ def create_system_runtime(
             paths,
             general_settings,
         ),
-        workspaces=workspaces,
         prompt_log_writer=FilePromptLogWriter(paths),
     )
     run_manager = RunManager(repository, agent_loop)

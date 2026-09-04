@@ -32,7 +32,13 @@ const event: RunEvent = {
   runId: run.id,
   conversationId: run.conversationId,
   createdAt: run.startedAt!,
-  data: {},
+  data: {
+    workspaceId: run.workspaceId,
+    workspaceRevision: run.workspaceRevision,
+    workspaceName: run.workspaceName,
+    workspaceRootHash: run.workspaceRootHash,
+    workspaceAvailability: "not_applicable",
+  },
 };
 
 const compactionEvent: RunEvent = {
@@ -51,6 +57,13 @@ const modelEvent: RunEvent = {
 };
 
 describe("execution context disclosure", () => {
+  it("shows the snapshotted Workspace availability", () => {
+    render(<ExecutionContext modelName="Auto Router" run={run} events={[event]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("工作區狀態")).toBeTruthy();
+    expect(screen.getByText("沒有資料夾")).toBeTruthy();
+  });
+
   it("labels an output-limited completion without treating it as a failure", () => {
     const completed = {
       ...run,

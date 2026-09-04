@@ -14,6 +14,8 @@
 .schedule-card h3 { margin: 0 0 6px; font-size: 18px; }
 .schedule-card__top p, .schedule-card__prompt { margin: 0; color: var(--os-muted); line-height: 1.5; }
 .schedule-card__prompt { display: -webkit-box; margin-top: 16px; overflow: hidden; color: var(--os-text); -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.schedule-card__workspace-warning { display: flex; align-items: flex-start; gap: 8px; margin: 14px 0 0; padding: 9px 11px; border-radius: 9px; background: #fff4e5; color: #8a4b12; line-height: 1.45; }
+.schedule-card__workspace-warning svg { flex: 0 0 auto; margin-top: 3px; }
 .schedule-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
 .schedule-card dl div { min-width: 0; padding: 11px; border-radius: 10px; background: var(--os-surface-subtle); }
 .schedule-card dt { color: var(--os-muted); font-size: 12px; }

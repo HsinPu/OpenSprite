@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import stat
 from pathlib import Path
 
 from .models import WorkspaceAvailability, WorkspaceUnavailableReason
@@ -40,7 +41,11 @@ class WorkspaceRootPolicy:
     def validate_new_root(self, value: str) -> str:
         path = self._parse_absolute(value)
         try:
-            if path.is_symlink() or self._is_junction(path):
+            if (
+                path.is_symlink()
+                or self._is_junction(path)
+                or self._is_reparse_point(path)
+            ):
                 raise UnsafeWorkspaceRoot
             resolved = path.resolve(strict=True)
         except UnsafeWorkspaceRoot:
@@ -64,7 +69,11 @@ class WorkspaceRootPolicy:
                 WorkspaceUnavailableReason.UNSAFE,
             )
         try:
-            if path.is_symlink() or self._is_junction(path):
+            if (
+                path.is_symlink()
+                or self._is_junction(path)
+                or self._is_reparse_point(path)
+            ):
                 return WorkspaceRootStatus(
                     WorkspaceAvailability.UNAVAILABLE,
                     WorkspaceUnavailableReason.UNSAFE,
@@ -124,6 +133,14 @@ class WorkspaceRootPolicy:
     def _is_junction(path: Path) -> bool:
         checker = getattr(path, "is_junction", None)
         return bool(checker is not None and checker())
+
+    @staticmethod
+    def _is_reparse_point(path: Path) -> bool:
+        if os.name != "nt":
+            return False
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        return bool(attributes & reparse_flag)
 
     def _is_unsafe(self, path: Path) -> bool:
         if path.parent == path or self._same(path, self._user_home):

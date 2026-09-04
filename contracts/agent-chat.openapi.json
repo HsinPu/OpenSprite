@@ -846,7 +846,7 @@
       "RunStartedEventData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash"],
+        "required": ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"],
         "properties": {
           "workspaceId": {"$ref": "#/components/schemas/Identifier"},
           "workspaceRevision": {"type": "integer", "minimum": 1},
@@ -856,6 +856,10 @@
               {"type": "string", "pattern": "^[0-9a-f]{64}$"},
               {"type": "null"}
             ]
+          },
+          "workspaceAvailability": {
+            "type": "string",
+            "enum": ["available", "unavailable", "not_applicable"]
           }
         }
       },

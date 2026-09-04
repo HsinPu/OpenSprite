@@ -425,7 +425,7 @@ class AgentChatService:
             except ConversationStoreError as error:
                 raise _store_error(error) from error
         if accepted.run.status is RunStatus.QUEUED:
-            await self._run_manager.start(accepted.run.id)
+            await self._run_manager.start(accepted.run.id, workspace)
         return accepted
 
     async def get_run(self, run_id: str) -> RunSnapshot:

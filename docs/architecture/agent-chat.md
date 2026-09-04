@@ -83,6 +83,9 @@ The request fingerprint includes the Workspace id, and the request id is the
 idempotency boundary for retries. A conversation may have
 only one queued, running, or cancelling Run. A new conversation is created only
 when the first user message is durably accepted into the requested Workspace.
+The application passes the exact accepted `WorkspaceExecutionContext` through
+RunManager to AgentLoop. AgentLoop validates its identity against the durable
+Run once and does not query the mutable Workspace catalog again.
 
 This workflow is now composed in the local system runtime. `AgentChatService`
 reads the atomic AI setting, verifies the selected Provider still has encrypted
@@ -385,8 +388,10 @@ single-use, exact-argument scoped, expires after ten minutes, and never becomes
 a remembered policy. No `tool.started` event occurs before approval. Authorized
 calls require an fsynced HMAC-SHA-256 hash-chained receipt under
 `logs/tool-receipts/<local-date>.jsonl`, signed with the random local
-`config/tool-receipt.key`. Receipts contain hashes and safe identity metadata,
-never raw arguments, results, credentials, or MCP stderr.
+`config/tool-receipt.key`. New version-3 receipts include Workspace availability
+beside its ID, revision and root hash; the verifier preserves signed version-1
+and version-2 history. Receipts never contain the absolute Workspace root, raw
+arguments, results, credentials, or MCP stderr.
 
 The core loop and registry boundary are now implemented independently of HTTP
 and native Provider transports. The loop consumes only the Conversation

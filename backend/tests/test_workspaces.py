@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 import pytest
@@ -14,13 +15,16 @@ import pytest
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.runtime import create_system_app
+import opensprite_backend.workspaces.policy as workspace_policy
 from opensprite_backend.workspaces import (
     UNASSIGNED_WORKSPACE_ID,
     JsonWorkspaceStore,
     WorkspaceCatalogService,
+    WorkspaceCatalogState,
     WorkspaceError,
     WorkspaceFailure,
     WorkspaceRootPolicy,
+    WorkspaceRecord,
     WorkspaceStoreError,
     WorkspaceUsage,
 )
@@ -152,7 +156,10 @@ def test_atomic_failure_preserves_previous_catalog(
     assert list(path.parent.glob("*.tmp")) == []
 
 
-def test_root_policy_rejects_high_risk_and_duplicate_roots(tmp_path: Path) -> None:
+def test_root_policy_rejects_high_risk_and_duplicate_roots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     service, data_root, project_root = make_service(tmp_path)
     run(service.create(name="Alpha", root_path=str(project_root), expected_revision=0))
 
@@ -165,6 +172,94 @@ def test_root_policy_rejects_high_risk_and_duplicate_roots(tmp_path: Path) -> No
     with pytest.raises(WorkspaceError) as duplicate:
         run(service.create(name="Other", root_path=str(project_root), expected_revision=1))
     assert duplicate.value.failure is WorkspaceFailure.DUPLICATE_ROOT
+
+    second_root = tmp_path / "projects" / "beta"
+    second_root.mkdir()
+    with pytest.raises(WorkspaceError) as duplicate_name:
+        run(service.create(name="alpha", root_path=str(second_root), expected_revision=1))
+    assert duplicate_name.value.failure is WorkspaceFailure.DUPLICATE_NAME
+
+    junction_root = tmp_path / "projects" / "junction"
+    junction_root.mkdir()
+    monkeypatch.setattr(
+        service._root_policy,
+        "_is_junction",
+        lambda path: path == junction_root,
+    )
+    with pytest.raises(WorkspaceError) as junction:
+        run(service.create(name="Junction", root_path=str(junction_root), expected_revision=1))
+    assert junction.value.failure is WorkspaceFailure.UNSAFE_ROOT
+
+
+def test_windows_reparse_attribute_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _, project_root = make_service(tmp_path)
+    fake_path = SimpleNamespace(
+        lstat=lambda: SimpleNamespace(st_file_attributes=0x400)
+    )
+    original_os_name = workspace_policy.os.name
+    monkeypatch.setattr(workspace_policy.os, "name", "nt")
+    assert WorkspaceRootPolicy._is_reparse_point(fake_path) is True
+    monkeypatch.setattr(workspace_policy.os, "name", original_os_name)
+    monkeypatch.setattr(service._root_policy, "_is_reparse_point", lambda _path: True)
+
+    with pytest.raises(WorkspaceError) as reparse:
+        run(service.create(name="Reparse", root_path=str(project_root), expected_revision=0))
+
+    assert reparse.value.failure is WorkspaceFailure.UNSAFE_ROOT
+
+
+def test_symlink_root_is_rejected(tmp_path: Path) -> None:
+    service, _, project_root = make_service(tmp_path)
+    link = tmp_path / "projects" / "linked-root"
+    try:
+        link.symlink_to(project_root, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"directory symlink is unavailable: {type(error).__name__}")
+
+    with pytest.raises(WorkspaceError) as symlink:
+        run(service.create(name="Symlink", root_path=str(link), expected_revision=0))
+
+    assert symlink.value.failure is WorkspaceFailure.UNSAFE_ROOT
+
+
+def test_workspace_limit_rejects_the_101st_user_workspace(tmp_path: Path) -> None:
+    store = JsonWorkspaceStore(tmp_path / ".opensprite" / "config" / "workspaces.json")
+    records = tuple(
+        WorkspaceRecord(
+            id=f"{index:08x}-0000-4000-8000-{index:012x}",
+            name=f"Workspace {index}",
+            root_path=str(tmp_path / "projects" / str(index)),
+            revision=1,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        for index in range(1, 101)
+    )
+    store.set(WorkspaceCatalogState(100, UNASSIGNED_WORKSPACE_ID, records))
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    service = WorkspaceCatalogService(
+        store,
+        WorkspaceRootPolicy(
+            data_root=tmp_path / ".opensprite",
+            user_home=tmp_path / "home",
+            install_root=tmp_path / "installed-app",
+        ),
+    )
+
+    with pytest.raises(WorkspaceError) as maximum:
+        run(
+            service.create(
+                name="One too many",
+                root_path=str(project_root),
+                expected_revision=100,
+            )
+        )
+
+    assert maximum.value.failure is WorkspaceFailure.INVALID_REQUEST
 
 
 def test_update_delete_and_usage_guards(tmp_path: Path) -> None:
@@ -227,6 +322,14 @@ def test_api_crud_strict_json_and_sanitized_errors(tmp_path: Path) -> None:
             },
         )
         fetched = client.get(f"/api/workspaces/{WORKSPACE_ID}")
+        invalid_deletes = [
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1&unexpected=1"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1&expectedRevision=2"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=0"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=-1"),
+            client.delete(f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=invalid"),
+        ]
         removed = client.delete(
             f"/api/workspaces/{WORKSPACE_ID}?expectedRevision=1"
         )
@@ -241,6 +344,8 @@ def test_api_crud_strict_json_and_sanitized_errors(tmp_path: Path) -> None:
     assert conflict.json()["error"]["code"] == "revision_conflict"
     assert fetched.status_code == 200
     assert fetched.json()["rootPath"] == str(project_root.resolve())
+    assert all(item.status_code == 400 for item in invalid_deletes)
+    assert all(item.json()["error"]["code"] == "invalid_request" for item in invalid_deletes)
     assert removed.status_code == 204
 
 

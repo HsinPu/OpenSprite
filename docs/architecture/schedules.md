@@ -53,5 +53,7 @@ or changes linger policy.
 Schedule management lives under Settings rather than the primary conversation
 navigation. The UI polls the authenticated schedule API every five seconds only
 while Settings is open on the Schedules section. Create and edit forms always
-send a Workspace ID, defaulting to the current Workspace. There is no WebSocket,
-OS notification, Email, or push notification in version 0.11.0.
+send a Workspace ID, defaulting to the current Workspace. Schedule cards and
+selector options show an unavailable or missing Workspace warning without
+disabling text-only execution. There is no WebSocket, OS notification, Email,
+or push notification in version 0.11.0.

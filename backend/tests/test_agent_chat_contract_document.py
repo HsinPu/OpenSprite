@@ -109,6 +109,7 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "workspaceRevision",
         "workspaceName",
         "workspaceRootHash",
+        "workspaceAvailability",
     ]
     assert schemas["CompletionReason"]["enum"] == ["stop", "output_limit", "context_limit"]
     assert schemas["RunSnapshot"]["properties"]["completionReason"]["oneOf"][0]["$ref"].endswith("/CompletionReason")

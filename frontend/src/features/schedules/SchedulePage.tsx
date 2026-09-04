@@ -6,6 +6,7 @@ import {
   PauseCircleOutlined,
   PlayCircleOutlined,
   PlusOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { Button, Drawer, Input, Modal, Popconfirm, Select, Tag } from "antd";
 
@@ -128,12 +129,19 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     value: `${choice.selection.providerId}:${choice.selection.modelId}`,
     label: choice.label,
   }));
+  const workspaceDisplayName = (item: Workspace) => workspaceName(item.kind, item.name, t("workspaces.unassigned"));
+  const workspaceReason = (item: Workspace) => item.unavailableReason
+    ? t(`workspaces.unavailableReason.${item.unavailableReason}` as never)
+    : t("workspaces.unavailable");
+  const workspaceLabel = (item: Workspace) => item.availability === "unavailable"
+    ? t("schedules.workspaceUnavailableLabel", { name: workspaceDisplayName(item), reason: workspaceReason(item) })
+    : workspaceDisplayName(item);
   const workspaceOptions = workspaces.map((item) => ({
     value: item.id,
-    label: workspaceName(item.kind, item.name, t("workspaces.unassigned")),
+    label: workspaceLabel(item),
   }));
   if (!workspaceOptions.some((option) => option.value === form.workspaceId)) {
-    workspaceOptions.push({ value: form.workspaceId, label: t("workspaces.unassigned") });
+    workspaceOptions.push({ value: form.workspaceId, label: t(workspaces.length ? "schedules.workspaceMissing" : "schedules.workspaceLoading") });
   }
   if (editing && !modelOptions.some((option) => option.value === form.providerModel)) {
     modelOptions.push({
@@ -212,19 +220,27 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     {errorText ? <div className="schedules-error" role="alert"><span>{errorText}</span><Button onClick={() => void controller.refresh()}>{t("common.retry")}</Button></div> : null}
     {controller.loading ? <p className="schedules-state" role="status">{t("schedules.loading")}</p> : null}
     {!controller.loading && controller.schedules.length === 0 ? <div className="schedules-empty"><CalendarOutlined /><h2>{t("schedules.emptyTitle")}</h2><p>{t("schedules.emptyDescription")}</p></div> : null}
-    {(["active", "paused", "completed"] as const).map((status) => grouped[status].length ? <section className="schedule-group" key={status}><h2>{t(`schedules.group.${status}` as never)} <span>{grouped[status].length}</span></h2><div className="schedule-grid">{grouped[status].map((item) => <article className="schedule-card" key={item.id}>
-      <div className="schedule-card__top"><div><h3>{item.name}</h3><p>{cadenceText(item)}</p></div><Tag color={item.status === "active" ? "green" : item.status === "paused" ? "gold" : "default"}>{t(`schedules.status.${item.status}` as never)}</Tag></div>
-      <p className="schedule-card__prompt">{item.prompt}</p>
-      <dl><div><dt>{t("schedules.workspace")}</dt><dd>{workspaceOptions.find((option) => option.value === item.workspaceId)?.label ?? item.workspaceId}</dd></div><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
-      <div className="schedule-card__actions">
-        <Button icon={<PlayCircleOutlined />} onClick={() => void controller.runNow(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.runNow")}</Button>
-        {item.status === "active" ? <Button icon={<PauseCircleOutlined />} onClick={() => void controller.pause(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.pause")}</Button> : item.status === "paused" ? <Button icon={<PlayCircleOutlined />} onClick={() => void controller.resume(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.resume")}</Button> : null}
-        <Button icon={<EditOutlined />} onClick={(event) => openEditor(item, event.currentTarget)}>{t("schedules.edit")}</Button>
-        <Button icon={<HistoryOutlined />} onClick={(event) => { historyOpenerRef.current = event.currentTarget; setHistoryId(item.id); void controller.loadOccurrences(item.id); }}>{t("schedules.history")}</Button>
-        {item.conversationId ? <Button onClick={() => onOpenConversation(item.conversationId!)}>{t("schedules.openConversation")}</Button> : null}
-        <Popconfirm getPopupContainer={() => container ?? document.body} title={t("schedules.deleteConfirm")} description={t("schedules.deleteDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.remove(item).catch(() => undefined)}><Button danger>{t("common.remove")}</Button></Popconfirm>
-      </div>
-    </article>)}</div></section> : null)}
+    {(["active", "paused", "completed"] as const).map((status) => grouped[status].length ? <section className="schedule-group" key={status}><h2>{t(`schedules.group.${status}` as never)} <span>{grouped[status].length}</span></h2><div className="schedule-grid">{grouped[status].map((item) => {
+      const workspace = workspaces.find((candidate) => candidate.id === item.workspaceId);
+      const workspaceMissing = workspaces.length > 0 && !workspace;
+      const workspaceWarning = workspace?.availability === "unavailable"
+        ? t("schedules.workspaceUnavailableWarning", { reason: workspaceReason(workspace) })
+        : workspaceMissing ? t("schedules.workspaceMissingWarning") : null;
+      return <article className="schedule-card" key={item.id}>
+        <div className="schedule-card__top"><div><h3>{item.name}</h3><p>{cadenceText(item)}</p></div><Tag color={item.status === "active" ? "green" : item.status === "paused" ? "gold" : "default"}>{t(`schedules.status.${item.status}` as never)}</Tag></div>
+        <p className="schedule-card__prompt">{item.prompt}</p>
+        {workspaceWarning ? <p className="schedule-card__workspace-warning" role="status"><WarningOutlined aria-hidden="true" />{workspaceWarning}</p> : null}
+        <dl><div><dt>{t("schedules.workspace")}</dt><dd>{workspace ? workspaceLabel(workspace) : t(workspaces.length ? "schedules.workspaceMissing" : "schedules.workspaceLoading")}</dd></div><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
+        <div className="schedule-card__actions">
+          <Button icon={<PlayCircleOutlined />} onClick={() => void controller.runNow(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.runNow")}</Button>
+          {item.status === "active" ? <Button icon={<PauseCircleOutlined />} onClick={() => void controller.pause(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.pause")}</Button> : item.status === "paused" ? <Button icon={<PlayCircleOutlined />} onClick={() => void controller.resume(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.resume")}</Button> : null}
+          <Button icon={<EditOutlined />} onClick={(event) => openEditor(item, event.currentTarget)}>{t("schedules.edit")}</Button>
+          <Button icon={<HistoryOutlined />} onClick={(event) => { historyOpenerRef.current = event.currentTarget; setHistoryId(item.id); void controller.loadOccurrences(item.id); }}>{t("schedules.history")}</Button>
+          {item.conversationId ? <Button onClick={() => onOpenConversation(item.conversationId!)}>{t("schedules.openConversation")}</Button> : null}
+          <Popconfirm getPopupContainer={() => container ?? document.body} title={t("schedules.deleteConfirm")} description={t("schedules.deleteDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.remove(item).catch(() => undefined)}><Button danger>{t("common.remove")}</Button></Popconfirm>
+        </div>
+      </article>;
+    })}</div></section> : null)}
     {mobile ? <Drawer getContainer={container ?? false} rootStyle={container ? { position: "absolute" } : undefined} open={editorOpen} placement="right" size="100vw" title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} onClose={closeEditor} destroyOnHidden>{editor}</Drawer> : <Modal rootClassName="schedule-editor-modal" getContainer={container ?? false} open={editorOpen} title={editing ? t("schedules.editTitle") : t("schedules.createTitle")} footer={null} onCancel={closeEditor} destroyOnHidden>{editor}</Modal>}
     <Drawer getContainer={container ?? false} rootStyle={container ? { position: "absolute" } : undefined} open={historyId !== null} placement="right" size={mobile ? "100vw" : 480} title={t("schedules.historyTitle")} onClose={() => { setHistoryId(null); window.requestAnimationFrame(() => historyOpenerRef.current?.focus()); }}><OccurrenceHistory items={historyId ? controller.occurrences[historyId] ?? [] : []} formatDate={formatDate} /></Drawer>
   </section>;

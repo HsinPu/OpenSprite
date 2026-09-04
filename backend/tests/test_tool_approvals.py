@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
+from hashlib import sha256
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import wraps
@@ -34,6 +36,12 @@ from opensprite_backend.tools.definition import (
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
 from opensprite_backend.tools.receipts import FileToolReceiptWriter, verify_tool_receipts
+from opensprite_backend.workspaces import (
+    WorkspaceAvailability,
+    WorkspaceExecutionContext,
+    WorkspaceKind,
+    WorkspaceUnavailableReason,
+)
 
 
 def async_test(function):
@@ -144,10 +152,11 @@ async def test_allow_once_exposes_arguments_then_executes(tmp_path: Path) -> Non
     )
     assert "hello" not in receipt_text
     receipts = [json.loads(line) for line in receipt_text.splitlines()]
-    assert all(item["version"] == 2 for item in receipts)
+    assert all(item["version"] == 3 for item in receipts)
     assert all(item["workspaceId"] == context.workspace.id for item in receipts)
     assert all(item["workspaceRevision"] == 1 for item in receipts)
     assert all(item["workspaceRootHash"] is None for item in receipts)
+    assert all(item["workspaceAvailability"] == "not_applicable" for item in receipts)
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
     assert [event.type for event in events[-2:]] == [
         RunEventType.TOOL_APPROVAL_REQUESTED,
@@ -237,10 +246,21 @@ def test_receipt_verification_detects_tampering(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     writer = FileToolReceiptWriter(paths)
     definition = tool().definition
+    root = str((tmp_path / "workspace-root").resolve())
     context = ToolContext(
         "11111111-1111-4111-8111-111111111111",
         "22222222-2222-4222-8222-222222222222",
         asyncio.Event(),
+        WorkspaceExecutionContext(
+            id="44444444-4444-4444-8444-444444444444",
+            kind=WorkspaceKind.DIRECTORY,
+            name="Alpha",
+            root_path=root,
+            revision=4,
+            root_hash="b" * 64,
+            availability=WorkspaceAvailability.UNAVAILABLE,
+            unavailable_reason=WorkspaceUnavailableReason.MISSING,
+        ),
     )
     grant = ToolApprovalGrant(
         "33333333-3333-4333-8333-333333333333",
@@ -250,6 +270,30 @@ def test_receipt_verification_detects_tampering(tmp_path: Path) -> None:
     assert verify_tool_receipts(paths) is True
 
     receipt = next(paths.tool_receipts_dir.glob("*.jsonl"))
+    raw = json.loads(receipt.read_text(encoding="utf-8"))
+    assert raw["version"] == 3
+    assert raw["workspaceAvailability"] == "unavailable"
+    assert root not in receipt.read_text(encoding="utf-8")
+
+    for version in (2, 1):
+        legacy_body = {key: value for key, value in raw.items() if key != "signature"}
+        legacy_body["version"] = version
+        legacy_body.pop("workspaceAvailability")
+        if version == 1:
+            for key in ("workspaceId", "workspaceRevision", "workspaceRootHash"):
+                legacy_body.pop(key)
+        legacy_signature = hmac.new(
+            paths.tool_receipt_key_file.read_bytes(),
+            json.dumps(legacy_body, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True).encode("utf-8"),
+            sha256,
+        ).hexdigest()
+        legacy = {**legacy_body, "signature": legacy_signature}
+        receipt.write_text(
+            json.dumps(legacy, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        assert verify_tool_receipts(paths) is True
+
     receipt.write_text(
         receipt.read_text(encoding="utf-8").replace(
             '"status":"authorized"',

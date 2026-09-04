@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -49,6 +50,8 @@ from opensprite_backend.workspaces import (
     UNASSIGNED_WORKSPACE_ID,
     JsonWorkspaceStore,
     WorkspaceCatalogService,
+    WorkspaceError,
+    WorkspaceFailure,
     WorkspaceMutationGate,
     WorkspaceRootPolicy,
 )
@@ -177,7 +180,6 @@ def service(
         gateway=FinalGateway(),
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
         capability_resolver=TestCapabilityResolver(),
-        workspaces=workspaces,
     )
     manager = RunManager(repository, loop)
     chat = AgentChatService(
@@ -316,6 +318,7 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
 @async_test
 async def test_custom_workspace_is_resolved_persisted_and_movable(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     chat, repository, manager, workspaces = service(tmp_path)
     root = tmp_path / "project"
@@ -328,6 +331,14 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     workspace = next(
         item for item in catalog.workspaces if item.id == catalog.active_workspace_id
     )
+    captured_workspaces = []
+    original_start = manager.start
+
+    async def capture_start(run_id, workspace_context):
+        captured_workspaces.append(workspace_context)
+        return await original_start(run_id, workspace_context)
+
+    monkeypatch.setattr(manager, "start", capture_start)
 
     accepted = await chat.start_run(
         conversation_id=None,
@@ -335,8 +346,19 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
         client_request_id="3ac641eb-03a5-4d9d-a50e-d2b0e2802ed1",
         message="workspace message",
     )
+    renamed = await workspaces.update(
+        workspace.id,
+        name="Beta",
+        root_path=str(root),
+        expected_revision=workspace.revision,
+    )
     await manager.wait(accepted.run.id)
 
+    assert renamed.name == "Beta"
+    assert len(captured_workspaces) == 1
+    assert captured_workspaces[0].name == "Alpha"
+    assert captured_workspaces[0].revision == workspace.revision
+    assert captured_workspaces[0].root_path == workspace.root_path
     assert accepted.conversation.workspace_id == workspace.id
     assert accepted.run.workspace_id == workspace.id
     assert accepted.run.workspace_revision == workspace.revision
@@ -360,6 +382,65 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     persisted_run = repository.get_run(accepted.run.id)
     assert persisted_run is not None
     assert persisted_run.workspace_id == workspace.id
+    await chat.close()
+
+
+@async_test
+async def test_shared_workspace_gate_serializes_run_start_and_root_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chat, repository, manager, workspaces = service(tmp_path)
+    root = tmp_path / "project"
+    replacement = tmp_path / "replacement"
+    root.mkdir()
+    replacement.mkdir()
+    catalog = await workspaces.create(
+        name="Alpha",
+        root_path=str(root),
+        expected_revision=0,
+    )
+    workspace = next(
+        item for item in catalog.workspaces if item.id == catalog.active_workspace_id
+    )
+    entered = Event()
+    release = Event()
+    original_start_run = repository.start_run
+
+    def blocking_start_run(**kwargs):
+        entered.set()
+        if not release.wait(timeout=2):
+            raise AssertionError("run-start gate was not released")
+        return original_start_run(**kwargs)
+
+    monkeypatch.setattr(repository, "start_run", blocking_start_run)
+    start_task = asyncio.create_task(
+        chat.start_run(
+            conversation_id=None,
+            workspace_id=workspace.id,
+            client_request_id="4ac641eb-03a5-4d9d-a50e-d2b0e2802ed1",
+            message="serialized workspace message",
+        )
+    )
+    assert await asyncio.to_thread(entered.wait, 1)
+    update_task = asyncio.create_task(
+        workspaces.update(
+            workspace.id,
+            name="Alpha",
+            root_path=str(replacement),
+            expected_revision=workspace.revision,
+        )
+    )
+    await asyncio.sleep(0)
+    assert update_task.done() is False
+    release.set()
+
+    accepted = await start_task
+    with pytest.raises(WorkspaceError) as busy:
+        await update_task
+
+    assert busy.value.failure is WorkspaceFailure.WORKSPACE_BUSY
+    await manager.wait(accepted.run.id)
     await chat.close()
 
 

@@ -107,7 +107,7 @@ class FileToolReceiptWriter:
                 previous_hash = self._previous_hash or self._read_previous_hash()
                 now = self._clock()
                 body = {
-                    "version": 2,
+                    "version": 3,
                     "receiptId": str(uuid4()),
                     "approvalId": grant.approval_id,
                     "actor": "local_user",
@@ -116,6 +116,7 @@ class FileToolReceiptWriter:
                     "workspaceId": context.workspace.id,
                     "workspaceRevision": context.workspace.revision,
                     "workspaceRootHash": context.workspace.root_hash,
+                    "workspaceAvailability": context.workspace.availability.value,
                     "serverId": definition.source_id,
                     "toolId": definition.name,
                     "requestHash": grant.request_hash,

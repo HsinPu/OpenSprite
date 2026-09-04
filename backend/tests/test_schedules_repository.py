@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
-from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceAvailability
 from opensprite_backend.schedules import (
     Cadence, CadenceType, ExecutionProfile, OccurrenceStatus, OccurrenceTrigger,
     ScheduleDraft, ScheduleFailure, ScheduleStatus, ScheduleStoreError,
@@ -114,7 +114,7 @@ def test_schedule_workspace_change_moves_owned_conversation_atomically(
         workspace_name_snapshot="Alpha",
         workspace_root_hash="a" * 64,
     )
-    conversations.mark_run_started(run.run.id)
+    conversations.mark_run_started(run.run.id, WorkspaceAvailability.AVAILABLE)
     conversations.complete_run(run.run.id, "done")
     schedule = schedules.bind_conversation(schedule.id, run.conversation.id)
     managed = conversations.get_conversation(run.conversation.id)

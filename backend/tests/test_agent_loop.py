@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -1030,28 +1031,24 @@ async def test_workspace_snapshot_reaches_prompt_and_tool_context(
         workspace_root_hash=workspace.root_hash,
     ).run
 
-    class Resolver:
-        def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
-            assert workspace_id == workspace.id
-            return workspace
-
     tool = LookupTool()
     prompt = RecordingSystemPromptProvider()
     loop = AgentLoop(
         repository=repository,
         gateway=ScriptedGateway([
             [ModelToolCall("call-1", "lookup_note", {"query": "today"}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelTextDelta("part "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
             [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
         ]),
         tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
         capability_resolver=TestCapabilityResolver(),
         system_prompt_provider=prompt,
-        workspaces=Resolver(),
     )
 
-    result = await loop.execute(run.id, asyncio.Event())
+    result = await loop.execute(run.id, asyncio.Event(), workspace)
 
     assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "part done"
     assert prompt.workspaces == [workspace]
     assert tool.contexts == [workspace]
     started = repository.list_run_events(run.id, after_sequence=0, limit=1)[0]
@@ -1060,7 +1057,9 @@ async def test_workspace_snapshot_reaches_prompt_and_tool_context(
         "workspaceRevision": 3,
         "workspaceName": "Alpha",
         "workspaceRootHash": "a" * 64,
+        "workspaceAvailability": "available",
     }
+    assert workspace.root_path not in json.dumps(started.data)
 
 
 @async_test

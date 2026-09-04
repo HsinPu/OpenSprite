@@ -105,6 +105,13 @@ describe("frontend internationalization", () => {
     expect(document.documentElement.lang).toBe("zh-TW");
   });
 
+  it.each(["zh-TW", "en", "ja"] as const)("localizes Workspace schedule warnings in %s", (locale) => {
+    const warning = createTranslator(locale)("schedules.workspaceUnavailableWarning", { reason: "ROOT_REASON" });
+
+    expect(warning).toContain("ROOT_REASON");
+    expect(warning).not.toContain("schedules.workspaceUnavailableWarning");
+  });
+
   it("merges rapid locale and time-zone saves into one latest snapshot", async () => {
     const firstPut = deferred<Response>();
     const secondPut = deferred<Response>();

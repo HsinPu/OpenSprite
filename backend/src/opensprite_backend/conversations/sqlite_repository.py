@@ -39,7 +39,11 @@ from .models import (
 )
 from .repository import ConversationStoreError
 from .event_notifier import RunEventNotifier
-from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceUsage
+from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
+    WorkspaceAvailability,
+    WorkspaceUsage,
+)
 from opensprite_backend.workspaces.models import UNASSIGNED_WORKSPACE_NAME
 
 
@@ -1311,13 +1315,26 @@ class SqliteConversationRepository:
             finally:
                 connection.close()
 
-    def mark_run_started(self, run_id: str) -> RunSnapshot:
+    def mark_run_started(
+        self,
+        run_id: str,
+        workspace_availability: WorkspaceAvailability | None = None,
+    ) -> RunSnapshot:
         self._require_identifier(run_id)
+        if workspace_availability is not None and not isinstance(
+            workspace_availability,
+            WorkspaceAvailability,
+        ):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         with self._lock:
             connection = self._open_write()
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 row = self._require_run_row(connection, run_id)
+                if workspace_availability is None:
+                    if row["workspace_id"] != UNASSIGNED_WORKSPACE_ID:
+                        raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+                    workspace_availability = WorkspaceAvailability.NOT_APPLICABLE
                 if row["status"] != RunStatus.QUEUED.value:
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
                 now = self._now()
@@ -1335,6 +1352,7 @@ class SqliteConversationRepository:
                         "workspaceRevision": int(row["workspace_revision"]),
                         "workspaceName": row["workspace_name_snapshot"],
                         "workspaceRootHash": row["workspace_root_hash"],
+                        "workspaceAvailability": workspace_availability.value,
                     },
                     now,
                 )
@@ -2415,6 +2433,7 @@ class SqliteConversationRepository:
                 "workspaceRevision",
                 "workspaceName",
                 "workspaceRootHash",
+                "workspaceAvailability",
             }
             if not keys:
                 return
@@ -2428,6 +2447,9 @@ class SqliteConversationRepository:
                 or not SqliteConversationRepository._is_bounded_text(
                     data.get("workspaceName"), maximum=80
                 )
+                or data.get("workspaceAvailability") not in {
+                    item.value for item in WorkspaceAvailability
+                }
                 or (
                     root_hash is not None
                     and (
