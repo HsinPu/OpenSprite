@@ -13,6 +13,7 @@ import pytest
 
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
+from opensprite_backend.runtime import create_system_app
 from opensprite_backend.workspaces import (
     UNASSIGNED_WORKSPACE_ID,
     JsonWorkspaceStore,
@@ -264,3 +265,20 @@ def test_workspace_api_obeys_same_origin_protection(tmp_path: Path) -> None:
 def test_app_paths_owns_workspace_config_location(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     assert paths.workspace_settings_file == paths.home / "config" / "workspaces.json"
+
+
+def test_system_runtime_exposes_lazy_unassigned_workspace(tmp_path: Path) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    app = create_system_app(app_paths=paths, enforce_authentication=False)
+
+    with TestClient(app, base_url="http://localhost:8765") as client:
+        response = client.get("/api/workspaces")
+
+    assert response.status_code == 200
+    assert response.json()["activeWorkspaceId"] == UNASSIGNED_WORKSPACE_ID
+    assert response.json()["workspaces"][0]["usage"] == {
+        "conversationCount": 0,
+        "scheduleCount": 0,
+        "activeRunCount": 0,
+    }
+    assert not paths.workspace_settings_file.exists()

@@ -26,6 +26,8 @@ import { AboutSettings } from "./AboutSettings";
 import { ToolsSettings } from "./ToolsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { SchedulePage } from "../schedules/SchedulePage";
+import { WorkspacesSettings } from "./WorkspacesSettings";
+import type { WorkspaceController } from "../workspaces/useWorkspaces";
 import { useAuthentication } from "../auth/AuthGate";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
@@ -54,6 +56,11 @@ type SettingsPageProps = {
   conversationSettings: ConversationSettingsController;
   toolSettings: ToolSettingsController;
   mcpConnections: McpConnectionsController;
+  workspaces: WorkspaceController;
+  onWorkspaceActivated: (workspaceId: string) => void;
+  workspaceCreateRequest: number;
+  onWorkspaceCreateRequestHandled: () => void;
+  onWorkspaceOverlayChange?: (open: boolean) => void;
   onOpenScheduleConversation: (conversationId: string) => void;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
@@ -62,6 +69,7 @@ type SettingsPageProps = {
 
 const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
   { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true },
+  { id: "workspaces", labelKey: "settings.category.workspaces", icon: "folder", enabled: true },
   { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
   { id: "memory", labelKey: "settings.category.memory", icon: "database" },
   { id: "tools", labelKey: "settings.category.tools", icon: "connections", enabled: true },
@@ -441,7 +449,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   );
 }
 
-export function SettingsPage({ section, active, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, mcpConnections, onOpenScheduleConversation, onClose, onProviderModalChange, onScheduleOverlayChange }: SettingsPageProps) {
+export function SettingsPage({ section, active, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, mcpConnections, workspaces, onWorkspaceActivated, workspaceCreateRequest, onWorkspaceCreateRequestHandled, onWorkspaceOverlayChange, onOpenScheduleConversation, onClose, onProviderModalChange, onScheduleOverlayChange }: SettingsPageProps) {
   const { t } = useI18n();
   const { mode: authMode } = useAuthentication();
   const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving || toolSettings.saving;
@@ -476,7 +484,7 @@ export function SettingsPage({ section, active, onSectionChange, modelSelection,
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <><div className="settings-intro"><h2>{t("settings.category.tools")}</h2><p>{t("settings.toolsIntro")}</p></div><ToolsSettings controller={toolSettings} mcpConnections={mcpConnections} modalContainer={modalContainer} /></> : section === "schedules" ? <><div className="settings-intro"><h2>{t("settings.category.schedules")}</h2><p>{t("settings.schedulesIntro")}</p></div><SchedulePage active={active && section === "schedules"} container={modalContainer} defaultTimeZone={generalSettings.settings.timeZone} modelSelection={modelSelection} modelChoices={providerCatalog.modelChoices} responseMode={responseMode} outputContinuation={outputContinuation} onOpenConversation={onOpenScheduleConversation} onOverlayChange={onScheduleOverlayChange} /></> : section === "privacy" ? <><div className="settings-intro"><h2>{t("settings.category.privacy")}</h2><p>{t(authMode === "trusted_local" ? "auth.trustedLocalDescription" : "auth.changeDescription")}</p></div><PrivacySettings /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "workspaces" ? <><div className="settings-intro"><h2>{t("settings.category.workspaces")}</h2><p>{t("settings.workspacesIntro")}</p></div><WorkspacesSettings controller={workspaces} container={modalContainer} onActivated={onWorkspaceActivated} createRequest={workspaceCreateRequest} onCreateRequestHandled={onWorkspaceCreateRequestHandled} onOverlayChange={onWorkspaceOverlayChange} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <><div className="settings-intro"><h2>{t("settings.category.tools")}</h2><p>{t("settings.toolsIntro")}</p></div><ToolsSettings controller={toolSettings} mcpConnections={mcpConnections} modalContainer={modalContainer} /></> : section === "schedules" ? <><div className="settings-intro"><h2>{t("settings.category.schedules")}</h2><p>{t("settings.schedulesIntro")}</p></div><SchedulePage active={active && section === "schedules"} container={modalContainer} defaultTimeZone={generalSettings.settings.timeZone} modelSelection={modelSelection} modelChoices={providerCatalog.modelChoices} responseMode={responseMode} outputContinuation={outputContinuation} activeWorkspaceId={workspaces.catalog?.activeWorkspaceId} workspaces={workspaces.catalog?.workspaces ?? []} onOpenConversation={onOpenScheduleConversation} onOverlayChange={onScheduleOverlayChange} /></> : section === "privacy" ? <><div className="settings-intro"><h2>{t("settings.category.privacy")}</h2><p>{t(authMode === "trusted_local" ? "auth.trustedLocalDescription" : "auth.changeDescription")}</p></div><PrivacySettings /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>

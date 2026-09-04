@@ -85,6 +85,7 @@ class ConversationSummary:
     updated_at: datetime
     workspace_id: str = UNASSIGNED_WORKSPACE_ID
     revision: int = 1
+    workspace_managed_by_schedule: bool = False
 
 
 @dataclass(frozen=True, slots=True)

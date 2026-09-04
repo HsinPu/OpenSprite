@@ -221,3 +221,27 @@
 .settings-password-form label { margin-top: 4px; font-weight: 600; }
 .settings-password-form .ant-btn { justify-self: start; margin-top: 8px; }
 .settings-trust-warning { padding: 12px 14px; border-radius: 10px; color: #7a3d00; background: #fff7e6; }
+.workspace-settings__toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.workspace-settings__list { display: grid; gap: 12px; padding-bottom: 12px; }
+.workspace-settings__item { display: grid; gap: 13px; padding: 16px; border: 1px solid var(--settings-border); border-radius: 12px; background: var(--settings-surface); }
+.workspace-settings__summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.workspace-settings__summary h3 { margin: 0 0 5px; font-size: 16px; }
+.workspace-settings__summary p { max-width: 560px; margin: 0; overflow: hidden; color: var(--settings-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-settings__item dl { display: flex; gap: 10px; margin: 0; }
+.workspace-settings__item dl div { min-width: 92px; padding: 9px 11px; border-radius: 8px; background: var(--settings-bg); }
+.workspace-settings__item dt { color: var(--settings-muted); font-size: 11px; }
+.workspace-settings__item dd { margin: 3px 0 0; font-weight: 650; }
+.workspace-settings__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.workspace-editor { display: grid; gap: 14px; }
+.workspace-editor label { display: grid; gap: 7px; font-weight: 600; }
+.workspace-editor__path { display: flex; gap: 8px; }
+.workspace-editor__path .ant-input { min-width: 0; }
+.workspace-editor__error { margin: 0; color: var(--settings-danger); font-size: 13px; }
+.workspace-editor__actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 767px) {
+  .workspace-settings__summary { align-items: stretch; flex-direction: column; }
+  .workspace-settings__item dl { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .workspace-settings__item dl div { min-width: 0; }
+  .workspace-settings__actions .ant-btn { flex: 1; }
+  .workspace-editor__path { flex-direction: column; }
+}

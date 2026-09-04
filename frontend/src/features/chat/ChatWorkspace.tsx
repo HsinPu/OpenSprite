@@ -25,6 +25,8 @@ import "./ChatWorkspace.css";
 type ChatWorkspaceProps = {
   conversationId: string | null;
   workspaceId?: string;
+  workspaceName?: string;
+  workspaceUnavailable?: boolean;
   modelName: string;
   modelSelection: ModelSelection | null;
   modelChoices: ReadonlyArray<ModelChoice>;
@@ -71,6 +73,8 @@ const MemoizedMarkdownMessage = memo(MarkdownMessage);
 export function ChatWorkspace({
   conversationId,
   workspaceId = UNASSIGNED_WORKSPACE_ID,
+  workspaceName,
+  workspaceUnavailable = false,
   modelName,
   modelSelection,
   modelChoices,
@@ -310,6 +314,7 @@ export function ChatWorkspace({
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
+          {workspaceUnavailable ? <p className="chat-workspace__workspace-warning" role="status">{t("workspaces.chatUnavailable", { name: workspaceName ?? t("workspaces.unassigned") })}</p> : null}
           <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
             id="chat-message"

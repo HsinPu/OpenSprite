@@ -590,4 +590,12 @@ describe("live chat workspace", () => {
     fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
     expect(send).toHaveBeenCalledWith("hello");
   });
+
+  it("warns about an unavailable Workspace without disabling text chat", () => {
+    mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={null} workspaceName="Alpha" workspaceUnavailable modelName="GPT-5.6" modelSelection={selection("openai", "gpt-5.6")} modelChoices={[{ selection: selection("openai", "gpt-5.6"), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    expect(screen.getByText("工作區「Alpha」的資料夾目前無法使用；文字聊天仍可繼續。")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "輸入訊息" }).hasAttribute("disabled")).toBe(false);
+  });
 });

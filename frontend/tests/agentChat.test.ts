@@ -38,6 +38,7 @@ describe("Agent chat HTTP contract", () => {
             id: conversationId,
             workspaceId: UNASSIGNED_WORKSPACE_ID,
             revision: 1,
+            workspaceManagedBySchedule: false,
             title: "整理今天的工作",
             latestMessagePreview: "完成",
             createdAt: "2026-08-21T08:30:00Z",

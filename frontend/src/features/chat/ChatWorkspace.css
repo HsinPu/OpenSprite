@@ -290,6 +290,7 @@
 .chat-workspace__process-item--error .chat-workspace__step-icon { border-color: #c85b46; background: #c85b46; }
 
 .chat-workspace__composer { width: min(calc(100% - 36px), 820px); margin: auto auto 24px; padding: 12px 16px 11px; border: 1px solid #d9d7d4; border-radius: 16px; background: var(--chat-surface); box-shadow: var(--chat-shadow); }
+.chat-workspace__workspace-warning { margin: 0 0 9px; padding: 8px 10px; border-radius: 8px; background: #fff4e5; color: #8a4b12; font-size: 0.78rem; line-height: 1.4; }
 .chat-workspace__composer-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
 .chat-workspace__composer textarea { display: block; width: 100%; min-height: 36px; max-height: 144px; resize: none; overflow-y: auto; border: 0; outline: 0; background: transparent; color: var(--chat-text); line-height: 1.5; }
 .chat-workspace__composer textarea::placeholder { color: var(--chat-muted); opacity: 0.85; }
@@ -437,7 +438,12 @@
   .chat-workspace__header { flex-direction: row; align-items: center; padding: 12px 16px; }
   .chat-workspace__header h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chat-workspace__model-select { min-height: 38px; padding: 0 10px; font-size: 0.86rem; }
-  .chat-workspace__model-select--composer { width: min(150px, calc(100vw - 238px)); min-width: 0; }
+  .chat-workspace__composer-actions { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: 10px; }
+  .chat-workspace__composer-actions > div:first-child { grid-column: 1; grid-row: 1; }
+  .chat-workspace__composer-actions > .chat-workspace__composer-primary-actions { display: contents; }
+  .chat-workspace__model-select--composer { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; max-width: none; }
+  .chat-workspace__context-usage { grid-column: 2; grid-row: 1; justify-self: end; }
+  .chat-workspace__send-button { grid-column: 2; grid-row: 2; justify-self: end; }
   .chat-workspace__context-usage { min-height: 38px; padding: 0 8px; font-size: 0.7rem; }
   .chat-workspace__conversation { padding: 24px 16px 16px; }
   .chat-workspace__user-row > div { max-width: 82%; }

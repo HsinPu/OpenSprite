@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/app/App";
 import { UNASSIGNED_WORKSPACE_ID } from "../src/api/agentChat";
 
+const unassignedWorkspaceCatalog = {
+  revision: 0,
+  activeWorkspaceId: UNASSIGNED_WORKSPACE_ID,
+  workspaces: [{ id: UNASSIGNED_WORKSPACE_ID, kind: "unassigned", name: "Unassigned workspace", rootPath: null, availability: "not_applicable", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } }],
+};
+const workspaceResponse = () => Promise.resolve(new Response(JSON.stringify(unassignedWorkspaceCatalog)));
+
 beforeEach(() => {
   vi.unstubAllGlobals();
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
@@ -285,6 +292,102 @@ describe("persisted AI settings", () => {
 });
 
 describe("conversation navigation", () => {
+  it("opens the create Workspace editor from the sidebar switcher", async () => {
+    const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/workspaces") return workspaceResponse();
+      if (path.startsWith("/api/conversations?")) return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "切換工作區，目前是 未指定工作區" }));
+    fireEvent.click(await screen.findByText("新增工作區"));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "工作區" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "新增工作區" })).toBeTruthy();
+  });
+
+  it("switches the backend active Workspace and loads its conversation list", async () => {
+    const alpha = { ...unassignedWorkspaceCatalog.workspaces[0], id: "11111111-1111-4111-8111-111111111111", kind: "directory", name: "Alpha", rootPath: "C:\\Projects\\Alpha", availability: "available", createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" };
+    const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", rootPath: "C:\\Projects\\Beta" };
+    const initial = { revision: 1, activeWorkspaceId: alpha.id, workspaces: [unassignedWorkspaceCatalog.workspaces[0], alpha, beta] };
+    const activated = { ...initial, revision: 2, activeWorkspaceId: beta.id };
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/workspaces" && !init) return Promise.resolve(new Response(JSON.stringify(initial)));
+      if (path === "/api/workspaces/active" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify(activated)));
+      if (path.startsWith("/api/conversations?")) return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "切換工作區，目前是 Alpha" }));
+    fireEvent.click(await screen.findByText("Beta"));
+
+    await waitFor(() => expect(window.location.hash).toBe("#new-chat"));
+    expect(fetchMock).toHaveBeenCalledWith("/api/workspaces/active", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ workspaceId: beta.id, expectedRevision: 1 }),
+    }));
+    await screen.findByRole("button", { name: "切換工作區，目前是 Beta" });
+  });
+
+  it("resolves a deep-linked conversation and activates its Workspace", async () => {
+    const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const alpha = { ...unassignedWorkspaceCatalog.workspaces[0], id: "11111111-1111-4111-8111-111111111111", kind: "directory", name: "Alpha", rootPath: "C:\\Projects\\Alpha", availability: "available", createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" };
+    const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", rootPath: "C:\\Projects\\Beta" };
+    const initial = { revision: 1, activeWorkspaceId: alpha.id, workspaces: [unassignedWorkspaceCatalog.workspaces[0], alpha, beta] };
+    const activated = { ...initial, revision: 2, activeWorkspaceId: beta.id };
+    const conversation = { id: conversationId, workspaceId: beta.id, revision: 1, workspaceManagedBySchedule: false, title: "Beta chat", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" };
+    window.history.replaceState(null, "", `#chat=${conversationId}`);
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/workspaces" && !init) return Promise.resolve(new Response(JSON.stringify(initial)));
+      if (path === `/api/conversations/${conversationId}`) return Promise.resolve(new Response(JSON.stringify(conversation)));
+      if (path === "/api/workspaces/active" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify(activated)));
+      if (path.startsWith("/api/conversations?")) return Promise.resolve(new Response(JSON.stringify({ conversations: path.includes(beta.id) ? [conversation] : [], nextCursor: null })));
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    await screen.findByRole("button", { name: "切換工作區，目前是 Beta" });
+    expect(window.location.hash).toBe(`#chat=${conversationId}`);
+    expect(screen.getByRole("heading", { name: "Beta chat" })).toBeTruthy();
+  });
+
+  it("moves an ordinary conversation and follows it to the target Workspace", async () => {
+    const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const alpha = { ...unassignedWorkspaceCatalog.workspaces[0], id: "11111111-1111-4111-8111-111111111111", kind: "directory", name: "Alpha", rootPath: "C:\\Projects\\Alpha", availability: "available", createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" };
+    const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", rootPath: "C:\\Projects\\Beta" };
+    const initial = { revision: 1, activeWorkspaceId: alpha.id, workspaces: [unassignedWorkspaceCatalog.workspaces[0], alpha, beta] };
+    const activated = { ...initial, revision: 2, activeWorkspaceId: beta.id };
+    const conversation = { id: conversationId, workspaceId: alpha.id, revision: 1, workspaceManagedBySchedule: false, title: "Alpha chat", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" };
+    const moved = { ...conversation, workspaceId: beta.id, revision: 2 };
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/workspaces" && !init) return Promise.resolve(new Response(JSON.stringify(initial)));
+      if (path === `/api/conversations/${conversationId}/workspace` && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify(moved)));
+      if (path === "/api/workspaces/active" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify(activated)));
+      if (path.startsWith("/api/conversations?")) return Promise.resolve(new Response(JSON.stringify({ conversations: path.includes(beta.id) ? [moved] : [conversation], nextCursor: null })));
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Alpha chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "移動對話「Alpha chat」" }));
+    fireEvent.click(await screen.findByText("Beta"));
+
+    await screen.findByRole("button", { name: "切換工作區，目前是 Beta" });
+    expect(window.location.hash).toBe(`#chat=${conversationId}`);
+    expect(fetchMock).toHaveBeenCalledWith(`/api/conversations/${conversationId}/workspace`, expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ workspaceId: beta.id, expectedRevision: 1 }),
+    }));
+  });
+
   it("keeps schedules out of the main sidebar and opens them inside settings", () => {
     const { container } = render(<App />);
     const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
@@ -303,11 +406,12 @@ describe("conversation navigation", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "balanced", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "Asia/Taipei" })));
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
-      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: true, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [{ id: "20000000-0000-4000-8000-000000000001", workspaceId: UNASSIGNED_WORKSPACE_ID, name: "晨間整理", prompt: "整理工作", timeZone: "Asia/Taipei", cadence: { type: "daily", localTime: "09:00" }, executionProfile: { providerId: "openai", modelId: "gpt-5.6", responseMode: "balanced", contextBudget: "64k", outputBudget: "16k", outputContinuation: "5" }, status: "active", conversationId, nextRunAt: "2026-09-05T01:00:00Z", revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", latestOccurrence: null }], nextCursor: null })));
       if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
@@ -332,6 +436,7 @@ describe("conversation navigation", () => {
   it("normalizes the removed schedules hash through the configured startup view", async () => {
     window.history.replaceState(null, "", "#schedules");
     const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "default", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
@@ -353,11 +458,12 @@ describe("conversation navigation", () => {
   ])("keeps an explicit startup URL instead of applying the recent preference (%s)", async (hash, explicitConversationId) => {
     window.history.replaceState(null, "", hash);
     const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: false, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       throw new Error(`unexpected request ${path}`);
     });
@@ -374,11 +480,12 @@ describe("conversation navigation", () => {
   it("opens the most recently updated conversation when startup preference is recent", async () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: false, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       throw new Error(`unexpected request ${path} ${init?.method ?? "GET"}`);
     });
@@ -394,6 +501,7 @@ describe("conversation navigation", () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({
@@ -401,6 +509,7 @@ describe("conversation navigation", () => {
           id: conversationId,
           workspaceId: UNASSIGNED_WORKSPACE_ID,
           revision: 1,
+          workspaceManagedBySchedule: false,
           title: "回顧進度",
           latestMessagePreview: "整理本週完成項目",
           createdAt: "2026-08-22T08:00:00Z",
@@ -413,6 +522,7 @@ describe("conversation navigation", () => {
           id: olderConversationId,
           workspaceId: UNASSIGNED_WORKSPACE_ID,
           revision: 1,
+          workspaceManagedBySchedule: false,
           title: "較早的對話",
           latestMessagePreview: "舊內容",
           createdAt: "2026-08-01T08:00:00Z",

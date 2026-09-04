@@ -123,6 +123,7 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "createdAt",
     ]
     assert schemas["MessageRole"]["enum"] == ["user", "assistant"]
+    assert "workspaceManagedBySchedule" in schemas["ConversationSummary"]["required"]
 
 
 def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:

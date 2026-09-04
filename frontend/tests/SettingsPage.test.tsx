@@ -11,6 +11,7 @@ import type { GeneralSettingsController } from "../src/features/general-settings
 import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
 import type { ToolSettingsController } from "../src/features/tool-settings/useToolSettings";
 import type { McpConnectionsController } from "../src/features/mcp-settings/useMcpConnections";
+import type { WorkspaceController } from "../src/features/workspaces/useWorkspaces";
 
 const generalSettings: GeneralSettingsController = {
   settings: { locale: "zh-TW", timeZone: "system" },
@@ -58,8 +59,27 @@ const mcpConnections: McpConnectionsController = {
   stop: async () => null, loadTools: async () => null,
 };
 
-function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections" | "active" | "onOpenScheduleConversation">) {
-  return <ProductionSettingsPage {...props} active toolSettings={toolSettings} mcpConnections={mcpConnections} onOpenScheduleConversation={() => undefined} />;
+const workspaceCatalog = {
+  revision: 0,
+  activeWorkspaceId: "00000000-0000-4000-8000-000000000000",
+  workspaces: [{ id: "00000000-0000-4000-8000-000000000000", kind: "unassigned" as const, name: "Unassigned workspace", rootPath: null, availability: "not_applicable" as const, unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } }],
+};
+const workspaceController: WorkspaceController = {
+  catalog: workspaceCatalog,
+  activeWorkspace: workspaceCatalog.workspaces[0],
+  loaded: true,
+  loading: false,
+  saving: false,
+  error: null,
+  reload: async () => workspaceCatalog,
+  create: async () => workspaceCatalog,
+  update: async (item) => item,
+  activate: async () => workspaceCatalog,
+  remove: async () => undefined,
+};
+
+function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections" | "workspaces" | "onWorkspaceActivated" | "workspaceCreateRequest" | "onWorkspaceCreateRequestHandled" | "active" | "onOpenScheduleConversation">) {
+  return <ProductionSettingsPage {...props} active toolSettings={toolSettings} mcpConnections={mcpConnections} workspaces={workspaceController} onWorkspaceActivated={() => undefined} workspaceCreateRequest={0} onWorkspaceCreateRequestHandled={() => undefined} onOpenScheduleConversation={() => undefined} />;
 }
 
 const disconnectedCatalog = {
@@ -264,7 +284,7 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具", "排程", "外觀Demo", "隱私", "關於"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "工作區", "AI 模型", "記憶與資料Demo", "工具", "排程", "外觀Demo", "隱私", "關於"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
     expect(screen.getAllByText("Demo")).toHaveLength(2);

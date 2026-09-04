@@ -384,6 +384,7 @@
           "id",
           "workspaceId",
           "revision",
+          "workspaceManagedBySchedule",
           "title",
           "latestMessagePreview",
           "createdAt",
@@ -399,6 +400,9 @@
           "revision": {
             "type": "integer",
             "minimum": 1
+          },
+          "workspaceManagedBySchedule": {
+            "type": "boolean"
           },
           "title": {
             "type": "string",

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
+import { Button, Dropdown, type MenuProps } from "antd";
 
-import { isIdentifier, type ConversationSummary } from "../api/agentChat";
+import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import { UNASSIGNED_WORKSPACE_ID } from "../api/agentChat";
 import { useConversations } from "../features/chat/useConversations";
@@ -18,6 +18,9 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
 import { useAuthentication } from "../features/auth/AuthGate";
+import { useWorkspaces } from "../features/workspaces/useWorkspaces";
+import { WorkspaceSwitcher, workspaceName } from "../features/workspaces/WorkspaceSwitcher";
+import type { Workspace } from "../api/workspaces";
 
 function conversationIdFromHash(): string | null {
   if (!window.location.hash.startsWith("#chat=")) return null;
@@ -34,23 +37,33 @@ function OpenSpriteMark() {
 }
 
 function ConversationButton({
-  title,
+  conversation,
   active,
   onClick,
+  workspaces,
+  onMove,
 }: {
-  title: string;
+  conversation: ConversationSummary;
   active: boolean;
   onClick: () => void;
+  workspaces: readonly Workspace[];
+  onMove: (workspaceId: string) => void;
 }) {
+  const { t } = useI18n();
+  const targets = workspaces.filter((item) => item.id !== conversation.workspaceId);
+  const items: MenuProps["items"] = conversation.workspaceManagedBySchedule
+    ? [{ key: "managed", disabled: true, label: t("workspaces.moveManaged") }]
+    : targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.unassigned")) }));
   return (
-    <button
-      className={`conversation-link${active ? " is-active" : ""}`}
-      type="button"
-      onClick={onClick}
-    >
-      <span aria-hidden="true">◯</span>
-      <span>{title}</span>
-    </button>
+    <div className={`conversation-item${active ? " is-active" : ""}`}>
+      <button className="conversation-link" type="button" onClick={onClick}>
+        <span aria-hidden="true">◯</span>
+        <span>{conversation.title}</span>
+      </button>
+      <Dropdown menu={{ items, onClick: ({ key }) => { if (key !== "managed") onMove(key); } }} trigger={["click"]} disabled={targets.length === 0 && !conversation.workspaceManagedBySchedule}>
+        <button className="conversation-item__more" type="button" aria-label={t("workspaces.moveConversationLabel", { title: conversation.title })} title={conversation.workspaceManagedBySchedule ? t("workspaces.moveManaged") : t("workspaces.moveConversation")}><MoreOutlined /></button>
+      </Dropdown>
+    </div>
   );
 }
 
@@ -58,6 +71,8 @@ export function App() {
   const { t } = useI18n();
   const { mode: authMode, signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
+  const workspaceController = useWorkspaces();
+  const activeWorkspaceId = workspaceController.catalog?.activeWorkspaceId ?? UNASSIGNED_WORKSPACE_ID;
   const {
     conversations,
     loading: conversationsLoading,
@@ -65,9 +80,12 @@ export function App() {
     refresh: refreshConversations,
     hasMore: hasMoreConversations,
     loadingMore: conversationsLoadingMore,
+    loadedWorkspaceId: conversationsLoadedWorkspaceId,
     loadMore: loadMoreConversations,
     recordAcceptedConversation,
-  } = useConversations(UNASSIGNED_WORKSPACE_ID);
+  } = useConversations(activeWorkspaceId, workspaceController.loaded && workspaceController.catalog !== null);
+  const [deepLinkedConversation, setDeepLinkedConversation] = useState<ConversationSummary | null>(null);
+  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavigation, setMobileNavigation] = useState(
@@ -99,6 +117,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [scheduleOverlayOpen, setScheduleOverlayOpen] = useState(false);
+  const [workspaceOverlayOpen, setWorkspaceOverlayOpen] = useState(false);
+  const [workspaceCreateRequest, setWorkspaceCreateRequest] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [mobileHeaderActionTarget, setMobileHeaderActionTarget] = useState<HTMLDivElement | null>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -108,15 +128,23 @@ export function App() {
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const appContentRef = useRef<HTMLElement>(null);
   const scheduleConversationTargetRef = useRef<string | null>(null);
+  const deepLinkResolutionRef = useRef<string | null>(null);
   const menuWasOpen = useRef(false);
   const startupResolvedRef = useRef(false);
-  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId)
+    ?? (deepLinkedConversation?.id === conversationId ? deepLinkedConversation : undefined);
+  const currentWorkspace = workspaceController.catalog?.workspaces.find(
+    (item) => item.id === (activeConversation?.workspaceId ?? activeWorkspaceId),
+  );
   const chatTitle = conversationId === null ? t("app.newConversationTitle") : activeConversation?.title ?? t("app.conversationTitle");
   const todayConversations = conversations.filter((conversation) => isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
   const earlierConversations = conversations.filter((conversation) => !isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
 
   useEffect(() => {
     if (startupResolvedRef.current
+      || !workspaceController.loaded
+      || workspaceController.catalog === null
+      || conversationsLoadedWorkspaceId !== activeWorkspaceId
       || conversationsLoading
       || (!conversationSettings.loaded && !conversationSettings.error)) return;
 
@@ -139,16 +167,53 @@ export function App() {
 
     setConversationId(null);
     window.history.replaceState(null, "", "#new-chat");
-  }, [conversationSettings.error, conversationSettings.loaded, conversationSettings.settings.startupView, conversations, conversationsLoading]);
+  }, [activeWorkspaceId, conversationSettings.error, conversationSettings.loaded, conversationSettings.settings.startupView, conversations, conversationsLoadedWorkspaceId, conversationsLoading, workspaceController.catalog, workspaceController.loaded]);
 
   useEffect(() => {
     const syncHash = () => {
       setConversationId(conversationIdFromHash());
+      setDeepLinkedConversation(null);
       setMenuOpen(false);
     };
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
+
+  useEffect(() => {
+    if (conversationId === null) {
+      deepLinkResolutionRef.current = null;
+      setDeepLinkedConversation(null);
+      return;
+    }
+    const listed = conversations.find((item) => item.id === conversationId);
+    if (listed) {
+      setDeepLinkedConversation(listed);
+      return;
+    }
+    if (
+      !workspaceController.loaded
+      || workspaceController.catalog === null
+      || deepLinkResolutionRef.current === conversationId
+      || (deepLinkedConversation?.id === conversationId && deepLinkedConversation.workspaceId === activeWorkspaceId)
+    ) return;
+    let cancelled = false;
+    deepLinkResolutionRef.current = conversationId;
+    void getConversation(conversationId).then(async (item) => {
+      if (cancelled) return;
+      setDeepLinkedConversation(item);
+      setWorkspaceActionError(null);
+      if (item.workspaceId !== activeWorkspaceId) {
+        await workspaceController.activate(item.workspaceId);
+      }
+    }).catch((error) => {
+      if (!cancelled) setWorkspaceActionError(agentChatErrorText(error, t));
+    }).finally(() => {
+      if (deepLinkResolutionRef.current === conversationId) {
+        deepLinkResolutionRef.current = null;
+      }
+    });
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, conversationId, conversations, deepLinkedConversation, t, workspaceController.activate, workspaceController.catalog, workspaceController.loaded]);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -218,6 +283,45 @@ export function App() {
     setMenuOpen(false);
   };
 
+  const activateWorkspace = async (workspaceId: string) => {
+    if (workspaceId === activeWorkspaceId) {
+      startNewChat();
+      return;
+    }
+    try {
+      await workspaceController.activate(workspaceId);
+      setWorkspaceActionError(null);
+      startNewChat();
+    } catch {
+      // The Workspace controller owns the localized recovery state.
+    }
+  };
+
+  const moveConversation = async (
+    conversation: ConversationSummary,
+    workspaceId: string,
+  ) => {
+    try {
+      const moved = await moveConversationToWorkspace(
+        conversation.id,
+        workspaceId,
+        conversation.revision,
+      );
+      setWorkspaceActionError(null);
+      if (conversation.id === conversationId) {
+        if (workspaceId !== activeWorkspaceId) {
+          await workspaceController.activate(workspaceId);
+          setDeepLinkedConversation(moved);
+          return;
+        }
+        setDeepLinkedConversation(moved);
+      }
+      await refreshConversations();
+    } catch (error) {
+      setWorkspaceActionError(agentChatErrorText(error, t));
+    }
+  };
+
   const acceptConversation = useCallback((acceptedId: string, firstMessage: string) => {
     setConversationId(acceptedId);
     window.location.hash = `chat=${acceptedId}`;
@@ -227,6 +331,14 @@ export function App() {
   const conversationUpdated = useCallback(() => {
     void refreshConversations();
   }, [refreshConversations]);
+
+  const workspaceActivated = (workspaceId: string) => {
+    void workspaceId;
+    setConversationId(null);
+    setDeepLinkedConversation(null);
+    setWorkspaceActionError(null);
+    window.location.hash = "new-chat";
+  };
 
   const openSettings = (section: SettingsSection = "general", opener?: HTMLElement) => {
     const activeElement = opener ?? document.activeElement;
@@ -240,7 +352,7 @@ export function App() {
 
   const hasProviderModal = () => document.querySelector(".provider-connection-modal") !== null;
   const closeSettings = () => {
-    if (!providerModalOpen && !scheduleOverlayOpen && !hasProviderModal()) {
+    if (!providerModalOpen && !scheduleOverlayOpen && !workspaceOverlayOpen && !hasProviderModal()) {
       setSettingsOpen(false);
     }
   };
@@ -313,6 +425,14 @@ export function App() {
           </div>
         </div>
 
+        <WorkspaceSwitcher
+          controller={workspaceController}
+          collapsed={sidebarCollapsed && !mobileNavigation}
+          onActivate={(workspaceId) => void activateWorkspace(workspaceId)}
+          onCreate={() => { setWorkspaceCreateRequest((value) => value + 1); openSettings("workspaces"); }}
+          onManage={() => openSettings("workspaces")}
+        />
+
         <button
           ref={newChatButtonRef}
           className="new-chat-button"
@@ -332,14 +452,17 @@ export function App() {
         >
           {conversationsLoading ? <p className="conversation-nav__status">{t("app.loadingConversations")}</p> : null}
           {conversationsError ? <p className="conversation-nav__status" aria-live="polite">{conversationsError}</p> : null}
+          {workspaceActionError ? <p className="conversation-nav__status conversation-nav__status--error" aria-live="polite">{workspaceActionError}</p> : null}
           {!conversationsLoading && conversations.length === 0 ? <p className="conversation-nav__status">{t("app.noConversations")}</p> : null}
           {todayConversations.length > 0 ? <p className="nav-group-label">{t("app.today")}</p> : null}
           {todayConversations.map((conversation) => (
             <ConversationButton
               key={conversation.id}
-              title={conversation.title}
+              conversation={conversation}
               active={conversationId === conversation.id}
               onClick={() => openChat(conversation)}
+              workspaces={workspaceController.catalog?.workspaces ?? []}
+              onMove={(workspaceId) => void moveConversation(conversation, workspaceId)}
             />
           ))}
 
@@ -348,9 +471,11 @@ export function App() {
           {earlierConversations.map((conversation) => (
             <ConversationButton
               key={conversation.id}
-              title={conversation.title}
+              conversation={conversation}
               active={conversationId === conversation.id}
               onClick={() => openChat(conversation)}
+              workspaces={workspaceController.catalog?.workspaces ?? []}
+              onMove={(workspaceId) => void moveConversation(conversation, workspaceId)}
             />
           ))}
           {hasMoreConversations ? (
@@ -398,7 +523,9 @@ export function App() {
         <ChatWorkspace
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
-          workspaceId={UNASSIGNED_WORKSPACE_ID}
+          workspaceId={activeConversation?.workspaceId ?? activeWorkspaceId}
+          workspaceName={currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.unassigned")) : undefined}
+          workspaceUnavailable={currentWorkspace?.availability === "unavailable"}
           title={chatTitle}
           modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })), t)}
           modelSelection={modelSelection}
@@ -441,7 +568,7 @@ export function App() {
           });
         }}
         onCancel={(event) => {
-          if (providerModalOpen || scheduleOverlayOpen || hasProviderModal()) event.preventDefault();
+          if (providerModalOpen || scheduleOverlayOpen || workspaceOverlayOpen || hasProviderModal()) event.preventDefault();
         }}
         onClick={(event) => {
           if (event.target === event.currentTarget) {
@@ -472,6 +599,11 @@ export function App() {
           conversationSettings={conversationSettings}
           toolSettings={toolSettings}
           mcpConnections={mcpConnections}
+          workspaces={workspaceController}
+          onWorkspaceActivated={workspaceActivated}
+          workspaceCreateRequest={workspaceCreateRequest}
+          onWorkspaceCreateRequestHandled={() => setWorkspaceCreateRequest(0)}
+          onWorkspaceOverlayChange={setWorkspaceOverlayOpen}
           onOpenScheduleConversation={openScheduleConversation}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}

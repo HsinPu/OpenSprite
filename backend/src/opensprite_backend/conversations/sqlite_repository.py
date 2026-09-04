@@ -751,7 +751,9 @@ class SqliteConversationRepository:
                 if cursor is None:
                     rows = connection.execute(
                         """
-                        SELECT * FROM conversations
+                        SELECT conversations.*,
+                               EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                        FROM conversations
                         WHERE workspace_id = ?
                         ORDER BY updated_at DESC, id DESC
                         LIMIT ?
@@ -762,7 +764,9 @@ class SqliteConversationRepository:
                     updated_at, identifier = cursor
                     rows = connection.execute(
                         """
-                        SELECT * FROM conversations
+                        SELECT conversations.*,
+                               EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                        FROM conversations
                         WHERE workspace_id = ? AND (
                             updated_at < ? OR (updated_at = ? AND id < ?)
                         )
@@ -797,7 +801,9 @@ class SqliteConversationRepository:
                 return None
             try:
                 row = connection.execute(
-                    "SELECT * FROM conversations WHERE id = ?",
+                    """SELECT conversations.*,
+                              EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                       FROM conversations WHERE id = ?""",
                     (conversation_id,),
                 ).fetchone()
                 return None if row is None else self._conversation(row)
@@ -1464,7 +1470,9 @@ class SqliteConversationRepository:
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
-                    "SELECT * FROM conversations WHERE id = ?",
+                    """SELECT conversations.*,
+                              EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                       FROM conversations WHERE id = ?""",
                     (conversation_id,),
                 ).fetchone()
                 if row is None:
@@ -2151,6 +2159,11 @@ class SqliteConversationRepository:
             ),
             workspace_id=row["workspace_id"],
             revision=int(row["revision"]),
+            workspace_managed_by_schedule=(
+                bool(row["workspace_managed_by_schedule"])
+                if "workspace_managed_by_schedule" in row.keys()
+                else False
+            ),
         )
 
     @staticmethod

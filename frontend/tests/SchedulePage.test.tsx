@@ -66,6 +66,7 @@ describe("schedule page", () => {
     fireEvent.click(screen.getByRole("button", { name: /新增排程/ }));
     expect(container.querySelector(selector)).toBeTruthy();
     expect(screen.getByLabelText("名稱")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "工作區" })).toBeTruthy();
     expect(props.onOverlayChange).toHaveBeenLastCalledWith(true);
     unmount();
     container.remove();

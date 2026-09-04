@@ -114,8 +114,18 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
 }
+
+.workspace-switcher { display: grid; gap: 5px; margin-bottom: 14px; }
+.workspace-switcher__button.ant-btn { display: grid; width: 100%; min-height: 44px; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 0 11px; border-color: var(--os-border); border-radius: 10px; background: var(--os-surface); text-align: left; }
+.workspace-switcher__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-switcher__chevron { color: var(--os-muted); font-size: 11px; }
+.workspace-switcher__error { overflow: hidden; color: #a84335; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-menu-label { display: inline-flex; align-items: center; gap: 8px; }
+.workspace-status-dot { display: inline-block; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #aaa; }
+.workspace-status-dot--available { background: #35a38d; }
+.workspace-status-dot--unavailable { background: #d05b48; }
 
 .brand {
   display: flex;
@@ -184,6 +194,8 @@ button {
 
 .new-chat-button:focus-visible,
 .conversation-link:focus-visible,
+.conversation-item__more:focus-visible,
+.workspace-switcher__button:focus-visible,
 .utility-nav button:focus-visible,
 .mobile-execution-button:focus-visible,
 .mobile-menu-button:focus-visible,
@@ -236,6 +248,7 @@ button {
 }
 
 .conversation-link,
+.conversation-item__more,
 .utility-nav button {
   width: 100%;
   border: 0;
@@ -255,6 +268,13 @@ button {
   font-size: 14px;
 }
 
+.conversation-item { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; border-radius: 9px; }
+.conversation-item .conversation-link { min-width: 0; }
+.conversation-item__more { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; color: var(--os-muted); opacity: 0; }
+.conversation-item:hover .conversation-item__more,
+.conversation-item:focus-within .conversation-item__more { opacity: 1; }
+.conversation-item:hover { background: #f6f4f1; }
+
 .conversation-link span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,6 +282,7 @@ button {
 }
 
 .conversation-link:hover,
+.conversation-item__more:hover,
 .utility-nav button:hover {
   background: #f6f4f1;
 }
@@ -272,6 +293,7 @@ button {
   cursor: not-allowed;
 }
 
+.conversation-item.is-active,
 .conversation-link.is-active,
 .utility-nav button.is-active {
   color: var(--os-primary-strong);
@@ -316,11 +338,17 @@ button {
   justify-content: center;
 }
 
+.conversation-nav__status--error { color: #a84335; }
+
 .app-shell.is-sidebar-collapsed .brand {
   padding: 2px 0 0;
 }
 
 .app-shell.is-sidebar-collapsed .brand > span:last-child,
+.app-shell.is-sidebar-collapsed .workspace-switcher__name,
+.app-shell.is-sidebar-collapsed .workspace-switcher__chevron,
+.app-shell.is-sidebar-collapsed .workspace-switcher .workspace-status-dot,
+.app-shell.is-sidebar-collapsed .workspace-switcher__error,
 .app-shell.is-sidebar-collapsed .new-chat-label,
 .app-shell.is-sidebar-collapsed .utility-label {
   display: none;
@@ -358,6 +386,8 @@ button {
   min-height: 0;
   overflow: hidden;
 }
+
+.app-shell.is-sidebar-collapsed .workspace-switcher__button.ant-btn { width: 52px; grid-template-columns: 1fr; justify-items: center; padding: 0; }
 
 .settings-dialog {
   width: min(920px, calc(100vw - 48px));
@@ -522,10 +552,17 @@ button {
   }
 
   .app-shell.is-sidebar-collapsed .brand > span:last-child,
+  .app-shell.is-sidebar-collapsed .workspace-switcher__name,
+  .app-shell.is-sidebar-collapsed .workspace-switcher__chevron,
+  .app-shell.is-sidebar-collapsed .workspace-switcher .workspace-status-dot,
+  .app-shell.is-sidebar-collapsed .workspace-switcher__error,
   .app-shell.is-sidebar-collapsed .new-chat-label,
   .app-shell.is-sidebar-collapsed .utility-label {
     display: inline;
   }
+
+  .app-shell.is-sidebar-collapsed .workspace-switcher__button.ant-btn { width: 100%; grid-template-columns: 20px minmax(0, 1fr) auto auto; justify-items: stretch; padding: 0 11px; }
+  .conversation-item__more { opacity: 1; }
 
   .app-shell.is-sidebar-collapsed .new-chat-button {
     width: 100%;

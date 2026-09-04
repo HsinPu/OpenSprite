@@ -57,6 +57,7 @@ class ConversationResponse(ChatContractModel):
     id: UUID
     workspace_id: UUID
     revision: int = Field(ge=1)
+    workspace_managed_by_schedule: bool
     title: str
     latest_message_preview: str | None
     created_at: datetime
@@ -186,6 +187,7 @@ def conversation_response(item: ConversationSummary) -> ConversationResponse:
         id=item.id,
         workspaceId=item.workspace_id,
         revision=item.revision,
+        workspaceManagedBySchedule=item.workspace_managed_by_schedule,
         title=item.title,
         latestMessagePreview=item.latest_message_preview,
         createdAt=item.created_at,

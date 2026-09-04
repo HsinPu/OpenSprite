@@ -225,6 +225,7 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
                 "id": CONVERSATION_ID,
                 "workspaceId": UNASSIGNED_WORKSPACE_ID,
                 "revision": 1,
+                "workspaceManagedBySchedule": False,
                 "title": "整理今天的工作",
                 "latestMessagePreview": "done",
                 "createdAt": "2026-08-21T08:30:00Z",

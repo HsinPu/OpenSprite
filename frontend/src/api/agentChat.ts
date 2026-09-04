@@ -17,6 +17,7 @@ export type ConversationSummary = {
   id: string;
   workspaceId: string;
   revision: number;
+  workspaceManagedBySchedule: boolean;
   title: string;
   latestMessagePreview: string | null;
   createdAt: string;
@@ -142,7 +143,7 @@ function boundedString(value: unknown, minimum: number, maximum: number): value 
 }
 
 function conversation(value: unknown): ConversationSummary {
-  if (!record(value) || !exactKeys(value, ["id", "workspaceId", "revision", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
+  if (!record(value) || !exactKeys(value, ["id", "workspaceId", "revision", "workspaceManagedBySchedule", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || typeof value.workspaceManagedBySchedule !== "boolean" || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
     throw new AgentChatApiError("malformed_response");
   }
   return value as ConversationSummary;
@@ -344,11 +345,11 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     scheduled_tool_approval_required: "error.chat.scheduledToolApprovalRequired",
     invalid_provider_response: "error.chat.invalidProviderResponse",
     internal_error: "error.chat.internal",
-    workspace_not_found: "error.chat.notFound",
-    workspace_mismatch: "error.chat.invalidRequest",
-    workspace_store_unavailable: "error.chat.database",
-    revision_conflict: "error.chat.runBusy",
-    workspace_managed_by_schedule: "error.chat.runBusy",
+    workspace_not_found: "error.chat.workspaceNotFound",
+    workspace_mismatch: "error.chat.workspaceMismatch",
+    workspace_store_unavailable: "error.chat.workspaceStore",
+    revision_conflict: "error.chat.revisionConflict",
+    workspace_managed_by_schedule: "error.chat.workspaceManaged",
     malformed_response: "error.chat.malformed",
     network_error: "error.network",
   } satisfies Record<AgentChatErrorCode, MessageKey>;

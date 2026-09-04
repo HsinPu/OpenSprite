@@ -34,6 +34,9 @@ describe("useConversations", () => {
       return Promise.resolve(new Response(JSON.stringify({
         conversations: [{
           id: conversationId,
+          workspaceId: "00000000-0000-4000-8000-000000000000",
+          revision: 1,
+          workspaceManagedBySchedule: false,
           title: "new conversation",
           latestMessagePreview: "new conversation",
           createdAt: "2026-08-28T08:00:00Z",

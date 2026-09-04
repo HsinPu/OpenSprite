@@ -13,6 +13,8 @@ import type { ContextBudget, OutputBudget, OutputContinuation, PersistedModelSel
 import { ScheduleApiError, type Schedule, type ScheduleCadence, type ScheduleFields } from "../../api/schedules";
 import type { ModelChoice } from "../ai-settings/modelCatalog";
 import { UNASSIGNED_WORKSPACE_ID } from "../../api/agentChat";
+import type { Workspace } from "../../api/workspaces";
+import { workspaceName } from "../workspaces/WorkspaceSwitcher";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSchedules } from "./useSchedules";
 import "./schedules.css";
@@ -29,6 +31,7 @@ type Props = {
   onOpenConversation: (conversationId: string) => void;
   onOverlayChange?: (open: boolean) => void;
   activeWorkspaceId?: string;
+  workspaces?: readonly Workspace[];
 };
 
 type FormState = {
@@ -91,7 +94,7 @@ function scheduleForm(schedule: Schedule): FormState {
   };
 }
 
-export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID }: Props) {
+export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID, workspaces = [] }: Props) {
   const { t, locale } = useI18n();
   const controller = useSchedules(active);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -125,6 +128,13 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     value: `${choice.selection.providerId}:${choice.selection.modelId}`,
     label: choice.label,
   }));
+  const workspaceOptions = workspaces.map((item) => ({
+    value: item.id,
+    label: workspaceName(item.kind, item.name, t("workspaces.unassigned")),
+  }));
+  if (!workspaceOptions.some((option) => option.value === form.workspaceId)) {
+    workspaceOptions.push({ value: form.workspaceId, label: t("workspaces.unassigned") });
+  }
   if (editing && !modelOptions.some((option) => option.value === form.providerModel)) {
     modelOptions.push({
       value: form.providerModel,
@@ -192,7 +202,7 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     ? t(`schedules.error.${controller.error.code}` as never)
     : controller.error ? t("schedules.error.load") : null;
 
-  const editor = <ScheduleEditor container={container} form={form} setForm={setForm} modelOptions={modelOptions} saving={controller.saving} error={formError} onCancel={closeEditor} onSave={() => void save()} />;
+  const editor = <ScheduleEditor container={container} form={form} setForm={setForm} modelOptions={modelOptions} workspaceOptions={workspaceOptions} saving={controller.saving} error={formError} onCancel={closeEditor} onSave={() => void save()} />;
 
   return <section className="schedules-settings" aria-label={t("settings.category.schedules")}>
     <div className="schedules-toolbar">
@@ -205,7 +215,7 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     {(["active", "paused", "completed"] as const).map((status) => grouped[status].length ? <section className="schedule-group" key={status}><h2>{t(`schedules.group.${status}` as never)} <span>{grouped[status].length}</span></h2><div className="schedule-grid">{grouped[status].map((item) => <article className="schedule-card" key={item.id}>
       <div className="schedule-card__top"><div><h3>{item.name}</h3><p>{cadenceText(item)}</p></div><Tag color={item.status === "active" ? "green" : item.status === "paused" ? "gold" : "default"}>{t(`schedules.status.${item.status}` as never)}</Tag></div>
       <p className="schedule-card__prompt">{item.prompt}</p>
-      <dl><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
+      <dl><div><dt>{t("schedules.workspace")}</dt><dd>{workspaceOptions.find((option) => option.value === item.workspaceId)?.label ?? item.workspaceId}</dd></div><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
       <div className="schedule-card__actions">
         <Button icon={<PlayCircleOutlined />} onClick={() => void controller.runNow(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.runNow")}</Button>
         {item.status === "active" ? <Button icon={<PauseCircleOutlined />} onClick={() => void controller.pause(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.pause")}</Button> : item.status === "paused" ? <Button icon={<PlayCircleOutlined />} onClick={() => void controller.resume(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.resume")}</Button> : null}
@@ -220,11 +230,12 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
   </section>;
 }
 
-function ScheduleEditor({ container, form, setForm, modelOptions, saving, error, onCancel, onSave }: { container: HTMLElement | null; form: FormState; setForm: (next: FormState) => void; modelOptions: { value: string; label: string }[]; saving: boolean; error: string | null; onCancel: () => void; onSave: () => void }) {
+function ScheduleEditor({ container, form, setForm, modelOptions, workspaceOptions, saving, error, onCancel, onSave }: { container: HTMLElement | null; form: FormState; setForm: (next: FormState) => void; modelOptions: { value: string; label: string }[]; workspaceOptions: { value: string; label: string }[]; saving: boolean; error: string | null; onCancel: () => void; onSave: () => void }) {
   const { t } = useI18n();
   const patch = (next: Partial<FormState>) => setForm({ ...form, ...next });
   const popupContainer = (trigger: HTMLElement) => container ?? trigger.parentElement ?? document.body;
   return <form className="schedule-editor" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+    <label>{t("schedules.field.workspace")}<Select aria-label={t("schedules.field.workspace")} getPopupContainer={popupContainer} value={form.workspaceId} options={workspaceOptions} onChange={(workspaceId) => patch({ workspaceId })} /></label>
     <label>{t("schedules.field.name")}<Input value={form.name} maxLength={120} onChange={(event) => patch({ name: event.target.value })} /></label>
     <label>{t("schedules.field.prompt")}<Input.TextArea value={form.prompt} rows={7} maxLength={32768} showCount onChange={(event) => patch({ prompt: event.target.value })} /></label>
     <label>{t("schedules.field.cadence")}<Select getPopupContainer={popupContainer} value={form.cadenceType} options={["once", "daily", "weekly"].map((value) => ({ value, label: t(`schedules.cadence.${value}` as never) }))} onChange={(cadenceType) => patch({ cadenceType })} /></label>

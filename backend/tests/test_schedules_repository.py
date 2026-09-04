@@ -116,6 +116,8 @@ def test_schedule_workspace_change_moves_owned_conversation_atomically(
     conversations.mark_run_started(run.run.id)
     conversations.complete_run(run.run.id, "done")
     schedule = schedules.bind_conversation(schedule.id, run.conversation.id)
+    managed = conversations.get_conversation(run.conversation.id)
+    assert managed is not None and managed.workspace_managed_by_schedule is True
 
     changed = schedules.update(
         schedule.id,

@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 
-export type IconName = "settings" | "robot" | "database" | "connections" | "schedules" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic" | "openrouter";
+export type IconName = "settings" | "folder" | "robot" | "database" | "connections" | "schedules" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic" | "openrouter";
 
 export function Icon({ name }: { name: IconName }) {
   if (name === "openai") return <span className="settings-brand-icon settings-brand-icon--openai" aria-hidden="true">◎</span>;
@@ -10,6 +10,7 @@ export function Icon({ name }: { name: IconName }) {
   if (name === "openrouter") return <span className="settings-brand-icon settings-brand-icon--openrouter" aria-hidden="true">OR</span>;
   const paths: Record<Exclude<IconName, "openai" | "anthropic" | "openrouter">, string> = {
     settings: "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.2 3.5 1.6-1.2-1.7-2.9-1.9.7a8.1 8.1 0 0 0-1.5-.9l-.3-2h-3.4l-.3 2a8 8 0 0 0-1.5.9l-1.9-.7-1.7 2.9 1.6 1.2a7.3 7.3 0 0 0 0 1.8l-1.6 1.2 1.7 2.9 1.9-.7c.5.4 1 .7 1.5.9l.3 2h3.4l.3-2c.5-.2 1-.5 1.5-.9l1.9.7 1.7-2.9-1.6-1.2a7.3 7.3 0 0 0 0-1.8Z",
+    folder: "M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm0 4h18",
     robot: "M8 8h8a4 4 0 0 1 4 4v5H4v-5a4 4 0 0 1 4-4Zm4-4v4m-5 9v2m10-2v2M9 13h.1M15 13h.1",
     database: "M5 6c0-1.1 3.1-2 7-2s7 .9 7 2-3.1 2-7 2-7-.9-7-2Zm0 0v6c0 1.1 3.1 2 7 2s7-.9 7-2V6m-14 6v6c0 1.1 3.1 2 7 2s7-.9 7-2v-6",
     connections: "M8 12h8m-9-4a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm10 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6ZM6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm3-9 7 3m-7-6 7-3",
