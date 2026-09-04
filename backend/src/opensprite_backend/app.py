@@ -46,6 +46,10 @@ from .api.schedule_routes import (
     router as schedule_router,
     schedule_error_response,
 )
+from .api.workspace_routes import (
+    router as workspace_router,
+    workspace_error_response,
+)
 from .application import (
     AgentChatError,
     AgentChatOperations,
@@ -111,6 +115,12 @@ from .tools.approval import (
 )
 from .schedules.repository import ScheduleFailure, ScheduleStoreError
 from .schedules.service import ScheduleOperations, UnavailableSchedules
+from .workspaces import (
+    UnavailableWorkspaces,
+    WorkspaceError,
+    WorkspaceFailure,
+    WorkspaceOperations,
+)
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 _LOGGER = logging.getLogger("opensprite.runtime")
@@ -129,6 +139,7 @@ def create_app(
     tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     schedules: ScheduleOperations | None = None,
+    workspaces: WorkspaceOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
@@ -190,6 +201,7 @@ def create_app(
         agent_chat if agent_chat is not None else UnavailableAgentChat()
     )
     app.state.schedules = schedules if schedules is not None else UnavailableSchedules()
+    app.state.workspaces = workspaces if workspaces is not None else UnavailableWorkspaces()
     if enforce_authentication:
         app.add_middleware(
             LocalAuthenticationMiddleware,
@@ -217,6 +229,8 @@ def create_app(
             return local_path_error_response("invalid_request")
         if request.url.path.startswith("/api/schedules"):
             return schedule_error_response(ScheduleFailure.INVALID_REQUEST)
+        if request.url.path.startswith("/api/workspaces"):
+            return workspace_error_response(WorkspaceFailure.INVALID_REQUEST)
         return provider_error_response(ErrorCode.INVALID_REQUEST)
 
     async def local_path_error_handler(
@@ -318,11 +332,20 @@ def create_app(
         del request
         return schedule_error_response(exc.failure)
 
+    async def workspace_error_handler(
+        request: Request,
+        exc: WorkspaceError,
+    ) -> JSONResponse:
+        del request
+        return workspace_error_response(exc.failure)
+
     async def internal_error_handler(
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
         _LOGGER.exception("request failed path=%s", request.url.path, exc_info=exc)
+        if request.url.path.startswith("/api/workspaces"):
+            return workspace_error_response(WorkspaceFailure.INTERNAL_ERROR)
         return provider_error_response(ErrorCode.INTERNAL_ERROR)
 
     app.add_exception_handler(
@@ -382,6 +405,10 @@ def create_app(
         cast(ExceptionHandler, schedule_store_error_handler),
     )
     app.add_exception_handler(
+        WorkspaceError,
+        cast(ExceptionHandler, workspace_error_handler),
+    )
+    app.add_exception_handler(
         Exception,
         cast(ExceptionHandler, internal_error_handler),
     )
@@ -407,4 +434,5 @@ def create_app(
     app.include_router(provider_router)
     app.include_router(chat_router)
     app.include_router(schedule_router)
+    app.include_router(workspace_router)
     return app

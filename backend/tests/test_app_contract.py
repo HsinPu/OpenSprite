@@ -199,6 +199,12 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
             "get",
             "listScheduleOccurrences",
         ),
+        ("/api/workspaces", "get", "listWorkspaces"),
+        ("/api/workspaces", "post", "createWorkspace"),
+        ("/api/workspaces/active", "put", "setActiveWorkspace"),
+        ("/api/workspaces/{workspace_id}", "get", "getWorkspace"),
+        ("/api/workspaces/{workspace_id}", "put", "updateWorkspace"),
+        ("/api/workspaces/{workspace_id}", "delete", "deleteWorkspace"),
         ("/api/providers", "get", "listProviders"),
         (
             "/api/providers/openrouter/models",

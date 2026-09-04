@@ -1,0 +1,186 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite Workspaces API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/workspaces": {
+      "get": {
+        "operationId": "listWorkspaces",
+        "responses": {
+          "200": {"$ref": "#/components/responses/WorkspaceCatalog"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      },
+      "post": {
+        "operationId": "createWorkspace",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateWorkspaceRequest"}}}
+        },
+        "responses": {
+          "201": {"$ref": "#/components/responses/WorkspaceCatalog"},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "409": {"$ref": "#/components/responses/WorkspaceConflict"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      }
+    },
+    "/api/workspaces/active": {
+      "put": {
+        "operationId": "setActiveWorkspace",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SetActiveWorkspaceRequest"}}}
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/WorkspaceCatalog"},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "404": {"$ref": "#/components/responses/WorkspaceNotFound"},
+          "409": {"$ref": "#/components/responses/WorkspaceConflict"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}": {
+      "parameters": [
+        {"name": "workspace_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      ],
+      "get": {
+        "operationId": "getWorkspace",
+        "responses": {
+          "200": {"$ref": "#/components/responses/Workspace"},
+          "404": {"$ref": "#/components/responses/WorkspaceNotFound"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      },
+      "put": {
+        "operationId": "updateWorkspace",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateWorkspaceRequest"}}}
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/Workspace"},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "404": {"$ref": "#/components/responses/WorkspaceNotFound"},
+          "409": {"$ref": "#/components/responses/WorkspaceConflict"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkspace",
+        "parameters": [
+          {"name": "expectedRevision", "in": "query", "required": true, "schema": {"type": "integer", "minimum": 1}}
+        ],
+        "responses": {
+          "204": {"description": "Workspace removed"},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "404": {"$ref": "#/components/responses/WorkspaceNotFound"},
+          "409": {"$ref": "#/components/responses/WorkspaceConflict"},
+          "503": {"$ref": "#/components/responses/WorkspaceStoreUnavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateWorkspaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "rootPath", "expectedRevision"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 80},
+          "rootPath": {"type": "string", "minLength": 1, "maxLength": 32768},
+          "expectedRevision": {"type": "integer", "minimum": 0}
+        }
+      },
+      "UpdateWorkspaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "rootPath", "expectedRevision"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 80},
+          "rootPath": {"type": "string", "minLength": 1, "maxLength": 32768},
+          "expectedRevision": {"type": "integer", "minimum": 1}
+        }
+      },
+      "SetActiveWorkspaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspaceId", "expectedRevision"],
+        "properties": {
+          "workspaceId": {"type": "string", "format": "uuid"},
+          "expectedRevision": {"type": "integer", "minimum": 0}
+        }
+      },
+      "WorkspaceUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conversationCount", "scheduleCount", "activeRunCount"],
+        "properties": {
+          "conversationCount": {"type": "integer", "minimum": 0},
+          "scheduleCount": {"type": "integer", "minimum": 0},
+          "activeRunCount": {"type": "integer", "minimum": 0}
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "name", "rootPath", "availability", "unavailableReason", "revision", "createdAt", "updatedAt", "usage"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "kind": {"type": "string", "enum": ["unassigned", "directory"]},
+          "name": {"type": "string"},
+          "rootPath": {"type": ["string", "null"]},
+          "availability": {"type": "string", "enum": ["available", "unavailable", "not_applicable"]},
+          "unavailableReason": {"type": ["string", "null"], "enum": ["missing", "not_directory", "access_denied", "unsafe", null]},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "usage": {"$ref": "#/components/schemas/WorkspaceUsage"}
+        }
+      },
+      "WorkspaceCatalog": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "activeWorkspaceId", "workspaces"],
+        "properties": {
+          "revision": {"type": "integer", "minimum": 0},
+          "activeWorkspaceId": {"type": "string", "format": "uuid"},
+          "workspaces": {"type": "array", "maxItems": 101, "items": {"$ref": "#/components/schemas/Workspace"}}
+        }
+      },
+      "WorkspaceErrorCode": {
+        "type": "string",
+        "enum": ["invalid_request", "unsafe_root", "duplicate_name", "duplicate_root", "revision_conflict", "not_found", "workspace_busy", "workspace_not_empty", "workspace_store_unavailable", "internal_error"]
+      },
+      "WorkspaceError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message", "retryable"],
+            "properties": {
+              "code": {"$ref": "#/components/schemas/WorkspaceErrorCode"},
+              "message": {"type": "string"},
+              "retryable": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Workspace": {"description": "Workspace", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Workspace"}}}},
+      "WorkspaceCatalog": {"description": "Workspace catalog", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceCatalog"}}}},
+      "InvalidRequest": {"description": "Invalid request or unsafe root", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceError"}}}},
+      "WorkspaceNotFound": {"description": "Workspace not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceError"}}}},
+      "WorkspaceConflict": {"description": "Revision, duplicate, busy, or non-empty conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceError"}}}},
+      "WorkspaceStoreUnavailable": {"description": "Workspace store unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceError"}}}}
+    }
+  }
+}

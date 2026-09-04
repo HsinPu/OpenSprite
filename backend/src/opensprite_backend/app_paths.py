@@ -13,6 +13,10 @@ class AppPaths:
     home: Path
 
     @property
+    def user_home(self) -> Path:
+        return Path.home().resolve(strict=False)
+
+    @property
     def credential_file(self) -> Path:
         return self.home / "auth.json"
 
@@ -55,6 +59,10 @@ class AppPaths:
     @property
     def mcp_settings_file(self) -> Path:
         return self.config_dir / "mcp.json"
+
+    @property
+    def workspace_settings_file(self) -> Path:
+        return self.config_dir / "workspaces.json"
 
     @property
     def data_dir(self) -> Path:
