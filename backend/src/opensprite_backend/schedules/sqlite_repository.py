@@ -33,8 +33,8 @@ class SqliteScheduleRepository:
         with self._write() as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
-                """INSERT INTO schedules(id,name,prompt,cadence_type,run_at,local_time,weekdays_json,time_zone,provider_id,model_id,response_mode,context_budget,output_budget,output_continuation,status,conversation_id,next_run_at,revision,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,1,?,?)""",
+                """INSERT INTO schedules(id,workspace_id,name,prompt,cadence_type,run_at,local_time,weekdays_json,time_zone,provider_id,model_id,response_mode,context_budget,output_budget,output_continuation,status,conversation_id,next_run_at,revision,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,1,?,?)""",
                 self._draft_values(identifier, draft, ScheduleStatus.ACTIVE, next_run_at, now),
             )
             connection.commit()
@@ -69,8 +69,36 @@ class SqliteScheduleRepository:
         now = self._now()
         with self._write() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute(
+                "SELECT * FROM schedules WHERE id=?",
+                (schedule_id,),
+            ).fetchone()
+            if current is None:
+                raise ScheduleStoreError(ScheduleFailure.NOT_FOUND)
+            if int(current["revision"]) != revision:
+                raise ScheduleStoreError(ScheduleFailure.REVISION_CONFLICT)
+            if current["workspace_id"] != draft.workspace_id:
+                if connection.execute(
+                    "SELECT 1 FROM schedule_occurrences WHERE schedule_id=? "
+                    "AND status IN ('pending','running') LIMIT 1",
+                    (schedule_id,),
+                ).fetchone() is not None:
+                    raise ScheduleStoreError(ScheduleFailure.WORKSPACE_BUSY)
+                conversation_id = current["conversation_id"]
+                if conversation_id is not None:
+                    if connection.execute(
+                        "SELECT 1 FROM runs WHERE conversation_id=? "
+                        "AND status IN ('queued','running','cancelling') LIMIT 1",
+                        (conversation_id,),
+                    ).fetchone() is not None:
+                        raise ScheduleStoreError(ScheduleFailure.WORKSPACE_BUSY)
+                    connection.execute(
+                        "UPDATE conversations SET workspace_id=?, revision=revision+1 "
+                        "WHERE id=?",
+                        (draft.workspace_id, conversation_id),
+                    )
             changed = connection.execute(
-                """UPDATE schedules SET name=?,prompt=?,cadence_type=?,run_at=?,local_time=?,weekdays_json=?,time_zone=?,provider_id=?,model_id=?,response_mode=?,context_budget=?,output_budget=?,output_continuation=?,status=CASE WHEN status='paused' THEN 'paused' ELSE 'active' END,next_run_at=CASE WHEN status='paused' THEN NULL ELSE ? END,revision=revision+1,updated_at=? WHERE id=? AND revision=?""",
+                """UPDATE schedules SET workspace_id=?,name=?,prompt=?,cadence_type=?,run_at=?,local_time=?,weekdays_json=?,time_zone=?,provider_id=?,model_id=?,response_mode=?,context_budget=?,output_budget=?,output_continuation=?,status=CASE WHEN status='paused' THEN 'paused' ELSE 'active' END,next_run_at=CASE WHEN status='paused' THEN NULL ELSE ? END,revision=revision+1,updated_at=? WHERE id=? AND revision=?""",
                 self._editable_values(draft, next_run_at, now) + (schedule_id, revision),
             ).rowcount
             if changed == 0: self._raise_missing_or_conflict(connection, schedule_id)
@@ -196,6 +224,15 @@ class SqliteScheduleRepository:
         self._require_id(schedule_id);self._require_id(conversation_id)
         with self._write() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            schedule = self._require_row(connection, schedule_id)
+            conversation = connection.execute(
+                "SELECT workspace_id FROM conversations WHERE id=?",
+                (conversation_id,),
+            ).fetchone()
+            if conversation is None:
+                raise ScheduleStoreError(ScheduleFailure.NOT_FOUND)
+            if conversation["workspace_id"] != schedule["workspace_id"]:
+                raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
             changed=connection.execute("UPDATE schedules SET conversation_id=COALESCE(conversation_id,?),revision=revision+1,updated_at=? WHERE id=?",(conversation_id,self._stamp(self._now()),schedule_id)).rowcount
             if changed!=1: raise ScheduleStoreError(ScheduleFailure.NOT_FOUND)
             connection.commit();return self._schedule(self._require_row(connection,schedule_id))
@@ -223,13 +260,14 @@ class SqliteScheduleRepository:
             connection=sqlite3.connect(self._database_file,timeout=5,isolation_level=None); connection.row_factory=sqlite3.Row; connection.execute("PRAGMA query_only=ON"); return connection
         except sqlite3.Error as error: raise ScheduleStoreError(ScheduleFailure.DATABASE_UNAVAILABLE) from error
 
-    def _draft_values(self, identifier, draft, status, next_run_at, now): return (identifier,) + self._editable_values(draft,next_run_at,now)[:13] + (status.value,self._stamp(next_run_at),self._stamp(now),self._stamp(now))
+    def _draft_values(self, identifier, draft, status, next_run_at, now): return (identifier,draft.workspace_id) + self._editable_values(draft,next_run_at,now)[1:14] + (status.value,self._stamp(next_run_at),self._stamp(now),self._stamp(now))
     def _editable_values(self,draft,next_run_at,now):
         c=draft.cadence;p=draft.profile
-        return (draft.name.strip(),draft.prompt,c.type.value,self._stamp(c.run_at),c.local_time.isoformat(timespec="minutes") if c.local_time else None,json.dumps(c.weekdays,separators=(",",":")) if c.weekdays else None,draft.time_zone,p.provider_id,p.model_id,p.response_mode,p.context_budget,p.output_budget,p.output_continuation,self._stamp(next_run_at),self._stamp(now))
+        return (draft.workspace_id,draft.name.strip(),draft.prompt,c.type.value,self._stamp(c.run_at),c.local_time.isoformat(timespec="minutes") if c.local_time else None,json.dumps(c.weekdays,separators=(",",":")) if c.weekdays else None,draft.time_zone,p.provider_id,p.model_id,p.response_mode,p.context_budget,p.output_budget,p.output_continuation,self._stamp(next_run_at),self._stamp(now))
 
     def _validate_draft(self,draft):
         if not isinstance(draft,ScheduleDraft) or not 1<=len(draft.name.strip())<=120 or not 1<=len(draft.prompt)<=32768: raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
+        self._require_id(draft.workspace_id)
         c=draft.cadence
         if c.type is CadenceType.ONCE and (c.run_at is None or c.run_at.tzinfo is None or c.local_time is not None or c.weekdays): raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         if c.type is CadenceType.DAILY and (c.run_at is not None or c.local_time is None or c.weekdays): raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
@@ -242,7 +280,7 @@ class SqliteScheduleRepository:
     def _schedule(self,r):
         cadence=Cadence(CadenceType(r["cadence_type"]),self._time(r["run_at"]),time.fromisoformat(r["local_time"]) if r["local_time"] else None,tuple(json.loads(r["weekdays_json"])) if r["weekdays_json"] else ())
         profile=ExecutionProfile(r["provider_id"],r["model_id"],r["response_mode"],r["context_budget"],r["output_budget"],r["output_continuation"])
-        return Schedule(r["id"],r["name"],r["prompt"],cadence,r["time_zone"],profile,ScheduleStatus(r["status"]),r["conversation_id"],self._time(r["next_run_at"]),r["revision"],self._time(r["created_at"]),self._time(r["updated_at"]))
+        return Schedule(r["id"],r["name"],r["prompt"],cadence,r["time_zone"],profile,ScheduleStatus(r["status"]),r["conversation_id"],self._time(r["next_run_at"]),r["revision"],self._time(r["created_at"]),self._time(r["updated_at"]),r["workspace_id"])
     def _occurrence(self,r): return Occurrence(r["id"],r["schedule_id"],self._time(r["scheduled_for"]),OccurrenceTrigger(r["trigger"]),OccurrenceStatus(r["status"]),r["run_id"],r["error_code"],r["missed_count"],self._time(r["started_at"]),self._time(r["finished_at"]),self._time(r["created_at"]))
     def _now(self):
         value=self._clock()

@@ -18,6 +18,7 @@ export type ScheduleExecutionProfile = PersistedModelSelection & {
   outputContinuation: OutputContinuation;
 };
 export type ScheduleFields = {
+  workspaceId: string;
   name: string;
   prompt: string;
   timeZone: string;
@@ -58,6 +59,9 @@ export type ScheduleApiErrorCode =
   | "not_found"
   | "revision_conflict"
   | "database_unavailable"
+  | "workspace_not_found"
+  | "workspace_store_unavailable"
+  | "workspace_busy"
   | "network_error"
   | "malformed_response";
 
@@ -95,8 +99,8 @@ function profile(value: unknown): ScheduleExecutionProfile {
 }
 
 function schedule(value: unknown): Schedule {
-  const keys = ["id", "name", "prompt", "timeZone", "cadence", "executionProfile", "status", "conversationId", "nextRunAt", "revision", "createdAt", "updatedAt", "latestOccurrence"];
-  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || typeof value.name !== "string" || typeof value.prompt !== "string" || typeof value.timeZone !== "string" || !oneOf(value.status, statuses) || !(value.conversationId === null || (typeof value.conversationId === "string" && identifier.test(value.conversationId))) || !(value.nextRunAt === null || dateString(value.nextRunAt)) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !dateString(value.createdAt) || !dateString(value.updatedAt)) throw new ScheduleApiError("malformed_response");
+  const keys = ["id", "workspaceId", "name", "prompt", "timeZone", "cadence", "executionProfile", "status", "conversationId", "nextRunAt", "revision", "createdAt", "updatedAt", "latestOccurrence"];
+  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || typeof value.workspaceId !== "string" || !identifier.test(value.workspaceId) || typeof value.name !== "string" || typeof value.prompt !== "string" || typeof value.timeZone !== "string" || !oneOf(value.status, statuses) || !(value.conversationId === null || (typeof value.conversationId === "string" && identifier.test(value.conversationId))) || !(value.nextRunAt === null || dateString(value.nextRunAt)) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !dateString(value.createdAt) || !dateString(value.updatedAt)) throw new ScheduleApiError("malformed_response");
   if (!(value.latestOccurrence === null || record(value.latestOccurrence))) throw new ScheduleApiError("malformed_response");
   return { ...value, cadence: cadence(value.cadence), executionProfile: profile(value.executionProfile), latestOccurrence: value.latestOccurrence === null ? null : occurrence(value.latestOccurrence) } as Schedule;
 }
@@ -115,7 +119,7 @@ async function response(request: Promise<Response>): Promise<unknown> {
     try { body = await resolved.json(); } catch { throw new ScheduleApiError("malformed_response"); }
   }
   if (!resolved.ok) {
-    if (record(body) && exact(body, ["error"]) && record(body.error) && exact(body.error, ["code", "message", "retryable"]) && typeof body.error.code === "string" && ["invalid_request", "not_found", "revision_conflict", "database_unavailable"].includes(body.error.code)) throw new ScheduleApiError(body.error.code as ScheduleApiErrorCode);
+    if (record(body) && exact(body, ["error"]) && record(body.error) && exact(body.error, ["code", "message", "retryable"]) && typeof body.error.code === "string" && ["invalid_request", "not_found", "revision_conflict", "database_unavailable", "workspace_not_found", "workspace_store_unavailable", "workspace_busy"].includes(body.error.code)) throw new ScheduleApiError(body.error.code as ScheduleApiErrorCode);
     throw new ScheduleApiError("malformed_response");
   }
   return body;

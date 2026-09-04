@@ -1324,7 +1324,12 @@ class SqliteConversationRepository:
                     run_id,
                     row["conversation_id"],
                     RunEventType.RUN_STARTED,
-                    {},
+                    {
+                        "workspaceId": row["workspace_id"],
+                        "workspaceRevision": int(row["workspace_revision"]),
+                        "workspaceName": row["workspace_name_snapshot"],
+                        "workspaceRootHash": row["workspace_root_hash"],
+                    },
                     now,
                 )
                 result = self._require_run_row(connection, run_id)
@@ -2387,8 +2392,42 @@ class SqliteConversationRepository:
         data: dict[str, object],
     ) -> None:
         keys = set(data)
+        if event_type is RunEventType.RUN_STARTED:
+            expected = {
+                "workspaceId",
+                "workspaceRevision",
+                "workspaceName",
+                "workspaceRootHash",
+            }
+            if not keys:
+                return
+            root_hash = data.get("workspaceRootHash")
+            if (
+                keys != expected
+                or not isinstance(data.get("workspaceId"), str)
+                or not isinstance(data.get("workspaceRevision"), int)
+                or isinstance(data.get("workspaceRevision"), bool)
+                or int(data["workspaceRevision"]) < 1
+                or not SqliteConversationRepository._is_bounded_text(
+                    data.get("workspaceName"), maximum=80
+                )
+                or (
+                    root_hash is not None
+                    and (
+                        not isinstance(root_hash, str)
+                        or re.fullmatch(r"[0-9a-f]{64}", root_hash) is None
+                    )
+                )
+            ):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            try:
+                SqliteConversationRepository._require_identifier(
+                    str(data["workspaceId"])
+                )
+            except ConversationStoreError:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST) from None
+            return
         if event_type in {
-            RunEventType.RUN_STARTED,
             RunEventType.CONTEXT_COMPACTION_STARTED,
             RunEventType.RUN_CANCELLED,
         }:

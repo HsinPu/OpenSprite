@@ -177,6 +177,7 @@ def service(
         gateway=FinalGateway(),
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
         capability_resolver=TestCapabilityResolver(),
+        workspaces=workspaces,
     )
     manager = RunManager(repository, loop)
     chat = AgentChatService(

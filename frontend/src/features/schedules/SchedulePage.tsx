@@ -12,6 +12,7 @@ import { Button, Drawer, Input, Modal, Popconfirm, Select, Tag } from "antd";
 import type { ContextBudget, OutputBudget, OutputContinuation, PersistedModelSelection, ResponseMode } from "../../api/aiSettings";
 import { ScheduleApiError, type Schedule, type ScheduleCadence, type ScheduleFields } from "../../api/schedules";
 import type { ModelChoice } from "../ai-settings/modelCatalog";
+import { UNASSIGNED_WORKSPACE_ID } from "../../api/agentChat";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSchedules } from "./useSchedules";
 import "./schedules.css";
@@ -27,9 +28,11 @@ type Props = {
   outputContinuation: OutputContinuation;
   onOpenConversation: (conversationId: string) => void;
   onOverlayChange?: (open: boolean) => void;
+  activeWorkspaceId?: string;
 };
 
 type FormState = {
+  workspaceId: string;
   name: string;
   prompt: string;
   timeZone: string;
@@ -54,7 +57,8 @@ const resolvedTimeZone = (value: string) => value === "system"
   ? Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
   : value;
 
-const emptyForm = (timeZone: string, selection: PersistedModelSelection | null, responseMode: ResponseMode, outputContinuation: OutputContinuation): FormState => ({
+const emptyForm = (timeZone: string, selection: PersistedModelSelection | null, responseMode: ResponseMode, outputContinuation: OutputContinuation, workspaceId: string): FormState => ({
+  workspaceId,
   name: "",
   prompt: "",
   timeZone: resolvedTimeZone(timeZone),
@@ -71,6 +75,7 @@ const emptyForm = (timeZone: string, selection: PersistedModelSelection | null, 
 
 function scheduleForm(schedule: Schedule): FormState {
   return {
+    workspaceId: schedule.workspaceId,
     name: schedule.name,
     prompt: schedule.prompt,
     timeZone: schedule.timeZone,
@@ -86,12 +91,12 @@ function scheduleForm(schedule: Schedule): FormState {
   };
 }
 
-export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange }: Props) {
+export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID }: Props) {
   const { t, locale } = useI18n();
   const controller = useSchedules(active);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Schedule | null>(null);
-  const [form, setForm] = useState(() => emptyForm(defaultTimeZone, modelSelection, responseMode, outputContinuation));
+  const [form, setForm] = useState(() => emptyForm(defaultTimeZone, modelSelection, responseMode, outputContinuation, activeWorkspaceId));
   const [formError, setFormError] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [mobile, setMobile] = useState(() => window.innerWidth <= 767);
@@ -130,7 +135,7 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
   const openEditor = (schedule: Schedule | null, opener: HTMLElement) => {
     openerRef.current = opener;
     setEditing(schedule);
-    setForm(schedule ? scheduleForm(schedule) : emptyForm(defaultTimeZone, modelSelection, responseMode, outputContinuation));
+    setForm(schedule ? scheduleForm(schedule) : emptyForm(defaultTimeZone, modelSelection, responseMode, outputContinuation, activeWorkspaceId));
     setFormError(null);
     setEditorOpen(true);
   };
@@ -153,6 +158,7 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
         ? { type: "daily", localTime: form.localTime }
         : { type: "weekly", localTime: form.localTime, weekdays: [...form.weekdays].sort() };
     const fields: ScheduleFields = {
+      workspaceId: form.workspaceId,
       name: form.name,
       prompt: form.prompt,
       timeZone: form.timeZone,

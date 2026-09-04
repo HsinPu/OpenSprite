@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID
 from opensprite_backend.schedules import (
     Cadence, CadenceType, ExecutionProfile, OccurrenceStatus, OccurrenceTrigger,
     ScheduleDraft, ScheduleFailure, ScheduleStatus, ScheduleStoreError,
@@ -18,13 +19,17 @@ NOW = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
 IDS = tuple(f"00000000-0000-4000-8000-{index:012d}" for index in range(1, 30))
 
 
-def draft(cadence: Cadence | None = None) -> ScheduleDraft:
+def draft(
+    cadence: Cadence | None = None,
+    workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+) -> ScheduleDraft:
     return ScheduleDraft(
         "Morning brief",
         "Summarize today's priorities.",
         cadence or Cadence(CadenceType.DAILY, local_time=time(9, 30)),
         "Asia/Taipei",
         ExecutionProfile("openrouter", "openrouter/auto", "balanced", "64k", "16k", "5"),
+        workspace_id,
     )
 
 
@@ -83,3 +88,73 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
     assert conversations.get_run(accepted.run.id) is not None
     with sqlite3.connect(database) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+
+
+def test_schedule_workspace_change_moves_owned_conversation_atomically(
+    tmp_path: Path,
+) -> None:
+    workspace_a = "11111111-1111-4111-8111-111111111111"
+    workspace_b = "22222222-2222-4222-8222-222222222222"
+    schedules = repository(tmp_path)
+    conversations = SqliteConversationRepository(schedules._database_file)
+    schedule = schedules.create(
+        draft(workspace_id=workspace_a),
+        next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC),
+    )
+    run = conversations.start_run(
+        conversation_id=None,
+        client_request_id=IDS[20],
+        message="scheduled",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        workspace_id=workspace_a,
+        workspace_revision=1,
+        workspace_name_snapshot="Alpha",
+        workspace_root_hash="a" * 64,
+    )
+    conversations.mark_run_started(run.run.id)
+    conversations.complete_run(run.run.id, "done")
+    schedule = schedules.bind_conversation(schedule.id, run.conversation.id)
+
+    changed = schedules.update(
+        schedule.id,
+        schedule.revision,
+        draft(workspace_id=workspace_b),
+        next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC),
+    )
+
+    assert changed.workspace_id == workspace_b
+    conversation = conversations.get_conversation(run.conversation.id)
+    assert conversation is not None
+    assert conversation.workspace_id == workspace_b
+    assert conversation.revision == 2
+
+
+def test_schedule_workspace_change_rolls_back_while_occurrence_is_pending(
+    tmp_path: Path,
+) -> None:
+    workspace_a = "11111111-1111-4111-8111-111111111111"
+    workspace_b = "22222222-2222-4222-8222-222222222222"
+    schedules = repository(tmp_path)
+    schedule = schedules.create(
+        draft(workspace_id=workspace_a),
+        next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC),
+    )
+    schedules.create_occurrence(
+        schedule.id,
+        scheduled_for=datetime(2026, 3, 1, 1, 30, tzinfo=UTC),
+        trigger=OccurrenceTrigger.MANUAL,
+        status=OccurrenceStatus.PENDING,
+    )
+
+    with pytest.raises(ScheduleStoreError) as raised:
+        schedules.update(
+            schedule.id,
+            schedule.revision,
+            draft(workspace_id=workspace_b),
+            next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC),
+        )
+
+    assert raised.value.failure is ScheduleFailure.WORKSPACE_BUSY
+    assert schedules.get(schedule.id).workspace_id == workspace_a  # type: ignore[union-attr]

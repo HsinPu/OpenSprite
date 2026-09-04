@@ -55,6 +55,11 @@ from opensprite_backend.tools.availability import ToolAvailabilitySnapshot
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.tools import create_production_tool_registry
+from opensprite_backend.workspaces import (
+    WorkspaceAvailability,
+    WorkspaceExecutionContext,
+    WorkspaceKind,
+)
 
 
 def async_test(function):
@@ -89,15 +94,17 @@ class RecordingSystemPromptProvider:
     def __init__(self, content: str = "dynamic system prompt") -> None:
         self.content = content
         self.run_ids: list[str] = []
+        self.workspaces: list[WorkspaceExecutionContext | None] = []
 
-    async def build(self, *, run_id: str) -> str:
+    async def build(self, *, run_id: str, workspace=None) -> str:
         self.run_ids.append(run_id)
+        self.workspaces.append(workspace)
         return self.content
 
 
 class FailingSystemPromptProvider:
-    async def build(self, *, run_id: str) -> str:
-        del run_id
+    async def build(self, *, run_id: str, workspace=None) -> str:
+        del run_id, workspace
         raise RuntimeError("prompt log failed")
 
 
@@ -131,14 +138,15 @@ class LookupTool:
         )
     )
     calls: list[dict[str, object]] = field(default_factory=list)
+    contexts: list[WorkspaceExecutionContext] = field(default_factory=list)
 
     async def invoke(
         self,
         arguments: dict[str, object],
         context: ToolContext,
     ) -> ToolResult:
-        del context
         self.calls.append(arguments)
+        self.contexts.append(context.workspace)
         return ToolResult(content="今天有 3 項工作", summary="找到 3 項工作")
 
 
@@ -992,6 +1000,67 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     database_bytes = repository.database_file.read_bytes()
     assert b'"query"' not in database_bytes
     assert b'"today"' not in database_bytes
+
+
+@async_test
+async def test_workspace_snapshot_reaches_prompt_and_tool_context(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    workspace = WorkspaceExecutionContext(
+        id="11111111-1111-4111-8111-111111111111",
+        kind=WorkspaceKind.DIRECTORY,
+        name="Alpha",
+        root_path=str((tmp_path / "project").resolve()),
+        revision=3,
+        root_hash="a" * 64,
+        availability=WorkspaceAvailability.AVAILABLE,
+        unavailable_reason=None,
+    )
+    run = repository.start_run(
+        conversation_id=None,
+        client_request_id=str(uuid4()),
+        message="use workspace",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        workspace_id=workspace.id,
+        workspace_revision=workspace.revision,
+        workspace_name_snapshot=workspace.name,
+        workspace_root_hash=workspace.root_hash,
+    ).run
+
+    class Resolver:
+        def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
+            assert workspace_id == workspace.id
+            return workspace
+
+    tool = LookupTool()
+    prompt = RecordingSystemPromptProvider()
+    loop = AgentLoop(
+        repository=repository,
+        gateway=ScriptedGateway([
+            [ModelToolCall("call-1", "lookup_note", {"query": "today"}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
+        ]),
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+        system_prompt_provider=prompt,
+        workspaces=Resolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert prompt.workspaces == [workspace]
+    assert tool.contexts == [workspace]
+    started = repository.list_run_events(run.id, after_sequence=0, limit=1)[0]
+    assert started.data == {
+        "workspaceId": workspace.id,
+        "workspaceRevision": 3,
+        "workspaceName": "Alpha",
+        "workspaceRootHash": "a" * 64,
+    }
 
 
 @async_test

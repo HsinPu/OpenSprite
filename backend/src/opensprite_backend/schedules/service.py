@@ -9,6 +9,13 @@ from typing import Callable, Protocol
 from .models import CadenceType, Occurrence, OccurrencePage, OccurrenceStatus, OccurrenceTrigger, Schedule, ScheduleDraft, SchedulePage, ScheduleStatus
 from .recurrence import RecurrenceError, next_occurrence
 from .repository import ScheduleFailure, ScheduleRepository, ScheduleStoreError
+from ..workspaces import (
+    UnassignedWorkspaceResolver,
+    WorkspaceError,
+    WorkspaceFailure,
+    WorkspaceMutationGate,
+    WorkspaceResolver,
+)
 
 
 class ScheduleOperations(Protocol):
@@ -89,10 +96,14 @@ class ScheduleService:
         self,
         repository: ScheduleRepository,
         *,
+        workspaces: WorkspaceResolver | None = None,
+        workspace_mutation_gate: WorkspaceMutationGate | None = None,
         clock: Callable[[], datetime] | None = None,
         on_change: Callable[[], None] | None = None,
     ) -> None:
         self.repository = repository
+        self._workspaces = workspaces or UnassignedWorkspaceResolver()
+        self._workspace_mutation_gate = workspace_mutation_gate or WorkspaceMutationGate()
         self._clock = clock or (lambda: datetime.now(UTC))
         self._on_change = on_change or (lambda: None)
 
@@ -100,11 +111,13 @@ class ScheduleService:
         next_run = self._next(draft, self._now())
         if next_run is None:
             raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
-        item = await asyncio.to_thread(
-            self.repository.create,
-            draft,
-            next_run_at=next_run,
-        )
+        async with self._workspace_mutation_gate.hold():
+            self._resolve_workspace(draft.workspace_id)
+            item = await asyncio.to_thread(
+                self.repository.create,
+                draft,
+                next_run_at=next_run,
+            )
         self._on_change()
         return item
 
@@ -130,13 +143,15 @@ class ScheduleService:
         next_run = self._next(draft, self._now())
         if next_run is None:
             raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
-        item = await asyncio.to_thread(
-            self.repository.update,
-            schedule_id,
-            revision,
-            draft,
-            next_run_at=next_run,
-        )
+        async with self._workspace_mutation_gate.hold():
+            self._resolve_workspace(draft.workspace_id)
+            item = await asyncio.to_thread(
+                self.repository.update,
+                schedule_id,
+                revision,
+                draft,
+                next_run_at=next_run,
+            )
         self._on_change()
         return item
 
@@ -165,6 +180,7 @@ class ScheduleService:
                 current.cadence,
                 current.time_zone,
                 current.profile,
+                current.workspace_id,
             ),
             self._now(),
         )
@@ -224,6 +240,17 @@ class ScheduleService:
             return next_occurrence(draft.cadence, draft.time_zone, after)
         except RecurrenceError as error:
             raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST) from error
+
+    def _resolve_workspace(self, workspace_id: str) -> None:
+        try:
+            self._workspaces.execution_context(workspace_id)
+        except WorkspaceError as error:
+            failure = {
+                WorkspaceFailure.NOT_FOUND: ScheduleFailure.WORKSPACE_NOT_FOUND,
+                WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE: ScheduleFailure.WORKSPACE_STORE_UNAVAILABLE,
+                WorkspaceFailure.WORKSPACE_BUSY: ScheduleFailure.WORKSPACE_BUSY,
+            }.get(error.failure, ScheduleFailure.INVALID_REQUEST)
+            raise ScheduleStoreError(failure) from error
 
     def _now(self) -> datetime:
         value = self._clock()

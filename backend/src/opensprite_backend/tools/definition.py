@@ -5,9 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
+
+from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
+    UnassignedWorkspaceResolver,
+    WorkspaceExecutionContext,
+)
 
 
 _TOOL_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -95,6 +101,11 @@ class ToolContext:
     run_id: str
     conversation_id: str
     cancellation_event: asyncio.Event
+    workspace: WorkspaceExecutionContext = field(
+        default_factory=lambda: UnassignedWorkspaceResolver().execution_context(
+            UNASSIGNED_WORKSPACE_ID
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)

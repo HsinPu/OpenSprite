@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from opensprite_backend.app import create_app
 from opensprite_backend.schedules.service import ScheduleService
 from opensprite_backend.schedules.sqlite_repository import SqliteScheduleRepository
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID
 
 
 NOW = datetime(2026, 3, 5, 3, tzinfo=UTC)
@@ -29,6 +30,7 @@ def _client(tmp_path: Path) -> TestClient:
 
 def _payload() -> dict[str, object]:
     return {
+        "workspaceId": UNASSIGNED_WORKSPACE_ID,
         "name": "Morning brief",
         "prompt": "Summarize today's priorities.",
         "timeZone": "Asia/Taipei",

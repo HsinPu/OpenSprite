@@ -33,6 +33,8 @@ def test_contract_contains_only_approved_schedule_operations() -> None:
         "unknown",
     ]
     assert schemas["ScheduleResponse"]["required"][-1] == "latestOccurrence"
+    assert "workspaceId" in schemas["ScheduleResponse"]["required"]
+    assert "workspaceId" in schemas["CreateScheduleRequest"]["required"]
     assert schemas["ExecutionProfile"]["additionalProperties"] is False
     assert contract["security"] == [{"cookieSession": []}]
 

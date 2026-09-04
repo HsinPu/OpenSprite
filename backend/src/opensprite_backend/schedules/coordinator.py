@@ -195,6 +195,7 @@ class ScheduleCoordinator:
         try:
             accepted = await self._chat.start_scheduled_run(
                 conversation_id=schedule.conversation_id,
+                workspace_id=schedule.workspace_id,
                 occurrence_id=occurrence.id,
                 message=schedule.prompt,
                 profile=schedule.profile,

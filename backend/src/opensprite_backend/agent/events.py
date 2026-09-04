@@ -78,6 +78,12 @@ SCHEDULED_TOOL_APPROVAL_REQUIRED = PublicRunError(
     retryable=False,
 )
 
+WORKSPACE_CONTEXT_ERROR = PublicRunError(
+    code="workspace_store_unavailable",
+    message="工作區執行內容暫時無法安全載入。",
+    retryable=True,
+)
+
 
 def inference_error(failure: InferenceFailure) -> PublicRunError:
     if failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED:

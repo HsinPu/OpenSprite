@@ -13,6 +13,9 @@ class ScheduleFailure(StrEnum):
     NOT_FOUND = "not_found"
     REVISION_CONFLICT = "revision_conflict"
     DATABASE_UNAVAILABLE = "database_unavailable"
+    WORKSPACE_NOT_FOUND = "workspace_not_found"
+    WORKSPACE_STORE_UNAVAILABLE = "workspace_store_unavailable"
+    WORKSPACE_BUSY = "workspace_busy"
 
 
 class ScheduleStoreError(Exception):

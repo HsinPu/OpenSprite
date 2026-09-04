@@ -15,6 +15,7 @@ from .models import (
 from .policy import WorkspaceRootPolicy
 from .service import (
     EmptyWorkspaceUsageReader,
+    UnassignedWorkspaceResolver,
     UnavailableWorkspaces,
     WorkspaceCatalogService,
     WorkspaceError,
@@ -29,6 +30,7 @@ from .store import JsonWorkspaceStore, WorkspaceStoreError
 __all__ = [
     "UNASSIGNED_WORKSPACE_ID",
     "EmptyWorkspaceUsageReader",
+    "UnassignedWorkspaceResolver",
     "JsonWorkspaceStore",
     "UnavailableWorkspaces",
     "WorkspaceAvailability",

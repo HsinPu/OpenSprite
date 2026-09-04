@@ -39,6 +39,7 @@ describe("schedule page", () => {
     controller.schedules = [{
       ...props.modelSelection,
       id: "20000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000000",
       name: "Morning brief", prompt: "Summarize today.", timeZone: "Asia/Taipei",
       cadence: { type: "daily", localTime: "09:30" } as const,
       executionProfile: { ...props.modelSelection, responseMode: "balanced", outputContinuation: "5" } as const,

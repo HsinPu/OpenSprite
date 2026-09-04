@@ -90,6 +90,7 @@ CadenceModel = Annotated[
 
 
 class ScheduleFields(ScheduleContractModel):
+    workspaceId: UUID
     name: str = Field(min_length=1, max_length=120)
     prompt: str = Field(min_length=1, max_length=32768)
     timeZone: str = Field(min_length=1, max_length=100)
@@ -110,6 +111,7 @@ class ScheduleFields(ScheduleContractModel):
             self.cadence.domain(),
             self.timeZone,
             self.executionProfile.domain(),
+            str(self.workspaceId),
         )
 
 
@@ -127,6 +129,7 @@ class RevisionRequest(ScheduleContractModel):
 
 class ScheduleResponse(ScheduleContractModel):
     id: UUID
+    workspaceId: UUID
     name: str
     prompt: str
     timeZone: str
@@ -176,6 +179,9 @@ class ScheduleErrorDetail(ScheduleContractModel):
         "not_found",
         "revision_conflict",
         "database_unavailable",
+        "workspace_not_found",
+        "workspace_store_unavailable",
+        "workspace_busy",
     ]
     message: str
     retryable: bool
@@ -198,6 +204,7 @@ def schedule_response(
         cadence["weekdays"] = list(item.cadence.weekdays)
     return ScheduleResponse(
         id=item.id,
+        workspaceId=item.workspace_id,
         name=item.name,
         prompt=item.prompt,
         timeZone=item.time_zone,

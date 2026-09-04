@@ -206,6 +206,7 @@ def create_system_runtime(
             paths,
             general_settings,
         ),
+        workspaces=workspaces,
         prompt_log_writer=FilePromptLogWriter(paths),
     )
     run_manager = RunManager(repository, agent_loop)
@@ -222,6 +223,8 @@ def create_system_runtime(
     schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
     schedules = ScheduleService(
         schedule_repository,
+        workspaces=workspaces,
+        workspace_mutation_gate=workspace_mutation_gate,
         on_change=schedule_coordinator.wake,
     )
     return _SystemRuntime(

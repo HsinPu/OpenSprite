@@ -66,6 +66,9 @@ def schedule_error_response(failure: ScheduleFailure) -> JSONResponse:
         ScheduleFailure.NOT_FOUND: (404, "找不到指定的排程。", False),
         ScheduleFailure.REVISION_CONFLICT: (409, "排程已在其他頁面更新。", True),
         ScheduleFailure.DATABASE_UNAVAILABLE: (503, "排程資料暫時無法使用。", True),
+        ScheduleFailure.WORKSPACE_NOT_FOUND: (404, "找不到指定的工作區。", False),
+        ScheduleFailure.WORKSPACE_STORE_UNAVAILABLE: (503, "工作區設定暫時無法使用。", True),
+        ScheduleFailure.WORKSPACE_BUSY: (409, "工作區或排程目前仍在執行。", True),
     }[failure]
     body = ScheduleErrorEnvelope(
         error=ScheduleErrorDetail(

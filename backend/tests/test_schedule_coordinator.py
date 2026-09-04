@@ -100,6 +100,7 @@ class FakeChat:
             output_continuation=profile.output_continuation,
             source="schedule",
             occurrence_id=str(kwargs["occurrence_id"]),
+            workspace_id=str(kwargs["workspace_id"]),
         )
 
     async def wait_run(self, run_id: str) -> RunSnapshot:
@@ -179,6 +180,7 @@ async def test_due_once_executes_and_binds_dedicated_conversation(
     assert refreshed.status is ScheduleStatus.COMPLETED
     assert refreshed.conversation_id is not None
     assert chat.starts[0]["profile"] == schedule.profile
+    assert chat.starts[0]["workspace_id"] == schedule.workspace_id
 
 
 @async_test

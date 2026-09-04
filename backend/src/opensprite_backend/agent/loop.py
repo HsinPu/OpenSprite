@@ -47,6 +47,11 @@ from opensprite_backend.tools.availability import (
 from opensprite_backend.tools.definition import ToolContext
 from opensprite_backend.tools.dynamic import DynamicToolProvider
 from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
+from opensprite_backend.workspaces import (
+    UnassignedWorkspaceResolver,
+    WorkspaceError,
+    WorkspaceResolver,
+)
 
 from .events import (
     AGENT_LIMIT_ERROR,
@@ -55,6 +60,7 @@ from .events import (
     INTERNAL_ERROR,
     INVALID_PROVIDER_RESPONSE,
     SCHEDULED_TOOL_APPROVAL_REQUIRED,
+    WORKSPACE_CONTEXT_ERROR,
     inference_error,
 )
 from .context import (
@@ -157,6 +163,7 @@ class AgentLoop:
         dynamic_tools: DynamicToolProvider | None = None,
         capability_resolver: ModelCapabilityResolver,
         system_prompt_provider: SystemPromptProvider | None = None,
+        workspaces: WorkspaceResolver | None = None,
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
         max_compactions_per_run: int | None = None,
@@ -188,6 +195,7 @@ class AgentLoop:
             if system_prompt_provider is not None
             else StaticSystemPromptProvider()
         )
+        self._workspaces = workspaces or UnassignedWorkspaceResolver()
         self._max_model_rounds = max_model_rounds
         self._max_tool_calls = max_tool_calls
         self._max_compactions_per_run = max_compactions_per_run
@@ -208,6 +216,17 @@ class AgentLoop:
             return await asyncio.to_thread(self._repository.request_cancel, run_id)
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
+            try:
+                workspace = self._workspaces.execution_context(run.workspace_id)
+            except WorkspaceError:
+                return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
+            if (
+                workspace.id != run.workspace_id
+                or workspace.revision != run.workspace_revision
+                or workspace.name != run.workspace_name_snapshot
+                or workspace.root_hash != run.workspace_root_hash
+            ):
+                return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
             run = await asyncio.to_thread(self._repository.mark_run_started, run_id)
             run_tools = (
                 self._tools.extended(await self._dynamic_tools.snapshot_tools())
@@ -223,7 +242,10 @@ class AgentLoop:
                     )
                 )
             )
-            system_prompt = await self._system_prompt_provider.build(run_id=run_id)
+            system_prompt = await self._system_prompt_provider.build(
+                run_id=run_id,
+                workspace=workspace,
+            )
             prepared = await self._prepare_context(
                 run=run,
                 system_prompt=system_prompt,
@@ -437,6 +459,7 @@ class AgentLoop:
                         run_id=run.id,
                         conversation_id=run.conversation_id,
                         cancellation_event=cancellation_event,
+                        workspace=workspace,
                     )
 
                     async def record_tool_started() -> None:

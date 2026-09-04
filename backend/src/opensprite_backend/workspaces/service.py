@@ -70,6 +70,22 @@ class WorkspaceResolver(Protocol):
     def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext: ...
 
 
+class UnassignedWorkspaceResolver:
+    def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
+        if workspace_id != UNASSIGNED_WORKSPACE_ID:
+            raise WorkspaceError(WorkspaceFailure.NOT_FOUND)
+        return WorkspaceExecutionContext(
+            id=UNASSIGNED_WORKSPACE_ID,
+            kind=WorkspaceKind.UNASSIGNED,
+            name=unassigned_workspace().name,
+            root_path=None,
+            revision=1,
+            root_hash=None,
+            availability=WorkspaceAvailability.NOT_APPLICABLE,
+            unavailable_reason=None,
+        )
+
+
 class WorkspaceMutationGate:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -247,16 +263,7 @@ class WorkspaceCatalogService:
 
     def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
         if workspace_id == UNASSIGNED_WORKSPACE_ID:
-            return WorkspaceExecutionContext(
-                id=UNASSIGNED_WORKSPACE_ID,
-                kind=WorkspaceKind.UNASSIGNED,
-                name=unassigned_workspace().name,
-                root_path=None,
-                revision=1,
-                root_hash=None,
-                availability=WorkspaceAvailability.NOT_APPLICABLE,
-                unavailable_reason=None,
-            )
+            return UnassignedWorkspaceResolver().execution_context(workspace_id)
         record = self._find(self._state(), workspace_id)
         status = self._root_policy.inspect_saved_root(record.root_path)
         return WorkspaceExecutionContext(

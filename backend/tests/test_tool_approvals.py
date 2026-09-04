@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import wraps
@@ -142,6 +143,11 @@ async def test_allow_once_exposes_arguments_then_executes(tmp_path: Path) -> Non
         encoding="utf-8"
     )
     assert "hello" not in receipt_text
+    receipts = [json.loads(line) for line in receipt_text.splitlines()]
+    assert all(item["version"] == 2 for item in receipts)
+    assert all(item["workspaceId"] == context.workspace.id for item in receipts)
+    assert all(item["workspaceRevision"] == 1 for item in receipts)
+    assert all(item["workspaceRootHash"] is None for item in receipts)
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
     assert [event.type for event in events[-2:]] == [
         RunEventType.TOOL_APPROVAL_REQUESTED,

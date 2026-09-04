@@ -256,7 +256,10 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   const data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
-  if (["run.started", "context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "run.started" && !exactKeys(data, [])) {
+    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash)))) throw new AgentChatApiError("malformed_response");
+  }
+  if (["context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {
     const legacyKeys = ["providerId", "modelId", "responseMode", "maxOutputTokens"] as const;
     const contextKeys = [...legacyKeys, "contextTokens", "contextLimitTokens", "inputBudgetTokens"] as const;
