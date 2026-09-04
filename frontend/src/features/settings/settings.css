@@ -222,11 +222,13 @@
 .settings-password-form .ant-btn { justify-self: start; margin-top: 8px; }
 .settings-trust-warning { padding: 12px 14px; border-radius: 10px; color: #7a3d00; background: #fff7e6; }
 .workspace-settings__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
-.workspace-settings__list { display: grid; gap: 12px; padding-bottom: 12px; }
-.workspace-settings__item { display: grid; gap: 13px; padding: 16px; border: 1px solid var(--settings-border); border-radius: 12px; background: var(--settings-surface); }
+.workspace-settings, .workspace-settings__list, .workspace-settings__item, .workspace-mounts { min-width: 0; }
+.workspace-settings__list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding-bottom: 12px; }
+.workspace-settings__item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 13px; padding: 16px; border: 1px solid var(--settings-border); border-radius: 12px; background: var(--settings-surface); }
 .workspace-settings__summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.workspace-settings__summary > div { min-width: 0; flex: 1; }
 .workspace-settings__summary h3 { margin: 0 0 5px; font-size: 16px; }
-.workspace-settings__summary p { max-width: 560px; margin: 0; overflow: hidden; color: var(--settings-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-settings__summary p { max-width: 100%; margin: 0; overflow: hidden; color: var(--settings-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-settings__item dl { display: flex; gap: 10px; margin: 0; }
 .workspace-settings__item dl div { min-width: 92px; padding: 9px 11px; border-radius: 8px; background: var(--settings-bg); }
 .workspace-settings__item dt { color: var(--settings-muted); font-size: 11px; }
@@ -246,7 +248,7 @@
 .workspace-mount > div:first-child { display: grid; min-width: 0; gap: 3px; }
 .workspace-import-item span,
 .workspace-mount span { overflow: hidden; color: var(--os-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-mounts { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--os-border); }
+.workspace-mounts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding-top: 12px; border-top: 1px solid var(--os-border); }
 .workspace-mounts__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .workspace-mounts__header h4 { margin: 0; }
 .workspace-mount > div:last-child { display: flex; flex: 0 0 auto; gap: 6px; }
