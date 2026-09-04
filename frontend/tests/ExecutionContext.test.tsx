@@ -8,6 +8,10 @@ import { ExecutionContext } from "../src/features/chat/ExecutionContext";
 const run: RunSnapshot = {
   id: "11111111-1111-4111-8111-111111111111",
   conversationId: "22222222-2222-4222-8222-222222222222",
+  workspaceId: "00000000-0000-4000-8000-000000000000",
+  workspaceRevision: 1,
+  workspaceName: "Unassigned workspace",
+  workspaceRootHash: null,
   userMessageId: "33333333-3333-4333-8333-333333333333",
   assistantMessageId: null,
   providerId: "openai",

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentChatApiError, type RunEvent, type RunEventStream, type RunEventStreamHandlers } from "../src/api/agentChat";
+import { AgentChatApiError, UNASSIGNED_WORKSPACE_ID, type RunEvent, type RunEventStream, type RunEventStreamHandlers } from "../src/api/agentChat";
 import type { ResponseDelivery } from "../src/api/aiSettings";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
 import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
@@ -50,6 +50,10 @@ function run(status: "running" | "cancelling" | "completed") {
   return {
     id: runId,
     conversationId,
+    workspaceId: UNASSIGNED_WORKSPACE_ID,
+    workspaceRevision: 1,
+    workspaceName: "Unassigned workspace",
+    workspaceRootHash: null,
     userMessageId,
     assistantMessageId: status === "completed" ? assistantMessageId : null,
     providerId: "openrouter",
@@ -137,7 +141,7 @@ describe("useConversationRun", () => {
     let runReads = 0;
     let messageReads = 0;
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, runId, status: "queued" }), { status: 202 }));
+      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, runId, status: "queued" }), { status: 202 }));
       if (path === `/api/runs/${runId}`) {
         runReads += 1;
         return Promise.resolve(new Response(JSON.stringify(run(runReads === 1 ? "running" : "completed"))));
@@ -179,7 +183,7 @@ describe("useConversationRun", () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
       if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify(run("running"))));
-      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, runId, status: "queued" }), { status: 202 }));
+      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, runId, status: "queued" }), { status: 202 }));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -216,7 +220,7 @@ describe("useConversationRun", () => {
     const completed = { ...run("completed"), partialText: "一次" };
     const completedAssistant = { ...assistantMessage, content: "一次" };
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, runId, status: "queued" }), { status: 202 }));
+      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, runId, status: "queued" }), { status: 202 }));
       if (path === `/api/runs/${runId}`) {
         runReads += 1;
         return Promise.resolve(new Response(JSON.stringify(runReads === 1 ? run("running") : completed)));

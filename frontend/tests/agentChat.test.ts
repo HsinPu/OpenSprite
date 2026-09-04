@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AgentChatApiError,
+  UNASSIGNED_WORKSPACE_ID,
   agentChatErrorText,
   cancelRun,
   getRun,
@@ -31,10 +32,12 @@ describe("Agent chat HTTP contract", () => {
 
   it("strictly parses conversation and message pages", async () => {
     const fetchMock = vi.fn((path: string) => {
-      if (path === "/api/conversations?limit=50") {
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) {
         return Promise.resolve(new Response(JSON.stringify({
           conversations: [{
             id: conversationId,
+            workspaceId: UNASSIGNED_WORKSPACE_ID,
+            revision: 1,
             title: "整理今天的工作",
             latestMessagePreview: "完成",
             createdAt: "2026-08-21T08:30:00Z",
@@ -61,7 +64,7 @@ describe("Agent chat HTTP contract", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const conversations = await listConversations();
+    const conversations = await listConversations({ workspaceId: UNASSIGNED_WORKSPACE_ID });
     const messages = await listConversationMessages(conversationId);
 
     expect(conversations.conversations[0]?.title).toBe("整理今天的工作");
@@ -77,12 +80,14 @@ describe("Agent chat HTTP contract", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversationId: null,
+            workspaceId: UNASSIGNED_WORKSPACE_ID,
             clientRequestId,
             message: "hello",
           }),
         });
         return Promise.resolve(new Response(JSON.stringify({
           conversationId,
+          workspaceId: UNASSIGNED_WORKSPACE_ID,
           runId,
           status: "queued",
         }), { status: 202 }));
@@ -91,6 +96,10 @@ describe("Agent chat HTTP contract", () => {
         return Promise.resolve(new Response(JSON.stringify({
           id: runId,
           conversationId,
+          workspaceId: UNASSIGNED_WORKSPACE_ID,
+          workspaceRevision: 1,
+          workspaceName: "Unassigned workspace",
+          workspaceRootHash: null,
           userMessageId,
           assistantMessageId: null,
           providerId: "openrouter",
@@ -109,10 +118,10 @@ describe("Agent chat HTTP contract", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const accepted = await startRun({ conversationId: null, clientRequestId, message: "hello" });
+    const accepted = await startRun({ conversationId: null, workspaceId: UNASSIGNED_WORKSPACE_ID, clientRequestId, message: "hello" });
     const run = await getRun(runId);
 
-    expect(accepted).toEqual({ conversationId, runId, status: "queued" });
+    expect(accepted).toEqual({ conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, runId, status: "queued" });
     expect(run.partialText).toBe("回");
     expect(run.completionReason).toBeNull();
   });
@@ -121,6 +130,10 @@ describe("Agent chat HTTP contract", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({
       id: runId,
       conversationId,
+      workspaceId: UNASSIGNED_WORKSPACE_ID,
+      workspaceRevision: 1,
+      workspaceName: "Unassigned workspace",
+      workspaceRootHash: null,
       userMessageId,
       assistantMessageId,
       providerId: "openrouter",
@@ -166,7 +179,7 @@ describe("Agent chat HTTP contract", () => {
       leaked: "field",
     })))));
 
-    await expect(listConversations()).rejects.toEqual(
+    await expect(listConversations({ workspaceId: UNASSIGNED_WORKSPACE_ID })).rejects.toEqual(
       new AgentChatApiError("malformed_response"),
     );
     await expect(getRun("not-a-uuid")).rejects.toEqual(

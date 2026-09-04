@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/app/App";
+import { UNASSIGNED_WORKSPACE_ID } from "../src/api/agentChat";
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -306,7 +307,7 @@ describe("conversation navigation", () => {
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "Asia/Taipei" })));
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
-      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [{ id: "20000000-0000-4000-8000-000000000001", name: "晨間整理", prompt: "整理工作", timeZone: "Asia/Taipei", cadence: { type: "daily", localTime: "09:00" }, executionProfile: { providerId: "openai", modelId: "gpt-5.6", responseMode: "balanced", contextBudget: "64k", outputBudget: "16k", outputContinuation: "5" }, status: "active", conversationId, nextRunAt: "2026-09-05T01:00:00Z", revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", latestOccurrence: null }], nextCursor: null })));
       if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
@@ -335,7 +336,7 @@ describe("conversation navigation", () => {
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "default", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify({ providers: [] })));
-      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
       return new Promise<Response>(() => undefined);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -356,7 +357,7 @@ describe("conversation navigation", () => {
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       throw new Error(`unexpected request ${path}`);
     });
@@ -377,7 +378,7 @@ describe("conversation navigation", () => {
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: UNASSIGNED_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
       throw new Error(`unexpected request ${path} ${init?.method ?? "GET"}`);
     });
@@ -395,9 +396,11 @@ describe("conversation navigation", () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({
         conversations: [{
           id: conversationId,
+          workspaceId: UNASSIGNED_WORKSPACE_ID,
+          revision: 1,
           title: "回顧進度",
           latestMessagePreview: "整理本週完成項目",
           createdAt: "2026-08-22T08:00:00Z",
@@ -405,9 +408,11 @@ describe("conversation navigation", () => {
         }],
         nextCursor: "older-cursor",
       })));
-      if (path === "/api/conversations?limit=50&before=older-cursor") return Promise.resolve(new Response(JSON.stringify({
+      if (path === `/api/conversations?workspaceId=${UNASSIGNED_WORKSPACE_ID}&limit=50&before=older-cursor`) return Promise.resolve(new Response(JSON.stringify({
         conversations: [{
           id: olderConversationId,
+          workspaceId: UNASSIGNED_WORKSPACE_ID,
+          revision: 1,
           title: "較早的對話",
           latestMessagePreview: "舊內容",
           createdAt: "2026-08-01T08:00:00Z",

@@ -25,6 +25,8 @@ from .models import (
     RunSnapshot,
     StartRunResult,
     StoreFailure,
+    UNASSIGNED_WORKSPACE_ID,
+    UNASSIGNED_WORKSPACE_NAME,
 )
 
 
@@ -40,6 +42,7 @@ class ConversationRepository(Protocol):
     def list_conversations(
         self,
         *,
+        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
         limit: int,
         before: str | None,
     ) -> ConversationPage: ...
@@ -48,6 +51,14 @@ class ConversationRepository(Protocol):
         self,
         conversation_id: str,
     ) -> ConversationSummary | None: ...
+
+    def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ) -> ConversationSummary: ...
 
     def list_messages(
         self,
@@ -82,6 +93,10 @@ class ConversationRepository(Protocol):
         log_full_prompts: bool = False,
         source: RunSource = "user",
         occurrence_id: str | None = None,
+        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_revision: int = 1,
+        workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME,
+        workspace_root_hash: str | None = None,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(

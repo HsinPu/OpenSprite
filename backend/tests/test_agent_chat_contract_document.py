@@ -37,7 +37,9 @@ def test_contract_has_only_the_approved_agent_chat_operations() -> None:
 
     assert operations == {
         ("/api/conversations", "get"),
+        ("/api/conversations/{conversation_id}", "get"),
         ("/api/conversations/{conversation_id}/messages", "get"),
+        ("/api/conversations/{conversation_id}/workspace", "put"),
         ("/api/runs", "post"),
         ("/api/runs/{run_id}", "get"),
         ("/api/runs/{run_id}/events", "get"),
@@ -51,6 +53,7 @@ def test_start_run_request_is_strict_and_idempotent() -> None:
     assert schema["additionalProperties"] is False
     assert schema["required"] == [
         "conversationId",
+        "workspaceId",
         "clientRequestId",
         "message",
     ]
@@ -74,6 +77,10 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
     assert schemas["RunSnapshot"]["required"] == [
         "id",
         "conversationId",
+        "workspaceId",
+        "workspaceRevision",
+        "workspaceName",
+        "workspaceRootHash",
         "userMessageId",
         "assistantMessageId",
         "providerId",

@@ -19,6 +19,12 @@
         "summary": "List conversations in reverse update order",
         "parameters": [
           {
+            "name": "workspaceId",
+            "in": "query",
+            "required": true,
+            "schema": {"$ref": "#/components/schemas/Identifier"}
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -61,6 +67,33 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "getConversation",
+        "parameters": [{"$ref": "#/components/parameters/ConversationId"}],
+        "responses": {
+          "200": {"description": "Conversation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSummary"}}}},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "503": {"$ref": "#/components/responses/LocalStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}/workspace": {
+      "put": {
+        "operationId": "moveConversationToWorkspace",
+        "parameters": [{"$ref": "#/components/parameters/ConversationId"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MoveConversationRequest"}}}},
+        "responses": {
+          "200": {"description": "Moved conversation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSummary"}}}},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/RunStartConflict"},
+          "503": {"$ref": "#/components/responses/LocalStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
         }
       }
     },
@@ -349,6 +382,8 @@
         "additionalProperties": false,
         "required": [
           "id",
+          "workspaceId",
+          "revision",
           "title",
           "latestMessagePreview",
           "createdAt",
@@ -357,6 +392,13 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/Identifier"
+          },
+          "workspaceId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
           },
           "title": {
             "type": "string",
@@ -520,7 +562,12 @@
           "tool_failure",
           "scheduled_tool_approval_required",
           "invalid_provider_response",
-          "internal_error"
+          "internal_error",
+          "workspace_not_found",
+          "workspace_mismatch",
+          "workspace_store_unavailable",
+          "revision_conflict",
+          "workspace_managed_by_schedule"
         ]
       },
       "ErrorDetail": {
@@ -563,6 +610,10 @@
         "required": [
           "id",
           "conversationId",
+          "workspaceId",
+          "workspaceRevision",
+          "workspaceName",
+          "workspaceRootHash",
           "userMessageId",
           "assistantMessageId",
           "providerId",
@@ -582,6 +633,24 @@
           },
           "conversationId": {
             "$ref": "#/components/schemas/Identifier"
+          },
+          "workspaceId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "workspaceRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "workspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "workspaceRootHash": {
+            "oneOf": [
+              {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              {"type": "null"}
+            ]
           },
           "userMessageId": {
             "$ref": "#/components/schemas/Identifier"
@@ -664,6 +733,7 @@
         "additionalProperties": false,
         "required": [
           "conversationId",
+          "workspaceId",
           "clientRequestId",
           "message"
         ],
@@ -677,6 +747,9 @@
                 "type": "null"
               }
             ]
+          },
+          "workspaceId": {
+            "$ref": "#/components/schemas/Identifier"
           },
           "clientRequestId": {
             "$ref": "#/components/schemas/Identifier"
@@ -693,11 +766,15 @@
         "additionalProperties": false,
         "required": [
           "conversationId",
+          "workspaceId",
           "runId",
           "status"
         ],
         "properties": {
           "conversationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "workspaceId": {
             "$ref": "#/components/schemas/Identifier"
           },
           "runId": {
@@ -707,6 +784,15 @@
             "type": "string",
             "const": "queued"
           }
+        }
+      },
+      "MoveConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspaceId", "expectedRevision"],
+        "properties": {
+          "workspaceId": {"$ref": "#/components/schemas/Identifier"},
+          "expectedRevision": {"type": "integer", "minimum": 1}
         }
       },
       "CancelRunResponse": {

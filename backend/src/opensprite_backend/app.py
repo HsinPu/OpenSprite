@@ -53,6 +53,7 @@ from .api.workspace_routes import (
 from .application import (
     AgentChatError,
     AgentChatOperations,
+    ChatErrorCode,
     UnavailableAgentChat,
 )
 from .local_security import LocalRequestSecurityMiddleware
@@ -231,6 +232,8 @@ def create_app(
             return schedule_error_response(ScheduleFailure.INVALID_REQUEST)
         if request.url.path.startswith("/api/workspaces"):
             return workspace_error_response(WorkspaceFailure.INVALID_REQUEST)
+        if request.url.path.startswith("/api/conversations") or request.url.path.startswith("/api/runs"):
+            return chat_error_response(ChatErrorCode.INVALID_REQUEST)
         return provider_error_response(ErrorCode.INVALID_REQUEST)
 
     async def local_path_error_handler(

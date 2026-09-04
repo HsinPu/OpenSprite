@@ -39,9 +39,11 @@ from .models import (
 )
 from .repository import ConversationStoreError
 from .event_notifier import RunEventNotifier
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID, WorkspaceUsage
+from opensprite_backend.workspaces.models import UNASSIGNED_WORKSPACE_NAME
 
 
-_SCHEMA_VERSION = 11
+_SCHEMA_VERSION = 12
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -81,6 +83,11 @@ _PUBLIC_ERROR_CODES = {
     "scheduled_tool_approval_required",
     "invalid_provider_response",
     "internal_error",
+    "workspace_not_found",
+    "workspace_mismatch",
+    "workspace_store_unavailable",
+    "revision_conflict",
+    "workspace_managed_by_schedule",
 }
 _MAX_EVENT_JSON_BYTES = 65536
 _MAX_ASSISTANT_DELTA_CHARS = 16384
@@ -92,6 +99,8 @@ _SCHEMA_SQL = """
 BEGIN IMMEDIATE;
 CREATE TABLE conversations (
     id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL CHECK(length(workspace_id) = 36),
+    revision INTEGER NOT NULL CHECK(revision >= 1),
     title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 160),
     latest_message_preview TEXT CHECK(
         latest_message_preview IS NULL OR
@@ -115,6 +124,10 @@ CREATE TABLE messages (
 CREATE TABLE runs (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL CHECK(length(workspace_id) = 36),
+    workspace_revision INTEGER NOT NULL CHECK(workspace_revision >= 1),
+    workspace_name_snapshot TEXT NOT NULL CHECK(length(workspace_name_snapshot) BETWEEN 1 AND 80),
+    workspace_root_hash TEXT CHECK(workspace_root_hash IS NULL OR length(workspace_root_hash) = 64),
     client_request_id TEXT NOT NULL UNIQUE,
     request_fingerprint TEXT NOT NULL CHECK(length(request_fingerprint) = 64),
     user_message_id TEXT NOT NULL REFERENCES messages(id),
@@ -190,6 +203,7 @@ ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
 CREATE TABLE schedules (
     id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL DEFAULT '00000000-0000-4000-8000-000000000000' CHECK(length(workspace_id) = 36),
     name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
     prompt TEXT NOT NULL CHECK(length(prompt) BETWEEN 1 AND 32768),
     cadence_type TEXT NOT NULL CHECK(cadence_type IN ('once', 'daily', 'weekly')),
@@ -235,7 +249,15 @@ CREATE INDEX schedules_by_next_run ON schedules(status, next_run_at, id);
 CREATE INDEX schedule_occurrences_by_schedule ON schedule_occurrences(schedule_id, scheduled_for DESC, id DESC);
 CREATE UNIQUE INDEX runs_by_occurrence ON runs(occurrence_id) WHERE occurrence_id IS NOT NULL;
 
-PRAGMA user_version = 11;
+CREATE INDEX conversations_by_workspace_updated
+ON conversations(workspace_id, updated_at DESC, id DESC);
+CREATE INDEX active_runs_by_workspace
+ON runs(workspace_id)
+WHERE status IN ('queued', 'running', 'cancelling');
+CREATE INDEX schedules_by_workspace
+ON schedules(workspace_id, status, next_run_at, id);
+
+PRAGMA user_version = 12;
 COMMIT;
 """
 
@@ -613,6 +635,76 @@ PRAGMA user_version = 11;
 COMMIT;
 """
 
+def _migrate_v11_to_v12(connection: sqlite3.Connection) -> None:
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        conversation_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(conversations)")
+        }
+        if "workspace_id" not in conversation_columns:
+            connection.execute(
+                "ALTER TABLE conversations ADD COLUMN workspace_id TEXT NOT NULL "
+                "DEFAULT '00000000-0000-4000-8000-000000000000' "
+                "CHECK(length(workspace_id) = 36)"
+            )
+        if "revision" not in conversation_columns:
+            connection.execute(
+                "ALTER TABLE conversations ADD COLUMN revision INTEGER NOT NULL "
+                "DEFAULT 1 CHECK(revision >= 1)"
+            )
+        run_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(runs)")
+        }
+        additions = {
+            "workspace_id": (
+                "ALTER TABLE runs ADD COLUMN workspace_id TEXT NOT NULL "
+                "DEFAULT '00000000-0000-4000-8000-000000000000' "
+                "CHECK(length(workspace_id) = 36)"
+            ),
+            "workspace_revision": (
+                "ALTER TABLE runs ADD COLUMN workspace_revision INTEGER NOT NULL "
+                "DEFAULT 1 CHECK(workspace_revision >= 1)"
+            ),
+            "workspace_name_snapshot": (
+                "ALTER TABLE runs ADD COLUMN workspace_name_snapshot TEXT NOT NULL "
+                "DEFAULT 'Unassigned workspace' "
+                "CHECK(length(workspace_name_snapshot) BETWEEN 1 AND 80)"
+            ),
+            "workspace_root_hash": (
+                "ALTER TABLE runs ADD COLUMN workspace_root_hash TEXT "
+                "CHECK(workspace_root_hash IS NULL OR length(workspace_root_hash) = 64)"
+            ),
+        }
+        for column, statement in additions.items():
+            if column not in run_columns:
+                connection.execute(statement)
+        schedule_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(schedules)")
+        }
+        if "workspace_id" not in schedule_columns:
+            connection.execute(
+                "ALTER TABLE schedules ADD COLUMN workspace_id TEXT NOT NULL "
+                "DEFAULT '00000000-0000-4000-8000-000000000000' "
+                "CHECK(length(workspace_id) = 36)"
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS conversations_by_workspace_updated "
+            "ON conversations(workspace_id, updated_at DESC, id DESC)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS active_runs_by_workspace ON runs(workspace_id) "
+            "WHERE status IN ('queued', 'running', 'cancelling')"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS schedules_by_workspace "
+            "ON schedules(workspace_id, status, next_run_at, id)"
+        )
+        connection.execute("PRAGMA user_version = 12")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
 
 class SqliteConversationRepository:
     """Own four chat tables below one explicit AppPaths database file."""
@@ -643,9 +735,11 @@ class SqliteConversationRepository:
     def list_conversations(
         self,
         *,
+        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
         limit: int,
         before: str | None,
     ) -> ConversationPage:
+        self._require_identifier(workspace_id)
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         cursor = self._decode_cursor(before) if before is not None else None
@@ -658,21 +752,24 @@ class SqliteConversationRepository:
                     rows = connection.execute(
                         """
                         SELECT * FROM conversations
+                        WHERE workspace_id = ?
                         ORDER BY updated_at DESC, id DESC
                         LIMIT ?
                         """,
-                        (limit + 1,),
+                        (workspace_id, limit + 1),
                     ).fetchall()
                 else:
                     updated_at, identifier = cursor
                     rows = connection.execute(
                         """
                         SELECT * FROM conversations
-                        WHERE updated_at < ? OR (updated_at = ? AND id < ?)
+                        WHERE workspace_id = ? AND (
+                            updated_at < ? OR (updated_at = ? AND id < ?)
+                        )
                         ORDER BY updated_at DESC, id DESC
                         LIMIT ?
                         """,
-                        (updated_at, updated_at, identifier, limit + 1),
+                        (workspace_id, updated_at, updated_at, identifier, limit + 1),
                     ).fetchall()
                 has_more = len(rows) > limit
                 selected = rows[:limit]
@@ -973,6 +1070,10 @@ class SqliteConversationRepository:
         log_full_prompts: bool = False,
         source: RunSource = "user",
         occurrence_id: str | None = None,
+        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
+        workspace_revision: int = 1,
+        workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME,
+        workspace_root_hash: str | None = None,
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -995,8 +1096,39 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if occurrence_id is not None:
             self._require_identifier(occurrence_id)
+        self._require_identifier(workspace_id)
+        normalized_workspace_name = self._require_text(
+            workspace_name_snapshot,
+            maximum=80,
+        )
+        if (
+            not isinstance(workspace_revision, int)
+            or isinstance(workspace_revision, bool)
+            or workspace_revision < 1
+            or (
+                workspace_root_hash is not None
+                and (
+                    not isinstance(workspace_root_hash, str)
+                    or re.fullmatch(r"[0-9a-f]{64}", workspace_root_hash) is None
+                )
+            )
+            or (
+                workspace_id == UNASSIGNED_WORKSPACE_ID
+                and (
+                    workspace_revision != 1
+                    or normalized_workspace_name != UNASSIGNED_WORKSPACE_NAME
+                    or workspace_root_hash is not None
+                )
+            )
+            or (
+                workspace_id != UNASSIGNED_WORKSPACE_ID
+                and workspace_root_hash is None
+            )
+        ):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
+            workspace_id,
             normalized_message,
             source,
             occurrence_id,
@@ -1039,11 +1171,13 @@ class SqliteConversationRepository:
                     connection.execute(
                         """
                         INSERT INTO conversations(
-                            id, title, latest_message_preview, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?)
+                            id, workspace_id, revision, title,
+                            latest_message_preview, created_at, updated_at
+                        ) VALUES (?, ?, 1, ?, ?, ?, ?)
                         """,
                         (
                             resolved_conversation_id,
+                            workspace_id,
                             title,
                             preview,
                             now_text,
@@ -1057,6 +1191,8 @@ class SqliteConversationRepository:
                     ).fetchone()
                     if conversation_row is None:
                         raise ConversationStoreError(StoreFailure.NOT_FOUND)
+                    if conversation_row["workspace_id"] != workspace_id:
+                        raise ConversationStoreError(StoreFailure.WORKSPACE_MISMATCH)
 
                 active = connection.execute(
                     """
@@ -1098,17 +1234,23 @@ class SqliteConversationRepository:
                 connection.execute(
                     """
                     INSERT INTO runs(
-                        id, conversation_id, client_request_id, request_fingerprint,
+                        id, conversation_id, workspace_id, workspace_revision,
+                        workspace_name_snapshot, workspace_root_hash,
+                        client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
                         response_mode, context_budget, output_budget, output_continuation,
                         log_full_prompts, source, occurrence_id,
                         status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
                         resolved_conversation_id,
+                        workspace_id,
+                        workspace_revision,
+                        normalized_workspace_name,
+                        workspace_root_hash,
                         client_request_id,
                         request_fingerprint,
                         message_id,
@@ -1294,6 +1436,112 @@ class SqliteConversationRepository:
                 raise ConversationStoreError(
                     StoreFailure.DATABASE_UNAVAILABLE
                 ) from error
+            finally:
+                connection.close()
+
+    def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ) -> ConversationSummary:
+        self._require_identifier(conversation_id)
+        self._require_identifier(workspace_id)
+        if (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+        ):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        with self._lock:
+            connection = self._open_write()
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT * FROM conversations WHERE id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                if row is None:
+                    raise ConversationStoreError(StoreFailure.NOT_FOUND)
+                if int(row["revision"]) != expected_revision:
+                    raise ConversationStoreError(StoreFailure.REVISION_CONFLICT)
+                if connection.execute(
+                    "SELECT 1 FROM schedules WHERE conversation_id = ? LIMIT 1",
+                    (conversation_id,),
+                ).fetchone() is not None:
+                    raise ConversationStoreError(
+                        StoreFailure.WORKSPACE_MANAGED_BY_SCHEDULE
+                    )
+                if connection.execute(
+                    """
+                    SELECT 1 FROM runs
+                    WHERE conversation_id = ? AND status IN (?, ?, ?)
+                    LIMIT 1
+                    """,
+                    (conversation_id, *_ACTIVE_STATUSES),
+                ).fetchone() is not None:
+                    raise ConversationStoreError(StoreFailure.RUN_BUSY)
+                connection.execute(
+                    """
+                    UPDATE conversations
+                    SET workspace_id = ?, revision = revision + 1
+                    WHERE id = ?
+                    """,
+                    (workspace_id, conversation_id),
+                )
+                updated = connection.execute(
+                    "SELECT * FROM conversations WHERE id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                if updated is None:
+                    raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
+                connection.commit()
+                return self._conversation(updated)
+            except ConversationStoreError:
+                connection.rollback()
+                raise
+            except (sqlite3.Error, OSError, TypeError, ValueError) as error:
+                connection.rollback()
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
+            finally:
+                connection.close()
+
+    def workspace_usage(self, workspace_id: str) -> WorkspaceUsage:
+        self._require_identifier(workspace_id)
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return WorkspaceUsage()
+            try:
+                conversation_count = int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM conversations WHERE workspace_id = ?",
+                        (workspace_id,),
+                    ).fetchone()[0]
+                )
+                schedule_count = int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM schedules WHERE workspace_id = ?",
+                        (workspace_id,),
+                    ).fetchone()[0]
+                )
+                active_run_count = int(
+                    connection.execute(
+                        """
+                        SELECT COUNT(*) FROM runs
+                        WHERE workspace_id = ? AND status IN (?, ?, ?)
+                        """,
+                        (workspace_id, *_ACTIVE_STATUSES),
+                    ).fetchone()[0]
+                )
+                return WorkspaceUsage(
+                    conversation_count,
+                    schedule_count,
+                    active_run_count,
+                )
+            except (sqlite3.Error, TypeError, ValueError) as error:
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
             finally:
                 connection.close()
 
@@ -1776,6 +2024,9 @@ class SqliteConversationRepository:
                     if "occurrence_id" not in run_columns:
                         connection.execute("ALTER TABLE runs ADD COLUMN occurrence_id TEXT")
                     connection.executescript(_MIGRATE_V10_TO_V11_SQL)
+                    version = 11
+                if version == 11:
+                    _migrate_v11_to_v12(connection)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1893,6 +2144,8 @@ class SqliteConversationRepository:
             updated_at=SqliteConversationRepository._parse_timestamp(
                 row["updated_at"]
             ),
+            workspace_id=row["workspace_id"],
+            revision=int(row["revision"]),
         )
 
     @staticmethod
@@ -1979,6 +2232,10 @@ class SqliteConversationRepository:
             completion_reason=completion_reason,
             source=row["source"],
             occurrence_id=row["occurrence_id"],
+            workspace_id=row["workspace_id"],
+            workspace_revision=int(row["workspace_revision"]),
+            workspace_name_snapshot=row["workspace_name_snapshot"],
+            workspace_root_hash=row["workspace_root_hash"],
         )
 
     @staticmethod
@@ -2048,12 +2305,13 @@ class SqliteConversationRepository:
     @staticmethod
     def _request_fingerprint(
         conversation_id: str | None,
+        workspace_id: str,
         message: str,
         source: RunSource = "user",
         occurrence_id: str | None = None,
     ) -> str:
         canonical = json.dumps(
-            {"conversationId": conversation_id, "message": message, "source": source, "occurrenceId": occurrence_id},
+            {"conversationId": conversation_id, "workspaceId": workspace_id, "message": message, "source": source, "occurrenceId": occurrence_id},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,

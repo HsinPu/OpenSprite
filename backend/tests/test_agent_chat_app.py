@@ -21,6 +21,7 @@ from opensprite_backend.conversations.models import (
     RunStatus,
     StartRunResult,
 )
+from opensprite_backend.workspaces import UNASSIGNED_WORKSPACE_ID
 
 
 NOW = datetime(2026, 8, 21, 8, 30, tzinfo=UTC)
@@ -55,7 +56,7 @@ def run_snapshot(status: RunStatus = RunStatus.QUEUED) -> RunSnapshot:
 
 class RecordingChat:
     def __init__(self) -> None:
-        self.start_args: tuple[str | None, str, str] | None = None
+        self.start_args: tuple[str | None, str, str, str] | None = None
         self.cancelled: str | None = None
         self.after_sequence: int | None = None
         self.failure: ChatErrorCode | None = None
@@ -64,8 +65,11 @@ class RecordingChat:
         if self.failure is not None:
             raise AgentChatError(self.failure)
 
-    async def list_conversations(self, *, limit: int, before: str | None):
+    async def list_conversations(
+        self, *, workspace_id: str, limit: int, before: str | None
+    ):
         self.fail_if_requested()
+        assert workspace_id == UNASSIGNED_WORKSPACE_ID
         assert limit == 50
         assert before is None
         return ConversationPage(
@@ -80,6 +84,29 @@ class RecordingChat:
             ),
             next_cursor=None,
         )
+
+    async def get_conversation(self, conversation_id: str):
+        self.fail_if_requested()
+        assert conversation_id == CONVERSATION_ID
+        return ConversationSummary(
+            id=CONVERSATION_ID,
+            title="整理今天的工作",
+            latest_message_preview="done",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+
+    async def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ):
+        item = await self.get_conversation(conversation_id)
+        assert workspace_id == UNASSIGNED_WORKSPACE_ID
+        assert expected_revision == 1
+        return item
 
     async def list_messages(
         self,
@@ -111,11 +138,12 @@ class RecordingChat:
         self,
         *,
         conversation_id: str | None,
+        workspace_id: str,
         client_request_id: str,
         message: str,
     ):
         self.fail_if_requested()
-        self.start_args = (conversation_id, client_request_id, message)
+        self.start_args = (conversation_id, workspace_id, client_request_id, message)
         return StartRunResult(
             conversation=ConversationSummary(
                 id=CONVERSATION_ID,
@@ -165,14 +193,25 @@ def client(chat: RecordingChat) -> TestClient:
 def test_conversation_and_run_json_shapes_match_contract() -> None:
     chat = RecordingChat()
     with client(chat) as browser:
-        conversations = browser.get("/api/conversations")
+        conversations = browser.get(
+            f"/api/conversations?workspaceId={UNASSIGNED_WORKSPACE_ID}"
+        )
         messages = browser.get(
             f"/api/conversations/{CONVERSATION_ID}/messages"
+        )
+        conversation = browser.get(f"/api/conversations/{CONVERSATION_ID}")
+        moved = browser.put(
+            f"/api/conversations/{CONVERSATION_ID}/workspace",
+            json={
+                "workspaceId": UNASSIGNED_WORKSPACE_ID,
+                "expectedRevision": 1,
+            },
         )
         started = browser.post(
             "/api/runs",
             json={
                 "conversationId": None,
+                "workspaceId": UNASSIGNED_WORKSPACE_ID,
                 "clientRequestId": "ba66c043-6229-469c-84b1-36f617cfc328",
                 "message": "hello",
             },
@@ -184,6 +223,8 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
         "conversations": [
             {
                 "id": CONVERSATION_ID,
+                "workspaceId": UNASSIGNED_WORKSPACE_ID,
+                "revision": 1,
                 "title": "整理今天的工作",
                 "latestMessagePreview": "done",
                 "createdAt": "2026-08-21T08:30:00Z",
@@ -193,6 +234,8 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
         "nextCursor": None,
     }
     assert messages.status_code == 200
+    assert conversation.status_code == 200
+    assert moved.status_code == 200
     assert messages.json()["messages"][0] == {
         "id": USER_MESSAGE_ID,
         "conversationId": CONVERSATION_ID,
@@ -205,11 +248,13 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
     assert started.status_code == 202
     assert started.json() == {
         "conversationId": CONVERSATION_ID,
+        "workspaceId": UNASSIGNED_WORKSPACE_ID,
         "runId": RUN_ID,
         "status": "queued",
     }
     assert chat.start_args == (
         None,
+        UNASSIGNED_WORKSPACE_ID,
         "ba66c043-6229-469c-84b1-36f617cfc328",
         "hello",
     )
@@ -218,6 +263,10 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
     assert run.json()["completionReason"] == "stop"
     assert run.json()["providerId"] == "openrouter"
     assert run.json()["responseMode"] == "default"
+    assert run.json()["workspaceId"] == UNASSIGNED_WORKSPACE_ID
+    assert run.json()["workspaceRevision"] == 1
+    assert run.json()["workspaceName"] == "Unassigned workspace"
+    assert run.json()["workspaceRootHash"] is None
 
 
 def test_cancel_is_bodyless_and_returns_terminal_or_cancelling_status() -> None:
@@ -284,6 +333,7 @@ def test_chat_mutations_require_existing_exact_same_origin_policy() -> None:
     app = create_app(agent_chat=chat, enforce_local_security=True)
     payload = {
         "conversationId": None,
+        "workspaceId": UNASSIGNED_WORKSPACE_ID,
         "clientRequestId": "ba66c043-6229-469c-84b1-36f617cfc328",
         "message": "hello",
     }
@@ -308,11 +358,13 @@ def test_generated_chat_schema_keeps_strict_request_and_sse_content_type() -> No
     assert start["additionalProperties"] is False
     assert start["required"] == [
         "conversationId",
+        "workspaceId",
         "clientRequestId",
         "message",
     ]
     assert set(start["properties"]) == {
         "conversationId",
+        "workspaceId",
         "clientRequestId",
         "message",
     }

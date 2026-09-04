@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
@@ -67,6 +68,14 @@ from .tools.receipts import FileToolReceiptWriter
 from .schedules.coordinator import ScheduleCoordinator
 from .schedules.service import ScheduleOperations, ScheduleService, UnavailableSchedules
 from .schedules.sqlite_repository import SqliteScheduleRepository
+from .workspaces import (
+    JsonWorkspaceStore,
+    UnavailableWorkspaces,
+    WorkspaceCatalogService,
+    WorkspaceMutationGate,
+    WorkspaceOperations,
+    WorkspaceRootPolicy,
+)
 
 
 class LocalProviderRuntime(Protocol):
@@ -86,6 +95,7 @@ class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     tool_approvals: ToolApprovalOperations
     agent_chat: AgentChatOperations
     schedules: ScheduleOperations
+    workspaces: WorkspaceOperations
 
     async def astart(self) -> None: ...
 
@@ -103,6 +113,7 @@ class _SystemRuntime:
         tool_settings: ToolSettingsOperations,
         mcp_connections: McpConnections,
         tool_approvals: ToolApprovalOperations,
+        workspaces: WorkspaceCatalogService,
         agent_chat: AgentChatService,
         schedules: ScheduleService,
         schedule_coordinator: ScheduleCoordinator,
@@ -115,6 +126,7 @@ class _SystemRuntime:
         self.tool_settings = tool_settings
         self.mcp_connections = mcp_connections
         self.tool_approvals = tool_approvals
+        self.workspaces = workspaces
         self.agent_chat = agent_chat
         self.schedules = schedules
         self._schedule_coordinator = schedule_coordinator
@@ -159,6 +171,17 @@ def create_system_runtime(
         paths.database_file,
         event_notifier=event_notifier,
     )
+    workspace_mutation_gate = WorkspaceMutationGate()
+    workspaces = WorkspaceCatalogService(
+        JsonWorkspaceStore(paths.workspace_settings_file),
+        WorkspaceRootPolicy(
+            data_root=paths.home,
+            user_home=paths.user_home,
+            install_root=Path(__file__).resolve().parents[3],
+        ),
+        usage_reader=repository,
+        mutation_gate=workspace_mutation_gate,
+    )
     tool_approvals = ToolApprovalManager(repository)
     tool_registry = create_production_tool_registry(
         tool_approvals,
@@ -191,6 +214,8 @@ def create_system_runtime(
         ai_settings,
         provider_runtime.connections,
         run_manager,
+        workspaces,
+        workspace_mutation_gate,
         event_notifier=event_notifier,
     )
     schedule_repository = SqliteScheduleRepository(paths.database_file)
@@ -207,6 +232,7 @@ def create_system_runtime(
         tool_settings,
         mcp_connections,
         tool_approvals,
+        workspaces,
         agent_chat,
         schedules,
         schedule_coordinator,
@@ -259,6 +285,7 @@ def create_system_app(
             app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
             app.state.schedules = UnavailableSchedules()
+            app.state.workspaces = UnavailableWorkspaces()
             runtime = factory()
             starter = getattr(runtime, "astart", None)
             if starter is not None:
@@ -292,6 +319,11 @@ def create_system_app(
                 "schedules",
                 UnavailableSchedules(),
             )
+            app.state.workspaces = getattr(
+                runtime,
+                "workspaces",
+                UnavailableWorkspaces(),
+            )
             yield
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
@@ -303,6 +335,7 @@ def create_system_app(
             app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
             app.state.schedules = UnavailableSchedules()
+            app.state.workspaces = UnavailableWorkspaces()
             try:
                 if runtime is not None:
                     await runtime.aclose()

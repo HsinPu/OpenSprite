@@ -176,6 +176,12 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/tool-approvals/{approval_id}", "get", "getToolApproval"),
         ("/api/tool-approvals/{approval_id}", "put", "putToolApprovalDecision"),
         ("/api/conversations", "get", "listConversations"),
+        ("/api/conversations/{conversation_id}", "get", "getConversation"),
+        (
+            "/api/conversations/{conversation_id}/workspace",
+            "put",
+            "moveConversationToWorkspace",
+        ),
         (
             "/api/conversations/{conversation_id}/messages",
             "get",

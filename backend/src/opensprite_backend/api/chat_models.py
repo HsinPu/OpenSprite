@@ -34,6 +34,7 @@ class StartRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     conversationId: UUID | None
+    workspaceId: UUID
     clientRequestId: UUID
     message: str = Field(min_length=1, max_length=32768)
 
@@ -47,12 +48,15 @@ class StartRunRequest(BaseModel):
 
 class StartRunResponse(ChatContractModel):
     conversation_id: UUID
+    workspace_id: UUID
     run_id: UUID
     status: Literal["queued"] = "queued"
 
 
 class ConversationResponse(ChatContractModel):
     id: UUID
+    workspace_id: UUID
+    revision: int = Field(ge=1)
     title: str
     latest_message_preview: str | None
     created_at: datetime
@@ -88,6 +92,10 @@ class RunErrorResponse(ChatContractModel):
 class RunResponse(ChatContractModel):
     id: UUID
     conversation_id: UUID
+    workspace_id: UUID
+    workspace_revision: int = Field(ge=1)
+    workspace_name: str
+    workspace_root_hash: str | None
     user_message_id: UUID
     assistant_message_id: UUID | None
     provider_id: Literal["openai", "anthropic", "openrouter"]
@@ -113,6 +121,13 @@ class RunResponse(ChatContractModel):
 class CancelRunResponse(ChatContractModel):
     run_id: UUID
     status: Literal["cancelling", "cancelled"]
+
+
+class MoveConversationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspaceId: UUID
+    expectedRevision: int = Field(ge=1)
 
 
 class ChatErrorDetail(ChatContractModel):
@@ -146,6 +161,11 @@ _ERRORS: dict[ChatErrorCode, tuple[int, str, bool]] = {
     ChatErrorCode.SCHEDULED_TOOL_APPROVAL_REQUIRED: (409, "排程無法執行需要人工核准的工具。", False),
     ChatErrorCode.INVALID_PROVIDER_RESPONSE: (502, "模型廠家的回應無法安全使用。", False),
     ChatErrorCode.INTERNAL_ERROR: (500, "本機服務暫時無法完成操作。", True),
+    ChatErrorCode.WORKSPACE_NOT_FOUND: (404, "找不到指定的工作區。", False),
+    ChatErrorCode.WORKSPACE_MISMATCH: (409, "對話不屬於指定的工作區。", True),
+    ChatErrorCode.WORKSPACE_STORE_UNAVAILABLE: (503, "工作區設定暫時無法使用。", True),
+    ChatErrorCode.REVISION_CONFLICT: (409, "對話已在其他頁面更新。", True),
+    ChatErrorCode.WORKSPACE_MANAGED_BY_SCHEDULE: (409, "這個對話的工作區由排程管理。", False),
 }
 
 
@@ -164,6 +184,8 @@ def chat_error_response(code: ChatErrorCode) -> JSONResponse:
 def conversation_response(item: ConversationSummary) -> ConversationResponse:
     return ConversationResponse(
         id=item.id,
+        workspaceId=item.workspace_id,
+        revision=item.revision,
         title=item.title,
         latestMessagePreview=item.latest_message_preview,
         createdAt=item.created_at,
@@ -210,6 +232,10 @@ def run_response(item: RunSnapshot) -> RunResponse:
     return RunResponse(
         id=item.id,
         conversationId=item.conversation_id,
+        workspaceId=item.workspace_id,
+        workspaceRevision=item.workspace_revision,
+        workspaceName=item.workspace_name_snapshot,
+        workspaceRootHash=item.workspace_root_hash,
         userMessageId=item.user_message_id,
         assistantMessageId=item.assistant_message_id,
         providerId=item.provider_id,

@@ -74,6 +74,18 @@ class WorkspaceCatalog:
     workspaces: tuple[WorkspaceSummary, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceExecutionContext:
+    id: str
+    kind: WorkspaceKind
+    name: str
+    root_path: str | None
+    revision: int
+    root_hash: str | None
+    availability: WorkspaceAvailability
+    unavailable_reason: WorkspaceUnavailableReason | None
+
+
 def unassigned_workspace(usage: WorkspaceUsage | None = None) -> WorkspaceSummary:
     epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
     return WorkspaceSummary(

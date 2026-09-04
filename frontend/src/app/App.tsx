@@ -4,6 +4,7 @@ import { Button } from "antd";
 
 import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
+import { UNASSIGNED_WORKSPACE_ID } from "../api/agentChat";
 import { useConversations } from "../features/chat/useConversations";
 import { modelLabel } from "../features/ai-settings/modelCatalog";
 import { useAiSettings } from "../features/ai-settings/useAiSettings";
@@ -66,7 +67,7 @@ export function App() {
     loadingMore: conversationsLoadingMore,
     loadMore: loadMoreConversations,
     recordAcceptedConversation,
-  } = useConversations();
+  } = useConversations(UNASSIGNED_WORKSPACE_ID);
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavigation, setMobileNavigation] = useState(
@@ -397,6 +398,7 @@ export function App() {
         <ChatWorkspace
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
+          workspaceId={UNASSIGNED_WORKSPACE_ID}
           title={chatTitle}
           modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })), t)}
           modelSelection={modelSelection}

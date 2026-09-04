@@ -7,6 +7,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
+from opensprite_backend.workspaces.models import (
+    UNASSIGNED_WORKSPACE_ID,
+    UNASSIGNED_WORKSPACE_NAME,
+)
+
 
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
@@ -59,6 +64,9 @@ class StoreFailure(str, Enum):
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     INVALID_STATE = "invalid_state"
     DATABASE_UNAVAILABLE = "database_unavailable"
+    REVISION_CONFLICT = "revision_conflict"
+    WORKSPACE_MISMATCH = "workspace_mismatch"
+    WORKSPACE_MANAGED_BY_SCHEDULE = "workspace_managed_by_schedule"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +83,8 @@ class ConversationSummary:
     latest_message_preview: str | None
     created_at: datetime
     updated_at: datetime
+    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    revision: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +132,10 @@ class RunSnapshot:
     completion_reason: CompletionReason | None = None
     source: RunSource = "user"
     occurrence_id: str | None = None
+    workspace_id: str = UNASSIGNED_WORKSPACE_ID
+    workspace_revision: int = 1
+    workspace_name_snapshot: str = UNASSIGNED_WORKSPACE_NAME
+    workspace_root_hash: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

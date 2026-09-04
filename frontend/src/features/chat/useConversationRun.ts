@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AgentChatApiError,
+  UNASSIGNED_WORKSPACE_ID,
   agentChatErrorText,
   cancelRun,
   getRun,
@@ -27,6 +28,7 @@ export type DisplayMessage = Pick<ChatMessage, "id" | "role" | "content" | "crea
 
 type UseConversationRunOptions = {
   conversationId: string | null;
+  workspaceId?: string;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
   responseDelivery: ResponseDelivery;
@@ -86,6 +88,7 @@ function defaultRequestId(): string {
 
 export function useConversationRun({
   conversationId,
+  workspaceId = UNASSIGNED_WORKSPACE_ID,
   onConversationAccepted,
   onConversationUpdated,
   responseDelivery,
@@ -332,6 +335,7 @@ export function useConversationRun({
     try {
       const accepted = await startRun({
         conversationId: resolvedConversationRef.current,
+        workspaceId,
         clientRequestId,
         message,
       });
@@ -356,7 +360,7 @@ export function useConversationRun({
       }
       return false;
     }
-  }, [commitRun, onConversationAccepted, requestIdFactory, t, watchRun]);
+  }, [commitRun, onConversationAccepted, requestIdFactory, t, watchRun, workspaceId]);
 
   const cancel = useCallback(async (): Promise<void> => {
     const run = activeRunRef.current;

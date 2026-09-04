@@ -11,6 +11,7 @@ from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.ai_settings import AiSettingsOperations, SettingsStoreError
 from opensprite_backend.conversations.models import (
     ConversationPage,
+    ConversationSummary,
     MessagePage,
     RunEvent,
     RunSnapshot,
@@ -29,6 +30,13 @@ from opensprite_backend.provider_connections import (
     ProviderConnections,
 )
 from opensprite_backend.schedules.models import ExecutionProfile
+from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
+    WorkspaceError,
+    WorkspaceFailure,
+    WorkspaceMutationGate,
+    WorkspaceResolver,
+)
 
 
 class ChatErrorCode(StrEnum):
@@ -52,6 +60,11 @@ class ChatErrorCode(StrEnum):
     SCHEDULED_TOOL_APPROVAL_REQUIRED = "scheduled_tool_approval_required"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INTERNAL_ERROR = "internal_error"
+    WORKSPACE_NOT_FOUND = "workspace_not_found"
+    WORKSPACE_MISMATCH = "workspace_mismatch"
+    WORKSPACE_STORE_UNAVAILABLE = "workspace_store_unavailable"
+    REVISION_CONFLICT = "revision_conflict"
+    WORKSPACE_MANAGED_BY_SCHEDULE = "workspace_managed_by_schedule"
 
 
 class AgentChatError(Exception):
@@ -66,9 +79,20 @@ class AgentChatOperations(Protocol):
     async def list_conversations(
         self,
         *,
+        workspace_id: str,
         limit: int,
         before: str | None,
     ) -> ConversationPage: ...
+
+    async def get_conversation(self, conversation_id: str) -> ConversationSummary: ...
+
+    async def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ) -> ConversationSummary: ...
 
     async def list_messages(
         self,
@@ -82,6 +106,7 @@ class AgentChatOperations(Protocol):
         self,
         *,
         conversation_id: str | None,
+        workspace_id: str,
         client_request_id: str,
         message: str,
     ) -> StartRunResult: ...
@@ -103,8 +128,24 @@ class UnavailableAgentChat:
     def _unavailable() -> AgentChatError:
         return AgentChatError(ChatErrorCode.DATABASE_UNAVAILABLE)
 
-    async def list_conversations(self, *, limit: int, before: str | None):
-        del limit, before
+    async def list_conversations(
+        self, *, workspace_id: str, limit: int, before: str | None
+    ):
+        del workspace_id, limit, before
+        raise self._unavailable()
+
+    async def get_conversation(self, conversation_id: str) -> ConversationSummary:
+        del conversation_id
+        raise self._unavailable()
+
+    async def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ) -> ConversationSummary:
+        del conversation_id, workspace_id, expected_revision
         raise self._unavailable()
 
     async def list_messages(
@@ -121,10 +162,11 @@ class UnavailableAgentChat:
         self,
         *,
         conversation_id: str | None,
+        workspace_id: str,
         client_request_id: str,
         message: str,
     ):
-        del conversation_id, client_request_id, message
+        del conversation_id, workspace_id, client_request_id, message
         raise self._unavailable()
 
     async def get_run(self, run_id: str):
@@ -156,6 +198,8 @@ class AgentChatService:
         ai_settings: AiSettingsOperations,
         provider_connections: ProviderConnections,
         run_manager: RunManager,
+        workspaces: WorkspaceResolver,
+        workspace_mutation_gate: WorkspaceMutationGate,
         *,
         event_notifier: RunEventNotifier | None = None,
         event_poll_seconds: float = 0.05,
@@ -169,6 +213,8 @@ class AgentChatService:
         self._ai_settings = ai_settings
         self._provider_connections = provider_connections
         self._run_manager = run_manager
+        self._workspaces = workspaces
+        self._workspace_mutation_gate = workspace_mutation_gate
         self._event_poll_seconds = event_poll_seconds
         self._event_wait_seconds = event_wait_seconds
         self._event_notifier = event_notifier
@@ -190,17 +236,55 @@ class AgentChatService:
     async def list_conversations(
         self,
         *,
+        workspace_id: str,
         limit: int,
         before: str | None,
     ) -> ConversationPage:
         try:
+            self._workspaces.execution_context(workspace_id)
             return await asyncio.to_thread(
                 self._repository.list_conversations,
+                workspace_id=workspace_id,
                 limit=limit,
                 before=before,
             )
+        except WorkspaceError as error:
+            raise _workspace_error(error) from error
         except ConversationStoreError as error:
             raise _store_error(error) from error
+
+    async def get_conversation(self, conversation_id: str):
+        try:
+            item = await asyncio.to_thread(
+                self._repository.get_conversation,
+                conversation_id,
+            )
+        except ConversationStoreError as error:
+            raise _store_error(error) from error
+        if item is None:
+            raise AgentChatError(ChatErrorCode.NOT_FOUND)
+        return item
+
+    async def move_conversation(
+        self,
+        conversation_id: str,
+        *,
+        workspace_id: str,
+        expected_revision: int,
+    ):
+        async with self._workspace_mutation_gate.hold():
+            try:
+                self._workspaces.execution_context(workspace_id)
+                return await asyncio.to_thread(
+                    self._repository.move_conversation,
+                    conversation_id,
+                    workspace_id=workspace_id,
+                    expected_revision=expected_revision,
+                )
+            except WorkspaceError as error:
+                raise _workspace_error(error) from error
+            except ConversationStoreError as error:
+                raise _store_error(error) from error
 
     async def list_messages(
         self,
@@ -231,6 +315,7 @@ class AgentChatService:
         self,
         *,
         conversation_id: str | None,
+        workspace_id: str,
         client_request_id: str,
         message: str,
     ) -> StartRunResult:
@@ -250,6 +335,7 @@ class AgentChatService:
         )
         return await self._start_configured_run(
             conversation_id=conversation_id,
+            workspace_id=workspace_id,
             client_request_id=client_request_id,
             message=message,
             profile=profile,
@@ -265,9 +351,11 @@ class AgentChatService:
         occurrence_id: str,
         message: str,
         profile: ExecutionProfile,
+        workspace_id: str = UNASSIGNED_WORKSPACE_ID,
     ) -> StartRunResult:
         return await self._start_configured_run(
             conversation_id=conversation_id,
+            workspace_id=workspace_id,
             client_request_id=occurrence_id,
             message=message,
             profile=profile,
@@ -283,6 +371,7 @@ class AgentChatService:
         self,
         *,
         conversation_id: str | None,
+        workspace_id: str,
         client_request_id: str,
         message: str,
         profile: ExecutionProfile,
@@ -309,24 +398,32 @@ class AgentChatService:
         )
         if selected is None or not selected.connected:
             raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
-        try:
-            accepted = await asyncio.to_thread(
-                self._repository.start_run,
-                conversation_id=conversation_id,
-                client_request_id=client_request_id,
-                message=message,
-                provider_id=profile.provider_id,
-                model_id=profile.model_id,
-                response_mode=profile.response_mode,
-                context_budget=profile.context_budget,
-                output_budget=profile.output_budget,
-                output_continuation=profile.output_continuation,
-                log_full_prompts=log_full_prompts,
-                source=source,
-                occurrence_id=occurrence_id,
-            )
-        except ConversationStoreError as error:
-            raise _store_error(error) from error
+        async with self._workspace_mutation_gate.hold():
+            try:
+                workspace = self._workspaces.execution_context(workspace_id)
+                accepted = await asyncio.to_thread(
+                    self._repository.start_run,
+                    conversation_id=conversation_id,
+                    client_request_id=client_request_id,
+                    message=message,
+                    provider_id=profile.provider_id,
+                    model_id=profile.model_id,
+                    response_mode=profile.response_mode,
+                    context_budget=profile.context_budget,
+                    output_budget=profile.output_budget,
+                    output_continuation=profile.output_continuation,
+                    log_full_prompts=log_full_prompts,
+                    source=source,
+                    occurrence_id=occurrence_id,
+                    workspace_id=workspace.id,
+                    workspace_revision=workspace.revision,
+                    workspace_name_snapshot=workspace.name,
+                    workspace_root_hash=workspace.root_hash,
+                )
+            except WorkspaceError as error:
+                raise _workspace_error(error) from error
+            except ConversationStoreError as error:
+                raise _store_error(error) from error
         if accepted.run.status is RunStatus.QUEUED:
             await self._run_manager.start(accepted.run.id)
         return accepted
@@ -395,5 +492,24 @@ def _store_error(error: ConversationStoreError) -> AgentChatError:
         StoreFailure.RUN_NOT_ACTIVE: ChatErrorCode.RUN_NOT_ACTIVE,
         StoreFailure.INVALID_STATE: ChatErrorCode.RUN_NOT_ACTIVE,
         StoreFailure.DATABASE_UNAVAILABLE: ChatErrorCode.DATABASE_UNAVAILABLE,
+        StoreFailure.REVISION_CONFLICT: ChatErrorCode.REVISION_CONFLICT,
+        StoreFailure.WORKSPACE_MISMATCH: ChatErrorCode.WORKSPACE_MISMATCH,
+        StoreFailure.WORKSPACE_MANAGED_BY_SCHEDULE: ChatErrorCode.WORKSPACE_MANAGED_BY_SCHEDULE,
+    }[error.failure]
+    return AgentChatError(code)
+
+
+def _workspace_error(error: WorkspaceError) -> AgentChatError:
+    code = {
+        WorkspaceFailure.NOT_FOUND: ChatErrorCode.WORKSPACE_NOT_FOUND,
+        WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE: ChatErrorCode.WORKSPACE_STORE_UNAVAILABLE,
+        WorkspaceFailure.WORKSPACE_BUSY: ChatErrorCode.RUN_BUSY,
+        WorkspaceFailure.REVISION_CONFLICT: ChatErrorCode.REVISION_CONFLICT,
+        WorkspaceFailure.INVALID_REQUEST: ChatErrorCode.INVALID_REQUEST,
+        WorkspaceFailure.UNSAFE_ROOT: ChatErrorCode.INVALID_REQUEST,
+        WorkspaceFailure.DUPLICATE_NAME: ChatErrorCode.INVALID_REQUEST,
+        WorkspaceFailure.DUPLICATE_ROOT: ChatErrorCode.INVALID_REQUEST,
+        WorkspaceFailure.WORKSPACE_NOT_EMPTY: ChatErrorCode.INVALID_REQUEST,
+        WorkspaceFailure.INTERNAL_ERROR: ChatErrorCode.INTERNAL_ERROR,
     }[error.failure]
     return AgentChatError(code)

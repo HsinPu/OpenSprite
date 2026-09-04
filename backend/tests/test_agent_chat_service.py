@@ -45,6 +45,13 @@ from opensprite_backend.models import (
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.schedules.models import ExecutionProfile
+from opensprite_backend.workspaces import (
+    UNASSIGNED_WORKSPACE_ID,
+    JsonWorkspaceStore,
+    WorkspaceCatalogService,
+    WorkspaceMutationGate,
+    WorkspaceRootPolicy,
+)
 
 
 def async_test(function):
@@ -136,9 +143,21 @@ def service(
     with_notifier: bool = False,
 ):
     event_notifier = RunEventNotifier() if with_notifier else None
+    paths = build_app_paths(tmp_path / ".opensprite")
     repository = SqliteConversationRepository(
-        build_app_paths(tmp_path / ".opensprite").database_file,
+        paths.database_file,
         event_notifier=event_notifier,
+    )
+    gate = WorkspaceMutationGate()
+    workspaces = WorkspaceCatalogService(
+        JsonWorkspaceStore(paths.workspace_settings_file),
+        WorkspaceRootPolicy(
+            data_root=paths.home,
+            user_home=tmp_path / "home",
+            install_root=tmp_path / "installed-app",
+        ),
+        usage_reader=repository,
+        mutation_gate=gate,
     )
     settings = AiSettings(
         model=(
@@ -165,20 +184,23 @@ def service(
         FixedSettings(settings),
         FixedConnections({"openrouter"} if connected else set()),
         manager,
+        workspaces,
+        gate,
         event_notifier=event_notifier,
         event_poll_seconds=0.001,
     )
-    return chat, repository, manager
+    return chat, repository, manager, workspaces
 
 
 @async_test
 async def test_start_run_persists_then_executes_and_lists_real_data(
     tmp_path: Path,
 ) -> None:
-    chat, repository, manager = service(tmp_path)
+    chat, repository, manager, _workspaces = service(tmp_path)
 
     accepted = await chat.start_run(
         conversation_id=None,
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
         message="整理今天的工作",
     )
@@ -187,7 +209,11 @@ async def test_start_run_persists_then_executes_and_lists_real_data(
     assert completed is not None
     assert completed.status is RunStatus.COMPLETED
     assert completed.output_budget == "auto"
-    conversations = await chat.list_conversations(limit=50, before=None)
+    conversations = await chat.list_conversations(
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        limit=50,
+        before=None,
+    )
     assert [item.id for item in conversations.items] == [accepted.conversation.id]
     messages = await chat.list_messages(
         accepted.conversation.id,
@@ -206,16 +232,18 @@ async def test_start_run_persists_then_executes_and_lists_real_data(
 async def test_start_is_idempotent_and_does_not_duplicate_execution(
     tmp_path: Path,
 ) -> None:
-    chat, _repository, manager = service(tmp_path)
+    chat, _repository, manager, _workspaces = service(tmp_path)
     request_id = "e898796c-71e9-4eb5-aac1-7a6e9430a429"
 
     first = await chat.start_run(
         conversation_id=None,
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
         client_request_id=request_id,
         message="hello",
     )
     replay = await chat.start_run(
         conversation_id=None,
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
         client_request_id=request_id,
         message="hello",
     )
@@ -240,7 +268,7 @@ def test_start_requires_selected_connected_provider(
     code: ChatErrorCode,
 ) -> None:
     async def scenario() -> None:
-        chat, _repository, _manager = service(
+        chat, _repository, _manager, _workspaces = service(
             tmp_path,
             model=model,
             connected=connected,
@@ -248,6 +276,7 @@ def test_start_requires_selected_connected_provider(
         with pytest.raises(AgentChatError) as captured:
             await chat.start_run(
                 conversation_id=None,
+                workspace_id=UNASSIGNED_WORKSPACE_ID,
                 client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
                 message="hello",
             )
@@ -261,9 +290,10 @@ def test_start_requires_selected_connected_provider(
 async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
     tmp_path: Path,
 ) -> None:
-    chat, _repository, manager = service(tmp_path)
+    chat, _repository, manager, _workspaces = service(tmp_path)
     accepted = await chat.start_run(
         conversation_id=None,
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
         message="hello",
     )
@@ -283,10 +313,60 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
 
 
 @async_test
+async def test_custom_workspace_is_resolved_persisted_and_movable(
+    tmp_path: Path,
+) -> None:
+    chat, repository, manager, workspaces = service(tmp_path)
+    root = tmp_path / "project"
+    root.mkdir()
+    catalog = await workspaces.create(
+        name="Alpha",
+        root_path=str(root),
+        expected_revision=0,
+    )
+    workspace = next(
+        item for item in catalog.workspaces if item.id == catalog.active_workspace_id
+    )
+
+    accepted = await chat.start_run(
+        conversation_id=None,
+        workspace_id=workspace.id,
+        client_request_id="3ac641eb-03a5-4d9d-a50e-d2b0e2802ed1",
+        message="workspace message",
+    )
+    await manager.wait(accepted.run.id)
+
+    assert accepted.conversation.workspace_id == workspace.id
+    assert accepted.run.workspace_id == workspace.id
+    assert accepted.run.workspace_revision == workspace.revision
+    assert accepted.run.workspace_name_snapshot == "Alpha"
+    assert accepted.run.workspace_root_hash is not None
+    assert str(root).encode("utf-8") not in repository.database_file.read_bytes()
+    page = await chat.list_conversations(
+        workspace_id=workspace.id,
+        limit=50,
+        before=None,
+    )
+    assert [item.id for item in page.items] == [accepted.conversation.id]
+
+    moved = await chat.move_conversation(
+        accepted.conversation.id,
+        workspace_id=UNASSIGNED_WORKSPACE_ID,
+        expected_revision=accepted.conversation.revision,
+    )
+    assert moved.workspace_id == UNASSIGNED_WORKSPACE_ID
+    assert moved.revision == 2
+    persisted_run = repository.get_run(accepted.run.id)
+    assert persisted_run is not None
+    assert persisted_run.workspace_id == workspace.id
+    await chat.close()
+
+
+@async_test
 async def test_scheduled_start_uses_fixed_profile_and_disables_prompt_log(
     tmp_path: Path,
 ) -> None:
-    chat, repository, manager = service(tmp_path)
+    chat, repository, manager, _workspaces = service(tmp_path)
     occurrence_id = "e898796c-71e9-4eb5-aac1-7a6e9430a430"
     profile = ExecutionProfile(
         "openrouter",
@@ -322,7 +402,7 @@ async def test_scheduled_start_uses_fixed_profile_and_disables_prompt_log(
 async def test_event_stream_waits_for_persisted_event_notification(
     tmp_path: Path,
 ) -> None:
-    chat, repository, _manager = service(tmp_path, with_notifier=True)
+    chat, repository, _manager, _workspaces = service(tmp_path, with_notifier=True)
     accepted = repository.start_run(
         conversation_id=None,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
@@ -357,7 +437,7 @@ async def test_event_stream_waits_for_persisted_event_notification(
 async def test_startup_interrupts_existing_non_terminal_runs(
     tmp_path: Path,
 ) -> None:
-    chat, repository, _manager = service(tmp_path)
+    chat, repository, _manager, _workspaces = service(tmp_path)
     queued = repository.start_run(
         conversation_id=None,
         client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",

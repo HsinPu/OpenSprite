@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from enum import StrEnum
+import hashlib
 import asyncio
 import unicodedata
 from typing import AsyncIterator, Callable, Protocol
@@ -16,6 +17,7 @@ from .models import (
     WorkspaceAvailability,
     WorkspaceCatalog,
     WorkspaceCatalogState,
+    WorkspaceExecutionContext,
     WorkspaceKind,
     WorkspaceRecord,
     WorkspaceSummary,
@@ -64,6 +66,10 @@ class WorkspaceOperations(Protocol):
     async def set_active(self, workspace_id: str, *, expected_revision: int) -> WorkspaceCatalog: ...
 
 
+class WorkspaceResolver(Protocol):
+    def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext: ...
+
+
 class WorkspaceMutationGate:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -84,6 +90,10 @@ class UnavailableWorkspaces:
     async def update(self, workspace_id: str, **kwargs): del workspace_id, kwargs; return await self._raise()
     async def delete(self, workspace_id: str, **kwargs): del workspace_id, kwargs; await self._raise()
     async def set_active(self, workspace_id: str, **kwargs): del workspace_id, kwargs; return await self._raise()
+
+    def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
+        del workspace_id
+        raise WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE)
 
 
 class WorkspaceCatalogService:
@@ -111,7 +121,7 @@ class WorkspaceCatalogService:
     async def get(self, workspace_id: str) -> WorkspaceSummary:
         state = self._state()
         if workspace_id == UNASSIGNED_WORKSPACE_ID:
-            return unassigned_workspace(self._usage.workspace_usage(workspace_id))
+            return unassigned_workspace(self._usage_for(workspace_id))
         record = self._find(state, workspace_id)
         return self._summary(record)
 
@@ -163,7 +173,7 @@ class WorkspaceCatalogService:
                 self._root_policy.comparison_key(current.root_path)
                 != self._root_policy.comparison_key(canonical_root)
             )
-            if root_changed and self._usage.workspace_usage(workspace_id).active_run_count:
+            if root_changed and self._usage_for(workspace_id).active_run_count:
                 raise WorkspaceError(WorkspaceFailure.WORKSPACE_BUSY)
             self._require_unique(
                 state, normalized_name, canonical_root, excluding=workspace_id
@@ -194,7 +204,7 @@ class WorkspaceCatalogService:
             current = self._find(state, workspace_id)
             if current.revision != expected_revision:
                 raise WorkspaceError(WorkspaceFailure.REVISION_CONFLICT)
-            usage = self._usage.workspace_usage(workspace_id)
+            usage = self._usage_for(workspace_id)
             if usage.active_run_count:
                 raise WorkspaceError(WorkspaceFailure.WORKSPACE_BUSY)
             if usage.conversation_count or usage.schedule_count:
@@ -235,10 +245,35 @@ class WorkspaceCatalogService:
             return None
         return self._find(state, workspace_id)
 
+    def execution_context(self, workspace_id: str) -> WorkspaceExecutionContext:
+        if workspace_id == UNASSIGNED_WORKSPACE_ID:
+            return WorkspaceExecutionContext(
+                id=UNASSIGNED_WORKSPACE_ID,
+                kind=WorkspaceKind.UNASSIGNED,
+                name=unassigned_workspace().name,
+                root_path=None,
+                revision=1,
+                root_hash=None,
+                availability=WorkspaceAvailability.NOT_APPLICABLE,
+                unavailable_reason=None,
+            )
+        record = self._find(self._state(), workspace_id)
+        status = self._root_policy.inspect_saved_root(record.root_path)
+        return WorkspaceExecutionContext(
+            id=record.id,
+            kind=WorkspaceKind.DIRECTORY,
+            name=record.name,
+            root_path=record.root_path,
+            revision=record.revision,
+            root_hash=hashlib.sha256(record.root_path.encode("utf-8")).hexdigest(),
+            availability=status.availability,
+            unavailable_reason=status.unavailable_reason,
+        )
+
     def _catalog(self, state: WorkspaceCatalogState) -> WorkspaceCatalog:
         summaries = [
             unassigned_workspace(
-                self._usage.workspace_usage(UNASSIGNED_WORKSPACE_ID)
+                self._usage_for(UNASSIGNED_WORKSPACE_ID)
             )
         ]
         summaries.extend(self._summary(item) for item in state.workspaces)
@@ -256,8 +291,18 @@ class WorkspaceCatalogService:
             item.revision,
             item.created_at,
             item.updated_at,
-            self._usage.workspace_usage(item.id),
+            self._usage_for(item.id),
         )
+
+    def _usage_for(self, workspace_id: str) -> WorkspaceUsage:
+        try:
+            return self._usage.workspace_usage(workspace_id)
+        except WorkspaceError:
+            raise
+        except Exception:
+            raise WorkspaceError(
+                WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE
+            ) from None
 
     def _state(self) -> WorkspaceCatalogState:
         try:

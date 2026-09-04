@@ -3,7 +3,7 @@ import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
 import { createPortal } from "react-dom";
 
-import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
+import { AgentChatApiError, UNASSIGNED_WORKSPACE_ID, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import type { SendBehavior } from "../../api/conversationSettings";
@@ -24,6 +24,7 @@ import "./ChatWorkspace.css";
 
 type ChatWorkspaceProps = {
   conversationId: string | null;
+  workspaceId?: string;
   modelName: string;
   modelSelection: ModelSelection | null;
   modelChoices: ReadonlyArray<ModelChoice>;
@@ -69,6 +70,7 @@ const MemoizedMarkdownMessage = memo(MarkdownMessage);
 
 export function ChatWorkspace({
   conversationId,
+  workspaceId = UNASSIGNED_WORKSPACE_ID,
   modelName,
   modelSelection,
   modelChoices,
@@ -96,6 +98,7 @@ export function ChatWorkspace({
   const mobileExecutionTitleId = `${mobileExecutionId}-title`;
   const chat = useConversationRun({
     conversationId,
+    workspaceId,
     onConversationAccepted,
     onConversationUpdated,
     responseDelivery,

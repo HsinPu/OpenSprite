@@ -66,7 +66,7 @@ def test_schedule_crud_revision_pagination_and_occurrence_uniqueness(tmp_path: P
     assert store.get(second.id) is None
 
 
-def test_schema_v10_migrates_to_v11_without_losing_conversation_data(tmp_path: Path) -> None:
+def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_path: Path) -> None:
     database = tmp_path / "opensprite.db"
     conversations = SqliteConversationRepository(database)
     accepted = conversations.start_run(conversation_id=None, client_request_id=IDS[20], message="keep", provider_id="openrouter", model_id="openrouter/auto", response_mode="default")
@@ -82,4 +82,4 @@ def test_schema_v10_migrates_to_v11_without_losing_conversation_data(tmp_path: P
     assert created.name == "Morning brief"
     assert conversations.get_run(accepted.run.id) is not None
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 11
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 12

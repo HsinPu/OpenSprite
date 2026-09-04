@@ -14,6 +14,10 @@ function snapshot(id: string): RunSnapshot {
   return {
     id,
     conversationId,
+    workspaceId: "00000000-0000-4000-8000-000000000000",
+    workspaceRevision: 1,
+    workspaceName: "Unassigned workspace",
+    workspaceRootHash: null,
     userMessageId: "c01956dc-fdf0-435c-a3be-e7eb5fd65f22",
     assistantMessageId: "7e660e86-4838-4af5-99d5-ab926428b1c0",
     providerId: "openrouter",

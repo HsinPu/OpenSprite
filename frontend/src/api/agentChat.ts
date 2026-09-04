@@ -4,15 +4,19 @@ export type RunStatus = (typeof runStatuses)[number];
 export const completionReasons = ["stop", "output_limit", "context_limit"] as const;
 export type CompletionReason = (typeof completionReasons)[number];
 
+export const UNASSIGNED_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
+
 export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error"] as const;
+export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
 export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
 
 export type ConversationSummary = {
   id: string;
+  workspaceId: string;
+  revision: number;
   title: string;
   latestMessagePreview: string | null;
   createdAt: string;
@@ -48,6 +52,10 @@ export type RunError = {
 export type RunSnapshot = {
   id: string;
   conversationId: string;
+  workspaceId: string;
+  workspaceRevision: number;
+  workspaceName: string;
+  workspaceRootHash: string | null;
   userMessageId: string;
   assistantMessageId: string | null;
   providerId: "openai" | "anthropic" | "openrouter";
@@ -81,12 +89,14 @@ export type ContextUsage = {
 
 export type StartRunInput = {
   conversationId: string | null;
+  workspaceId: string;
   clientRequestId: string;
   message: string;
 };
 
 export type StartRunResult = {
   conversationId: string;
+  workspaceId: string;
   runId: string;
   status: "queued";
 };
@@ -132,7 +142,7 @@ function boundedString(value: unknown, minimum: number, maximum: number): value 
 }
 
 function conversation(value: unknown): ConversationSummary {
-  if (!record(value) || !exactKeys(value, ["id", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
+  if (!record(value) || !exactKeys(value, ["id", "workspaceId", "revision", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
     throw new AgentChatApiError("malformed_response");
   }
   return value as ConversationSummary;
@@ -153,7 +163,7 @@ function runError(value: unknown): RunError {
 }
 
 function runSnapshot(value: unknown, expectedRunId?: string): RunSnapshot {
-  if (!record(value) || !exactKeys(value, ["id", "conversationId", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.workspaceRevision) || (value.workspaceRevision as number) < 1 || !boundedString(value.workspaceName, 1, 80) || (value.workspaceRootHash !== null && (typeof value.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceRootHash))) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
     throw new AgentChatApiError("malformed_response");
   }
   const parsedError = value.error === null ? null : runError(value.error);
@@ -191,11 +201,12 @@ async function jsonRequest(path: string, init: RequestInit | undefined, successS
   return body;
 }
 
-export async function listConversations(options: { limit?: number; before?: string } = {}): Promise<ConversationPage> {
+export async function listConversations(options: { workspaceId: string; limit?: number; before?: string }): Promise<ConversationPage> {
+  if (!isIdentifier(options.workspaceId)) throw new AgentChatApiError("malformed_response");
   const limit = options.limit ?? 50;
-  const query = new URLSearchParams({ limit: String(limit) });
+  const query = new URLSearchParams({ workspaceId: options.workspaceId, limit: String(limit) });
   if (options.before !== undefined) query.set("before", options.before);
-  const body = await jsonRequest(`/api/conversations?${query}`, undefined, 200, new Map([[400, ["invalid_request"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  const body = await jsonRequest(`/api/conversations?${query}`, undefined, 200, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [503, ["database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
   if (!record(body) || !exactKeys(body, ["conversations", "nextCursor"]) || !Array.isArray(body.conversations) || body.conversations.length > 100 || (body.nextCursor !== null && !boundedString(body.nextCursor, 1, 512))) throw new AgentChatApiError("malformed_response");
   return { conversations: body.conversations.map(conversation), nextCursor: body.nextCursor as string | null };
 }
@@ -211,10 +222,21 @@ export async function listConversationMessages(conversationId: string, options: 
   return { messages, nextBeforeSequence: body.nextBeforeSequence as number | null };
 }
 
+export async function getConversation(conversationId: string): Promise<ConversationSummary> {
+  if (!isIdentifier(conversationId)) throw new AgentChatApiError("malformed_response");
+  return conversation(await jsonRequest(`/api/conversations/${conversationId}`, undefined, 200, new Map([[404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]])));
+}
+
+export async function moveConversationToWorkspace(conversationId: string, workspaceId: string, expectedRevision: number): Promise<ConversationSummary> {
+  if (!isIdentifier(conversationId) || !isIdentifier(workspaceId) || !Number.isInteger(expectedRevision) || expectedRevision < 1) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest(`/api/conversations/${conversationId}/workspace`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, expectedRevision }) }, 200, new Map([[400, ["invalid_request"]], [404, ["not_found", "workspace_not_found"]], [409, ["run_busy", "revision_conflict", "workspace_managed_by_schedule"]], [503, ["database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
+  return conversation(body);
+}
+
 export async function startRun(input: StartRunInput): Promise<StartRunResult> {
-  if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
-  const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [409, ["run_busy", "model_not_selected", "provider_not_connected"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable"]], [500, ["internal_error"]]]));
-  if (!record(body) || !exactKeys(body, ["conversationId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
+  if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.workspaceId) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [409, ["run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["conversationId", "workspaceId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.workspaceId) || body.workspaceId !== input.workspaceId || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
   return body as StartRunResult;
 }
 
@@ -319,6 +341,11 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     scheduled_tool_approval_required: "error.chat.scheduledToolApprovalRequired",
     invalid_provider_response: "error.chat.invalidProviderResponse",
     internal_error: "error.chat.internal",
+    workspace_not_found: "error.chat.notFound",
+    workspace_mismatch: "error.chat.invalidRequest",
+    workspace_store_unavailable: "error.chat.database",
+    revision_conflict: "error.chat.runBusy",
+    workspace_managed_by_schedule: "error.chat.runBusy",
     malformed_response: "error.chat.malformed",
     network_error: "error.network",
   } satisfies Record<AgentChatErrorCode, MessageKey>;

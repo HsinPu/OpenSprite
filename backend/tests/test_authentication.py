@@ -235,6 +235,8 @@ def test_auth_mutations_still_require_same_origin(tmp_path: Path) -> None:
     ("GET", "/api/mcp/servers"),
     ("POST", "/api/local-paths/pick"),
     ("GET", "/api/conversations"),
+    ("GET", "/api/workspaces"),
+    ("POST", "/api/workspaces"),
     ("POST", "/api/runs"),
     ("GET", "/api/runs/00000000-0000-4000-8000-000000000000/events"),
     ("PUT", "/api/tool-approvals/00000000-0000-4000-8000-000000000000"),

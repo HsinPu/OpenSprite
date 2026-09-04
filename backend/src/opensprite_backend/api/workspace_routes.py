@@ -63,6 +63,7 @@ def workspace_error_response(failure: WorkspaceFailure) -> JSONResponse:
         WorkspaceFailure.WORKSPACE_BUSY: (409, "Workspace has an active run.", True),
         WorkspaceFailure.WORKSPACE_NOT_EMPTY: (409, "Workspace is not empty.", False),
         WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE: (503, "Workspace settings are unavailable.", True),
+        WorkspaceFailure.INTERNAL_ERROR: (500, "An internal error occurred.", False),
     }[failure]
     envelope = WorkspaceErrorEnvelope(
         error=WorkspaceErrorDetail(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Annotated, cast
 from uuid import UUID
@@ -15,11 +16,14 @@ from .chat_models import (
     CancelRunResponse,
     ChatErrorEnvelope,
     ConversationListResponse,
+    ConversationResponse,
     MessageListResponse,
+    MoveConversationRequest,
     RunResponse,
     StartRunRequest,
     StartRunResponse,
     conversation_list_response,
+    conversation_response,
     message_list_response,
     run_response,
 )
@@ -49,6 +53,25 @@ def _agent_chat(request: Request) -> AgentChatOperations:
     return cast(AgentChatOperations, request.app.state.agent_chat)
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate key")
+        result[key] = value
+    return result
+
+
+async def strict_json(request: Request) -> None:
+    try:
+        json.loads(
+            (await request.body()).decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        raise AgentChatError(ChatErrorCode.INVALID_REQUEST) from None
+
+
 @router.get(
     "/api/conversations",
     operation_id="listConversations",
@@ -56,12 +79,51 @@ def _agent_chat(request: Request) -> AgentChatOperations:
     responses=_errors(400, 500, 503),
 )
 async def list_conversations(
+    workspaceId: Annotated[UUID, Query()],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before: Annotated[str | None, Query(min_length=1, max_length=512)] = None,
     chat: AgentChatOperations = Depends(_agent_chat),
 ) -> ConversationListResponse:
-    page = await chat.list_conversations(limit=limit, before=before)
+    page = await chat.list_conversations(
+        workspace_id=str(workspaceId),
+        limit=limit,
+        before=before,
+    )
     return conversation_list_response(page)
+
+
+@router.get(
+    "/api/conversations/{conversation_id}",
+    operation_id="getConversation",
+    response_model=ConversationResponse,
+    responses=_errors(404, 500, 503),
+)
+async def get_conversation(
+    conversation_id: UUID,
+    chat: AgentChatOperations = Depends(_agent_chat),
+) -> ConversationResponse:
+    return conversation_response(await chat.get_conversation(str(conversation_id)))
+
+
+@router.put(
+    "/api/conversations/{conversation_id}/workspace",
+    operation_id="moveConversationToWorkspace",
+    response_model=ConversationResponse,
+    responses=_errors(400, 404, 409, 500, 503),
+    dependencies=[Depends(strict_json)],
+)
+async def move_conversation_to_workspace(
+    conversation_id: UUID,
+    payload: MoveConversationRequest,
+    chat: AgentChatOperations = Depends(_agent_chat),
+) -> ConversationResponse:
+    return conversation_response(
+        await chat.move_conversation(
+            str(conversation_id),
+            workspace_id=str(payload.workspaceId),
+            expected_revision=payload.expectedRevision,
+        )
+    )
 
 
 @router.get(
@@ -93,6 +155,7 @@ async def list_conversation_messages(
     status_code=status.HTTP_202_ACCEPTED,
     response_model=StartRunResponse,
     responses=_errors(400, 409, 500, 503),
+    dependencies=[Depends(strict_json)],
 )
 async def start_run(
     payload: StartRunRequest,
@@ -104,11 +167,13 @@ async def start_run(
             if payload.conversationId is None
             else str(payload.conversationId)
         ),
+        workspace_id=str(payload.workspaceId),
         client_request_id=str(payload.clientRequestId),
         message=payload.message,
     )
     return StartRunResponse(
         conversationId=accepted.conversation.id,
+        workspaceId=accepted.conversation.workspace_id,
         runId=accepted.run.id,
     )
 
