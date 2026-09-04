@@ -3,12 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   agentChatErrorText,
   listConversations,
-  UNASSIGNED_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_ID,
   type ConversationSummary,
 } from "../../api/agentChat";
 import { useI18n } from "../../i18n/I18nProvider";
 
-export function useConversations(workspaceId = UNASSIGNED_WORKSPACE_ID, enabled = true) {
+export function useConversations(workspaceId = DEFAULT_WORKSPACE_ID, enabled = true) {
   const { t } = useI18n();
   const [conversations, setConversations] = useState<ReadonlyArray<ConversationSummary>>([]);
   const [loading, setLoading] = useState(enabled);

@@ -28,15 +28,15 @@ const props = {
 };
 
 const unassignedWorkspace: Workspace = {
-  id: "00000000-0000-4000-8000-000000000000", kind: "unassigned", name: "Unassigned workspace",
-  rootPath: null, availability: "not_applicable", unavailableReason: null, revision: 1,
+  id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default",
+  rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1,
   createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z",
   usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 },
 };
 const directoryWorkspace: Workspace = {
   ...unassignedWorkspace,
-  id: "30000000-0000-4000-8000-000000000001", kind: "directory", name: "Alpha",
-  rootPath: "C:\\Projects\\Alpha", availability: "available",
+  id: "30000000-0000-4000-8000-000000000001", kind: "managed", name: "Alpha", directoryName: "Alpha",
+  rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Alpha", availability: "available",
 };
 const schedule: Schedule = {
   id: "20000000-0000-4000-8000-000000000001",

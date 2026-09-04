@@ -13,7 +13,7 @@ import { Button, Drawer, Input, Modal, Popconfirm, Select, Tag } from "antd";
 import type { ContextBudget, OutputBudget, OutputContinuation, PersistedModelSelection, ResponseMode } from "../../api/aiSettings";
 import { ScheduleApiError, type Schedule, type ScheduleCadence, type ScheduleFields } from "../../api/schedules";
 import type { ModelChoice } from "../ai-settings/modelCatalog";
-import { UNASSIGNED_WORKSPACE_ID } from "../../api/agentChat";
+import { DEFAULT_WORKSPACE_ID } from "../../api/agentChat";
 import type { Workspace } from "../../api/workspaces";
 import { workspaceName } from "../workspaces/WorkspaceSwitcher";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -98,7 +98,7 @@ function scheduleForm(schedule: Schedule): FormState {
   };
 }
 
-export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID, workspaces = [], workspaceLoading = false, workspaceError = false, onWorkspaceRetry }: Props) {
+export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = DEFAULT_WORKSPACE_ID, workspaces = [], workspaceLoading = false, workspaceError = false, onWorkspaceRetry }: Props) {
   const { t, locale } = useI18n();
   const controller = useSchedules(active);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -132,7 +132,7 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     value: `${choice.selection.providerId}:${choice.selection.modelId}`,
     label: choice.label,
   }));
-  const workspaceDisplayName = (item: Workspace) => workspaceName(item.kind, item.name, t("workspaces.unassigned"));
+  const workspaceDisplayName = (item: Workspace) => workspaceName(item.kind, item.name, t("workspaces.default"));
   const workspaceReason = (item: Workspace) => item.unavailableReason
     ? t(`workspaces.unavailableReason.${item.unavailableReason}` as never)
     : t("workspaces.unavailable");

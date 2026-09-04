@@ -5,8 +5,8 @@ import type { WorkspaceController } from "./useWorkspaces";
 import { workspaceErrorText } from "../../api/workspaces";
 import { useI18n } from "../../i18n/I18nProvider";
 
-export function workspaceName(kind: "unassigned" | "directory", name: string, unassigned: string): string {
-  return kind === "unassigned" ? unassigned : name;
+export function workspaceName(kind: "default" | "managed", name: string, defaultName: string): string {
+  return kind === "default" ? defaultName : name;
 }
 
 export function WorkspaceSwitcher({
@@ -25,12 +25,12 @@ export function WorkspaceSwitcher({
   const { t } = useI18n();
   const active = controller.activeWorkspace;
   const displayName = active
-    ? workspaceName(active.kind, active.name, t("workspaces.unassigned"))
+    ? workspaceName(active.kind, active.name, t("workspaces.default"))
     : t("workspaces.loading");
   const items: MenuProps["items"] = [
     ...(controller.catalog?.workspaces.map((item) => ({
       key: `workspace:${item.id}`,
-      label: <span className="workspace-menu-label"><span className={`workspace-status-dot workspace-status-dot--${item.availability}`} aria-hidden="true" />{workspaceName(item.kind, item.name, t("workspaces.unassigned"))}</span>,
+      label: <span className="workspace-menu-label"><span className={`workspace-status-dot workspace-status-dot--${item.availability}`} aria-hidden="true" />{workspaceName(item.kind, item.name, t("workspaces.default"))}</span>,
     })) ?? []),
     { type: "divider" as const },
     { key: "create", icon: <PlusOutlined />, label: t("workspaces.create") },

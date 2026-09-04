@@ -5,17 +5,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../src/api/workspaces";
 import { useWorkspaces } from "../src/features/workspaces/useWorkspaces";
 
-const unassigned = { id: "00000000-0000-4000-8000-000000000000", kind: "unassigned", name: "Unassigned workspace", rootPath: null, availability: "not_applicable", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
+const unassigned: Workspace = { id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
 const alphaRoot = "C:\\Projects\\Alpha";
-const alpha: Workspace = { id: "11111111-1111-4111-8111-111111111111", kind: "directory", name: "Alpha", rootPath: alphaRoot, availability: "available", unavailableReason: null, revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
-const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", rootPath: "C:\\Projects\\Beta" };
+const alpha: Workspace = { id: "11111111-1111-4111-8111-111111111111", kind: "managed", name: "Alpha", directoryName: "Alpha", rootPath: alphaRoot, mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
+const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", directoryName: "Beta", rootPath: "C:\\Projects\\Beta" };
 const initial = { revision: 1, activeWorkspaceId: unassigned.id, workspaces: [unassigned, alpha] };
 const activated = { ...initial, revision: 2, activeWorkspaceId: alpha.id };
 const created = { revision: 2, activeWorkspaceId: beta.id, workspaces: [unassigned, alpha, beta] };
 
 function Harness() {
   const state = useWorkspaces();
-  return <div><output>{state.activeWorkspace?.name ?? "none"}</output><output data-testid="error">{state.error?.code ?? ""}</output><output data-testid="loading">{String(state.loading)}</output><button onClick={() => void state.activate(alpha.id)}>activate</button><button onClick={() => void state.create("Beta", "C:\\Projects\\Beta")}>create</button><button onClick={() => void state.update(alpha, "Renamed", alphaRoot)}>update</button><button onClick={() => void state.reload()}>reload</button></div>;
+  return <div><output>{state.activeWorkspace?.name ?? "none"}</output><output data-testid="error">{state.error?.code ?? ""}</output><output data-testid="loading">{String(state.loading)}</output><button onClick={() => void state.activate(alpha.id)}>activate</button><button onClick={() => void state.create("Beta")}>create</button><button onClick={() => void state.update(alpha, "Renamed")}>update</button><button onClick={() => void state.reload()}>reload</button></div>;
 }
 
 function deferred<T>() {
@@ -34,7 +34,7 @@ describe("useWorkspaces", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness />);
 
-    await screen.findByText("Unassigned workspace");
+    await screen.findByText("Default workspace");
     fireEvent.click(screen.getByRole("button", { name: "activate" }));
     await screen.findByText("Alpha");
 
@@ -65,7 +65,7 @@ describe("useWorkspaces", () => {
     expect(screen.getByTestId("error").textContent).toBe("");
     expect(screen.getByTestId("loading").textContent).toBe("true");
     retry.resolve(new Response(JSON.stringify(initial)));
-    await screen.findByText("Unassigned workspace");
+    await screen.findByText("Default workspace");
     await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
   });
 
@@ -78,7 +78,7 @@ describe("useWorkspaces", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     request.resolve(new Response(JSON.stringify(initial)));
 
-    await screen.findByText("Unassigned workspace");
+    await screen.findByText("Default workspace");
     expect(screen.getByTestId("loading").textContent).toBe("false");
   });
 
@@ -90,7 +90,7 @@ describe("useWorkspaces", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness />);
-    await screen.findByText("Unassigned workspace");
+    await screen.findByText("Default workspace");
 
     fireEvent.click(screen.getByRole("button", { name: "reload" }));
     fireEvent.click(screen.getByRole("button", { name: "create" }));
@@ -111,7 +111,7 @@ describe("useWorkspaces", () => {
       .mockRejectedValueOnce(new Error("offline"));
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness />);
-    await screen.findByText("Unassigned workspace");
+    await screen.findByText("Default workspace");
 
     fireEvent.click(screen.getByRole("button", { name: "update" }));
 

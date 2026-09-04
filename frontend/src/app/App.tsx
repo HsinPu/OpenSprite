@@ -4,7 +4,7 @@ import { Button, Dropdown, type MenuProps } from "antd";
 
 import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
-import { UNASSIGNED_WORKSPACE_ID } from "../api/agentChat";
+import { DEFAULT_WORKSPACE_ID } from "../api/agentChat";
 import { useConversations } from "../features/chat/useConversations";
 import { modelLabel } from "../features/ai-settings/modelCatalog";
 import { useAiSettings } from "../features/ai-settings/useAiSettings";
@@ -53,7 +53,7 @@ function ConversationButton({
   const targets = workspaces.filter((item) => item.id !== conversation.workspaceId);
   const items: MenuProps["items"] = conversation.workspaceManagedBySchedule
     ? [{ key: "managed", disabled: true, label: t("workspaces.moveManaged") }]
-    : targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.unassigned")) }));
+    : targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.default")) }));
   return (
     <div className={`conversation-item${active ? " is-active" : ""}`}>
       <button className="conversation-link" type="button" onClick={onClick}>
@@ -72,7 +72,7 @@ export function App() {
   const { mode: authMode, signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
   const workspaceController = useWorkspaces();
-  const activeWorkspaceId = workspaceController.catalog?.activeWorkspaceId ?? UNASSIGNED_WORKSPACE_ID;
+  const activeWorkspaceId = workspaceController.catalog?.activeWorkspaceId ?? DEFAULT_WORKSPACE_ID;
   const {
     conversations,
     loading: conversationsLoading,
@@ -524,7 +524,7 @@ export function App() {
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
           workspaceId={activeConversation?.workspaceId ?? activeWorkspaceId}
-          workspaceName={currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.unassigned")) : undefined}
+          workspaceName={currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : undefined}
           workspaceUnavailable={currentWorkspace?.availability === "unavailable"}
           title={chatTitle}
           modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })), t)}

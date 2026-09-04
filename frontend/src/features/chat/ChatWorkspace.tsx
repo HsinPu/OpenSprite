@@ -3,7 +3,7 @@ import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
 import { createPortal } from "react-dom";
 
-import { AgentChatApiError, UNASSIGNED_WORKSPACE_ID, agentChatErrorText } from "../../api/agentChat";
+import { AgentChatApiError, DEFAULT_WORKSPACE_ID, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import type { SendBehavior } from "../../api/conversationSettings";
@@ -72,7 +72,7 @@ const MemoizedMarkdownMessage = memo(MarkdownMessage);
 
 export function ChatWorkspace({
   conversationId,
-  workspaceId = UNASSIGNED_WORKSPACE_ID,
+  workspaceId = DEFAULT_WORKSPACE_ID,
   workspaceName,
   workspaceUnavailable = false,
   modelName,
@@ -314,7 +314,7 @@ export function ChatWorkspace({
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
-          {workspaceUnavailable ? <p className="chat-workspace__workspace-warning" role="status">{t("workspaces.chatUnavailable", { name: workspaceName ?? t("workspaces.unassigned") })}</p> : null}
+          {workspaceUnavailable ? <p className="chat-workspace__workspace-warning" role="status">{t("workspaces.chatUnavailable", { name: workspaceName ?? t("workspaces.default") })}</p> : null}
           <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
             id="chat-message"

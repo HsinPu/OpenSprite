@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AgentChatApiError,
-  UNASSIGNED_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_ID,
   agentChatErrorText,
   cancelRun,
   getRun,
@@ -88,7 +88,7 @@ function defaultRequestId(): string {
 
 export function useConversationRun({
   conversationId,
-  workspaceId = UNASSIGNED_WORKSPACE_ID,
+  workspaceId = DEFAULT_WORKSPACE_ID,
   onConversationAccepted,
   onConversationUpdated,
   responseDelivery,

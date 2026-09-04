@@ -221,7 +221,7 @@
 .settings-password-form label { margin-top: 4px; font-weight: 600; }
 .settings-password-form .ant-btn { justify-self: start; margin-top: 8px; }
 .settings-trust-warning { padding: 12px 14px; border-radius: 10px; color: #7a3d00; background: #fff7e6; }
-.workspace-settings__toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.workspace-settings__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
 .workspace-settings__list { display: grid; gap: 12px; padding-bottom: 12px; }
 .workspace-settings__item { display: grid; gap: 13px; padding: 16px; border: 1px solid var(--settings-border); border-radius: 12px; background: var(--settings-surface); }
 .workspace-settings__summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
@@ -238,10 +238,27 @@
 .workspace-editor__path .ant-input { min-width: 0; }
 .workspace-editor__error { margin: 0; color: var(--settings-danger); font-size: 13px; }
 .workspace-editor__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.workspace-editor__switch { display: flex; align-items: center; justify-content: space-between; }
+.workspace-import-list { display: grid; gap: 12px; }
+.workspace-import-item,
+.workspace-mount { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--os-border); border-radius: 10px; }
+.workspace-import-item > div,
+.workspace-mount > div:first-child { display: grid; min-width: 0; gap: 3px; }
+.workspace-import-item span,
+.workspace-mount span { overflow: hidden; color: var(--os-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-mounts { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--os-border); }
+.workspace-mounts__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.workspace-mounts__header h4 { margin: 0; }
+.workspace-mount > div:last-child { display: flex; flex: 0 0 auto; gap: 6px; }
 @media (max-width: 767px) {
   .workspace-settings__summary { align-items: stretch; flex-direction: column; }
   .workspace-settings__item dl { display: grid; grid-template-columns: repeat(3, 1fr); }
   .workspace-settings__item dl div { min-width: 0; }
   .workspace-settings__actions .ant-btn { flex: 1; }
   .workspace-editor__path { flex-direction: column; }
+  .workspace-import-item,
+  .workspace-mount { align-items: stretch; flex-direction: column; }
+  .workspace-mount > div:last-child { width: 100%; }
+  .workspace-mount > div:last-child .ant-btn { flex: 1; }
+  .workspace-import-item .ant-btn { width: 100%; }
 }

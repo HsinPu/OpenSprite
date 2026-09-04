@@ -62,7 +62,7 @@ const mcpConnections: McpConnectionsController = {
 const workspaceCatalog = {
   revision: 0,
   activeWorkspaceId: "00000000-0000-4000-8000-000000000000",
-  workspaces: [{ id: "00000000-0000-4000-8000-000000000000", kind: "unassigned" as const, name: "Unassigned workspace", rootPath: null, availability: "not_applicable" as const, unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } }],
+  workspaces: [{ id: "00000000-0000-4000-8000-000000000000", kind: "default" as const, name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available" as const, unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } }],
 };
 const workspaceController: WorkspaceController = {
   catalog: workspaceCatalog,
@@ -71,11 +71,19 @@ const workspaceController: WorkspaceController = {
   loading: false,
   saving: false,
   error: null,
+  importCandidates: [],
+  importCandidatesLoading: false,
+  importCandidatesNextCursor: null,
   reload: async () => workspaceCatalog,
+  loadImportCandidates: async () => undefined,
   create: async () => workspaceCatalog,
+  importExisting: async () => workspaceCatalog,
   update: async (item) => item,
   activate: async () => workspaceCatalog,
   remove: async () => undefined,
+  addMount: async (item) => item,
+  updateMount: async (item) => item,
+  removeMount: async (item) => item,
 };
 
 function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections" | "workspaces" | "onWorkspaceActivated" | "workspaceCreateRequest" | "onWorkspaceCreateRequestHandled" | "active" | "onOpenScheduleConversation">) {

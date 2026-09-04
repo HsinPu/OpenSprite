@@ -4,7 +4,7 @@ export type RunStatus = (typeof runStatuses)[number];
 export const completionReasons = ["stop", "output_limit", "context_limit"] as const;
 export type CompletionReason = (typeof completionReasons)[number];
 
-export const UNASSIGNED_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
+export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
 
 export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
@@ -57,6 +57,7 @@ export type RunSnapshot = {
   workspaceRevision: number;
   workspaceName: string;
   workspaceRootHash: string | null;
+  workspaceMountManifestHash: string;
   userMessageId: string;
   assistantMessageId: string | null;
   providerId: "openai" | "anthropic" | "openrouter";
@@ -164,7 +165,7 @@ function runError(value: unknown): RunError {
 }
 
 function runSnapshot(value: unknown, expectedRunId?: string): RunSnapshot {
-  if (!record(value) || !exactKeys(value, ["id", "conversationId", "workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.workspaceRevision) || (value.workspaceRevision as number) < 1 || !boundedString(value.workspaceName, 1, 80) || (value.workspaceRootHash !== null && (typeof value.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceRootHash))) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceMountManifestHash", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.workspaceRevision) || (value.workspaceRevision as number) < 1 || !boundedString(value.workspaceName, 1, 80) || (value.workspaceRootHash !== null && (typeof value.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceRootHash))) || typeof value.workspaceMountManifestHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceMountManifestHash) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
     throw new AgentChatApiError("malformed_response");
   }
   const parsedError = value.error === null ? null : runError(value.error);
@@ -258,7 +259,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   const data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
   if (expectedType === "run.started" && !exactKeys(data, [])) {
-    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash))) || !["available", "unavailable", "not_applicable"].includes(data.workspaceAvailability as string)) throw new AgentChatApiError("malformed_response");
+    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability", "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash))) || !["available", "unavailable", "not_applicable"].includes(data.workspaceAvailability as string) || typeof data.workspaceMountManifestHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceMountManifestHash) || !Number.isInteger(data.workspaceMountCount) || (data.workspaceMountCount as number) < 0 || (data.workspaceMountCount as number) > 20 || !Array.isArray(data.workspaceMounts) || data.workspaceMounts.length !== data.workspaceMountCount || data.workspaceMounts.some((mount) => !record(mount) || !exactKeys(mount, ["id", "alias", "rootHash", "accessMode", "enabled", "availability"]) || !isIdentifier(mount.id) || !boundedString(mount.alias, 1, 40) || typeof mount.rootHash !== "string" || !/^[0-9a-f]{64}$/.test(mount.rootHash) || !["read_only", "read_write"].includes(mount.accessMode as string) || typeof mount.enabled !== "boolean" || !["available", "unavailable", "not_applicable"].includes(mount.availability as string))) throw new AgentChatApiError("malformed_response");
   }
   if (["context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {
