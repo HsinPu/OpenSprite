@@ -1,7 +1,7 @@
 # Durable Agent schedules
 
 OpenSprite owns one in-process schedule coordinator inside the backend lifespan.
-SQLite schema v12 stores schedules, Workspace ownership and occurrences;
+SQLite schema v13 stores schedules, Workspace ownership and occurrences;
 operating-system schedulers only keep the single OpenSprite backend available
 and never own individual jobs.
 
@@ -58,4 +58,4 @@ selector options show an unavailable or missing Workspace warning without
 disabling text-only execution. A Workspace catalog load failure has its own
 retry action and temporarily disables Schedule create/edit instead of showing a
 permanent loading label. There is no WebSocket, OS notification, Email, or push
-notification in version 0.11.0.
+notification in version 0.12.0.

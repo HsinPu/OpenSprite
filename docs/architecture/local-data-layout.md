@@ -151,19 +151,19 @@ records. A record contains UUID, NFC-normalized name, one canonical absolute
 root, item revision and UTC timestamps. The root is intentionally present only
 in this protected config boundary, process memory, and complete System Prompt
 logs; it is not copied into SQLite, ordinary runtime logs, Run events or tool
-receipts. A missing file exposes the fixed virtual unassigned Workspace without
-creating `config/`. The first create, update, active-selection or delete
+receipts. A missing file exposes the fixed managed Default Workspace without
+creating `config/`; runtime startup creates only its user-visible managed root. The first catalog
 mutation performs an owner-only atomic write.
 
 `data/opensprite.db` is created only when the first user message, Run, or
 Schedule is successfully accepted. It owns Conversation, visible Message, Run,
 Schedule, ScheduleOccurrence, append-only conversation compaction, and safe
 semantic Run-event tables described by
-`agent-chat.md`. SQLite schema v12 adds Workspace identity and optimistic
+`agent-chat.md`. SQLite schema v13 adds Workspace identity and optimistic
 Conversation revision: Conversations and Schedules store a non-null Workspace
-ID, while Runs also snapshot Workspace revision, name and nullable root SHA-256.
-The complete root is never stored in the database. The v11-to-v12 migration
-assigns all existing rows to the fixed unassigned Workspace in one transaction.
+ID, while Runs also snapshot Workspace revision, name, root SHA-256 and mount-manifest SHA-256.
+Complete roots are never stored in the database. The v11-to-v12 migration
+assigns all existing rows to the fixed Workspace UUID; v12-to-v13 adds the empty mount manifest.
 SQLite schema v11 added durable schedules, occurrence idempotency, fixed
 execution profiles and Run source metadata. Schema v10 snapshots each Run's
 requested output budget, strict output-continuation policy and full-Prompt

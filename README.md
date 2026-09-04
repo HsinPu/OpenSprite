@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.11.0`。
+目前產品版本為 `0.12.0`。
 
 Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後透過
 `http://localhost:8765/` 使用；backend 固定只監聽 loopback，不直接提供公網模式。
@@ -11,7 +11,7 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 
 - 前端：React、TypeScript、Vite、Ant Design，透過同源 `/api` 與本機服務溝通。
 - 對話：Conversation、Message、Run 與安全語意事件保存於 `.opensprite/data/opensprite.db`，前端以 HTTP 與 SSE 消費。
-- 工作區：Sidebar 可切換一個本機資料夾範圍；Conversation 與 Schedule 明確歸屬 Workspace，每次 Run 固定使用開始時的 Workspace 快照。
+- 工作區：OpenSprite 在使用者目錄建立 managed root，並可掛載最多 20 個具唯讀／可讀寫權限的外部目錄；Conversation 與 Schedule 明確歸屬 Workspace，每次 Run 固定使用開始時的 Workspace 快照。
 - AI：固定支援 OpenAI、Anthropic、OpenRouter；模型、Context／輸出上限、推理模式、續接次數、回覆顯示方式與 Prompt log 偏好保存於 `.opensprite/config/settings.json`。
 - 金鑰：只以 AES-256-GCM ciphertext 保存於 `.opensprite/auth.json`，每次安裝使用獨立的 `config/credential.key`。
 - Agent：所有使用者訊息進入同一個 Token-budgeted Agent loop；舊對話只做可重建摘要，原始訊息不刪除。執行事件與 Context 用量可由前端即時／歷史查看；production Tool Registry 目前包含安全的唯讀計算器。
@@ -23,14 +23,15 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 
 ## 工作區
 
-Workspace 是網頁聊天、排程以及後續 Skills／外部 Channel Adapter 共用的執行範圍。每個使用者建立的 Workspace 綁定一個已存在的本機資料夾；保留的「未指定工作區」沒有根目錄，仍可正常文字聊天。
+Workspace 是網頁聊天、排程以及後續 Skills／外部 Channel Adapter 共用的執行範圍。Windows 使用 `%USERPROFILE%\OpenSprite\workspace`，Linux 使用 `~/OpenSprite/workspace`；固定的「預設工作區」位於 `workspace/default`。建立 `test` 會建立 `workspace/test`，也能明確加入容器內既有的第一層目錄。
 
-- Workspace 目錄與目前選擇保存在 `.opensprite/config/workspaces.json`，不使用瀏覽器儲存。
-- SQLite 只保存 Workspace ID、revision、名稱快照與 root hash，不保存完整絕對路徑。
+- Workspace catalog 與目前選擇保存在 `.opensprite/config/workspaces.json`；managed root 路徑由使用者家目錄推導，不使用瀏覽器儲存。
+- 外部目錄以預設唯讀的 mount 掛入 Workspace，可明確提升為可讀寫；重疊、系統敏感與 reparse/symlink 路徑會被拒絕。
+- SQLite 只保存 Workspace ID、revision、名稱、root hash 與 mount-manifest hash，不保存完整絕對路徑。
 - Conversation 清單依目前 Workspace 隔離；一般 Conversation 可在沒有執行中 Run 時安全移動。
 - Schedule 保存自己的 Workspace，不會隨 Sidebar 目前選擇改變。
-- 根目錄失效時仍可文字聊天；未來需要檔案路徑的工具必須拒絕執行。
-- `0.11.0` 尚未提供檔案、Git、Terminal 或檔案樹工具。模型知道 Workspace 路徑不代表取得檔案能力。
+- managed root 或 mount 失效時仍可文字聊天；未來需要檔案路徑的工具必須拒絕執行。
+- `0.12.0` 只建立目錄權限架構，尚未提供檔案、Git、Terminal 或檔案樹工具。模型知道 Workspace 路徑不代表取得檔案能力。
 
 根目錄會經後端 canonicalization；磁碟根目錄、家目錄、`.opensprite`、OpenSprite 安裝目錄，以及 symlink／junction／reparse-point 根目錄會被拒絕。完整設計見 [`docs/architecture/workspaces.md`](docs/architecture/workspaces.md)。
 

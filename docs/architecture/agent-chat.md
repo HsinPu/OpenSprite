@@ -28,8 +28,8 @@ Browser UI
 - A **Run** is the execution caused by one user message. It snapshots Provider,
   model, response mode, Context budget, status, completion reason, safe error,
   partial assistant text, timing, and Workspace identity. SQLite keeps only the
-  Workspace ID, revision, name snapshot and nullable root hash; the canonical
-  path stays in the in-memory execution context. Context budget remains internal
+  Workspace ID, revision, name snapshot, managed-root hash and mount-manifest
+  hash; canonical paths stay in the in-memory execution context. Context budget remains internal
   and does not expand the public Run payload.
 - A **Run event** is a small durable semantic projection used for replay and UI
   status. Events never contain credentials, raw upstream bodies, or hidden
@@ -196,7 +196,8 @@ connected stdio or Streamable HTTP MCP Servers. The UI localizes the stable buil
 uses the discovered MCP display name for MCP events; it does not advertise a
 capability unless an active Server actually provides it.
 Every ToolContext carries the same immutable Workspace execution context used by
-the Agent loop. Existing tools do not gain filesystem access from that metadata;
+the Agent loop, including managed root and permission-aware external mounts.
+Existing tools do not gain filesystem access from that metadata;
 a future path-dependent tool must check availability and fail closed.
 
 The Tools settings page reads the production catalog from `GET /api/tools` and
@@ -392,9 +393,9 @@ single-use, exact-argument scoped, expires after ten minutes, and never becomes
 a remembered policy. No `tool.started` event occurs before approval. Authorized
 calls require an fsynced HMAC-SHA-256 hash-chained receipt under
 `logs/tool-receipts/<local-date>.jsonl`, signed with the random local
-`config/tool-receipt.key`. New version-3 receipts include Workspace availability
-beside its ID, revision and root hash; the verifier preserves signed version-1
-and version-2 history. Receipts never contain the absolute Workspace root, raw
+`config/tool-receipt.key`. New version-4 receipts include Workspace availability,
+root hash and mount-manifest metadata; the verifier preserves signed version-1
+through version-3 history. Receipts never contain absolute Workspace roots, raw
 arguments, results, credentials, or MCP stderr.
 
 The core loop and registry boundary are now implemented independently of HTTP

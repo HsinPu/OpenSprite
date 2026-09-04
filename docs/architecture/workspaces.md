@@ -1,119 +1,79 @@
 # Workspace architecture
 
-## Purpose and boundary
+## Managed roots and sensitive data
 
-A Workspace gives web chat, durable schedules, future Skills and future channel
-adapters one explicit local execution scope. A user Workspace binds one UUID to
-one canonical existing directory. The reserved unassigned Workspace uses the
-fixed UUID `00000000-0000-4000-8000-000000000000`, has no root directory and
-cannot be renamed or deleted.
+OpenSprite owns one user-visible managed Workspace container outside the
+sensitive `.opensprite` data root:
 
-Version 0.11.0 does not add file, Git, terminal or directory-tree tools. A
-Workspace path in the System Prompt is context only; the Agent can act on it
-only through a tool that is actually present in that Run's registry.
+- Windows: `%USERPROFILE%\OpenSprite\workspace`
+- Linux: `~/OpenSprite/workspace`
 
-## Catalog and root policy
+The fixed UUID `00000000-0000-4000-8000-000000000000` identifies the Default
+Workspace at `workspace/default`. It cannot be renamed or removed. A new
+Workspace named `test` creates `workspace/test`; its immutable directory name
+is separate from its later-editable display name. Removing a Workspace removes
+only catalog registration and never deletes its directory.
 
-`AppPaths` owns `.opensprite/config/workspaces.json`. The strict schema-v1 file
-stores the catalog revision, global `activeWorkspaceId`, and at most 100 user
-Workspace records with UUID, NFC-normalized name, canonical root, item revision
-and UTC timestamps. A missing file exposes only the virtual unassigned
-Workspace and creates no directory. The first mutation uses the existing
-owner-only, fsynced atomic-replacement boundary; malformed, duplicate-key,
-oversized or failed writes fail closed without replacing the last valid file.
+Conversation messages, attachments, generated-output records, SQLite,
+credentials, state, logs and cache remain below `.opensprite`. Managed roots
+are user project scopes, not a second internal product-data store.
 
-Names are 1-80 characters after NFC normalization and trimming, contain no
-control characters, and are unique by case-folded comparison. Roots must be
-absolute, exist, be readable searchable directories, and resolve successfully.
-Filesystem roots, the exact user home, `.opensprite` and its descendants, the
-known OpenSprite install root and its descendants, and roots that are symlinks,
-junctions or reparse points are rejected. Canonical roots are unique using the
-host platform's path-comparison rules; nested legitimate Workspaces remain
-allowed.
+## Catalog v2 and migration
 
-Windows detects the complete reparse-point file attribute in addition to the
-portable symlink and junction checks. Workspace DELETE accepts exactly one
-`expectedRevision` query item; missing, duplicate, unknown or non-positive
-values fail as `invalid_request` before the service is called. The declarative
-FastAPI query parameter remains present so live OpenAPI matches the authoritative
-contract.
+`config/workspaces.json` schema v2 stores catalog revision, active Workspace,
+the Default Workspace mount revision, and up to 100 managed Workspace records.
+Each record contains UUID, display name, immutable directory name, at most 20
+mounts, revision and UTC timestamps. Absolute managed-root paths are derived
+from the current user home and are not persisted in the catalog.
 
-A saved root that later disappears, becomes inaccessible, stops being a
-directory or becomes unsafe is reported as `unavailable` with a bounded reason
-code. The catalog never silently substitutes another path.
+On startup the backend creates the container and Default Workspace. A v1
+catalog is converted without moving source files: every previous external root
+becomes a `legacy-root` read-write mount and a new managed root is created.
+Nested legacy roots are imported disabled so no ambiguous authority is
+activated. Atomic persistence failure preserves the v1 file and removes only
+new empty migration directories.
 
-## SQLite identity and consistency
+Existing first-level managed directories are not adopted implicitly. The
+import-candidates endpoint returns a cursor page, and import requires an
+explicit user action.
 
-SQLite schema v12 stores Workspace identity but never a complete root path:
+## Mount policy
 
-- `conversations`: non-null `workspace_id` and optimistic `revision`;
-- `runs`: Workspace ID, Workspace revision, name snapshot and nullable SHA-256
-  root hash; and
-- `schedules`: non-null `workspace_id`.
+A Workspace has one writable managed root and zero to twenty external mounts.
+Mounts have UUID, NFC-normalized alias, canonical root, `read_only` or
+`read_write` access, enabled state and live availability. New mounts default to
+read-only.
 
-The v11-to-v12 transaction assigns every existing Conversation, Run and
-Schedule to the unassigned Workspace and creates Workspace-scoped list,
-schedule and active-Run indexes. The config catalog intentionally is not an SQL
-foreign-key target. `WorkspaceCatalogService`, the Conversation repository and
-Schedule service coordinate cross-store mutations through one process-local
-`WorkspaceMutationGate` under the single-backend-process deployment rule.
+Enabled roots may not be equal, ancestors or descendants of any managed root
+or another enabled mount. Filesystem roots, the exact home directory,
+`.opensprite`, the installation directory, symlinks, junctions and Windows
+reparse points are rejected. Missing or inaccessible saved paths become
+unavailable without substitution. Mount mutations are blocked while the
+Workspace has a queued, running or cancelling Run.
 
-Workspace deletion succeeds only when Conversation, Schedule and active-Run
-counts are all zero. Deleting the selected empty Workspace atomically selects
-the unassigned Workspace. Changing a root is blocked while the Workspace has an
-active Run. No Workspace mutation cascades into Messages, historical Runs,
-compactions or user directories.
+This release defines authority metadata but adds no file tool. A future
+Workspace-aware tool must enforce the immutable snapshot and fail closed.
 
-## Conversation, Run and Schedule behavior
+## Execution and persistence
 
-Conversation pagination always receives a Workspace ID. A deep-linked
-Conversation can first be queried by ID so the browser can activate its owning
-Workspace before loading the scoped list. A normal Conversation may move when
-it has no queued, running or cancelling Run; moving increments its revision and
-does not rewrite its Messages, Runs or compactions. Schedule-owned
-Conversations move only through the Schedule Workspace update transaction.
+Each accepted Run holds one `WorkspaceExecutionContext` with the managed root,
+mount tuple, permissions, availability and hashes. Retry, Context compaction,
+output continuation and Tool rounds reuse that object. Schedules resolve their
+stored Workspace ID when an occurrence begins.
 
-Before accepting a Run, the chat service resolves one immutable
-`WorkspaceExecutionContext`: ID, name, revision, canonical root, root hash,
-availability and safe reason. That exact object is handed to RunManager and then
-the Agent loop; the loop never re-resolves the catalog. It remains fixed through
-retries, compaction, continuation and tool rounds even if the Workspace is
-renamed. SQLite and ordinary runtime logs never receive the absolute root.
-`run.started` and version-3 tool receipts record only Workspace ID, revision,
-availability, safe name where contracted and root hash. Receipt verification
-continues to accept the existing signed version-1 and version-2 records.
+SQLite schema v13 stores Workspace ID, revision, display-name snapshot, managed
+root hash and mount-manifest hash; it never stores absolute roots. `run.started`
+and version-4 Tool receipts include mount aliases, access modes, availability
+and root hashes without absolute paths. Existing receipt versions 1–3 remain
+verifiable. Full System Prompt logs intentionally contain the complete paths
+and remain sensitive; ordinary runtime logs do not.
 
-The dynamic System Prompt version 2 contains a delimited, JSON-encoded
-Workspace section. Name and root are explicitly untrusted metadata, and the
-Prompt states that path knowledge grants no capability. The existing complete
-System Prompt log intentionally contains that path and therefore remains
-sensitive. An unavailable root does not block a text-only Run; a future
-path-dependent tool must inspect the snapshot and fail closed.
+## Frontend
 
-A Schedule stores its own Workspace ID at create or edit time and never reads
-the global active selection when executing. Changing a Schedule Workspace
-atomically moves its dedicated Conversation when no occurrence or Run is
-active. Each occurrence resolves the stored Workspace into the same immutable
-Run snapshot used by interactive chat.
+The Sidebar selects one active Workspace and Conversation pagination remains
+Workspace-scoped. Settings can create managed roots, explicitly import existing
+first-level directories, and add, edit, enable, disable or remove mounts.
+Desktop uses modal editors and the 390px layout uses full-width drawers.
 
-## Frontend ownership
-
-The application loads the catalog once when the authenticated App mounts. The
-active Workspace is backend-owned; it is not copied to localStorage,
-sessionStorage, the URL or a polling channel. The Sidebar switcher updates the
-catalog and navigates the current tab to `#new-chat`; other open tabs observe
-the change on their next reload.
-
-Conversation navigation is scoped to the selected Workspace. Settings owns
-Workspace create, rename, controlled root replacement and empty deletion;
-desktop uses a Modal and the 390 px layout uses a full-width Drawer. Both native
-directory selection and manual paths go through the same backend validation.
-The Schedule editor sends an explicit Workspace ID. Unavailable state appears
-in the Sidebar, Settings, composer and Schedule UI without disabling plain text
-chat.
-
-## Deliberate exclusions
-
-Version 0.11.0 does not include filesystem browsing or mutation, shell or Git
-access, per-Workspace model settings, Skills, LINE or another channel adapter,
-cross-tab live synchronization, or automatic relocation of missing roots.
+The UI explicitly states that this release does not provide file-content
+access. Unavailable roots warn the user but do not disable plain text chat.

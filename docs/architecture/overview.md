@@ -79,9 +79,9 @@ Ctrl/Cmd + Enter 傳送、Enter 換行。IME composition 期間不觸發傳送�
 
 Workspace 核心由 [`workspaces.md`](workspaces.md) 定義。Strict
 `config/workspaces.json` 保存使用者 Workspace catalog 與後端全域 active selection；
-Conversation 與 Schedule 在 SQLite schema v12 保存 Workspace ID，每個 Run 另保存 revision、
-名稱與 root hash 快照。完整 canonical root 不進 SQLite、一般 log、Run event 或 tool receipt，
-但會進入記憶體執行快照及完整 System Prompt log。Workspace 只提供範圍資訊，0.11.0
+Conversation 與 Schedule 在 SQLite schema v13 保存 Workspace ID，每個 Run 另保存 revision、
+名稱、managed-root hash 與 mount-manifest hash 快照。完整 canonical roots 不進 SQLite、一般 log、Run event 或 tool receipt，
+但會進入記憶體執行快照及完整 System Prompt log。Workspace 只提供範圍資訊，0.12.0
 不新增檔案、Git 或 Terminal 能力。
 
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
@@ -153,7 +153,7 @@ Frontend localization 由 [`frontend-localization.md`](frontend-localization.md)
 控制日期分組及顯示時間；穩定 locale/time-zone ID 與 message key 不使用顯示文字作為
 狀態或 DOM identity。
 
-Durable Agent 排程由 [`schedules.md`](schedules.md) 定義。SQLite schema v12
+Durable Agent 排程由 [`schedules.md`](schedules.md) 定義。SQLite schema v13
 保存 once／daily／weekly schedule、固定 execution profile、Workspace 與 occurrence；單一
 runtime coordinator 負責補跑、重啟恢復、全域併發 1 與禁止人工核准工具。
 

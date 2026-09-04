@@ -21,11 +21,11 @@ reasoning, memory, Skills, subagents and MCP catalogs are not inserted into this
 Prompt.
 
 Prompt version 2 includes a delimited Workspace section containing ID, name,
-revision, availability and the canonical root when one exists. Workspace name
-and root are JSON-encoded untrusted metadata, not instructions. The fixed text
+revision, availability, managed root and external mounts with their access modes.
+Workspace names and roots are JSON-encoded untrusted metadata, not instructions. The fixed text
 also states that knowing a path grants no file capability; only tools actually
-provided to the Run may perform an action. The reserved unassigned Workspace
-has no root and uses `not_applicable` availability.
+provided to the Run may perform an action. The fixed Default Workspace uses the
+managed `OpenSprite/workspace/default` root.
 
 ## Ownership and dependency direction
 
