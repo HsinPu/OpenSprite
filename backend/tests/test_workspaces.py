@@ -144,6 +144,10 @@ def test_create_uses_name_as_managed_directory_and_sets_active(tmp_path: Path) -
         "trailing ",
         "control\x7f",
         "format\u202e",
+        "\u200d",
+        "\u200cleading",
+        "trailing\u200d",
+        "double\u200c\u200djoiner",
     ],
 )
 def test_create_rejects_unsafe_cross_platform_directory_names(
@@ -323,6 +327,10 @@ def test_v1_migration_renames_values_reserved_by_the_default_workspace(
         ("developer-\U0001f468\u200d\U0001f4bb", True),
         ("legacy\x7f", False),
         ("unsafe\u202e", False),
+        ("\u200d", False),
+        ("\u200clegacy", False),
+        ("legacy\u200d", False),
+        ("double\u200c\u200djoiner", False),
     ],
 )
 def test_v1_migration_preserves_joiners_and_sanitizes_newly_unsafe_names(

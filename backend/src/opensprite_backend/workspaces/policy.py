@@ -15,14 +15,22 @@ _SAFE_NAME_FORMAT_CHARACTERS = frozenset({"\u200c", "\u200d"})
 
 
 def has_unsafe_name_controls(value: str) -> bool:
-    return any(
-        unicodedata.category(character) in {"Cc", "Cs"}
-        or (
-            unicodedata.category(character) == "Cf"
-            and character not in _SAFE_NAME_FORMAT_CHARACTERS
-        )
-        for character in value
-    )
+    for index, character in enumerate(value):
+        category = unicodedata.category(character)
+        if category in {"Cc", "Cs"}:
+            return True
+        if category != "Cf":
+            continue
+        if character not in _SAFE_NAME_FORMAT_CHARACTERS:
+            return True
+        if index == 0 or index == len(value) - 1:
+            return True
+        if (
+            value[index - 1] in _SAFE_NAME_FORMAT_CHARACTERS
+            or value[index + 1] in _SAFE_NAME_FORMAT_CHARACTERS
+        ):
+            return True
+    return False
 
 
 class UnsafeWorkspaceRoot(ValueError):
