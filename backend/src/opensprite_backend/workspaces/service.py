@@ -41,6 +41,7 @@ from .policy import (
     InvalidWorkspaceRoot,
     UnsafeWorkspaceRoot,
     WorkspaceRootPolicy,
+    has_unsafe_name_controls,
 )
 from .store import WorkspaceStore, WorkspaceStoreError
 
@@ -774,10 +775,7 @@ class WorkspaceCatalogService:
         if (
             not normalized
             or len(normalized) > 80
-            or any(
-                unicodedata.category(character) in {"Cc", "Cf"}
-                for character in normalized
-            )
+            or has_unsafe_name_controls(normalized)
         ):
             raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
         return normalized
@@ -791,10 +789,10 @@ class WorkspaceCatalogService:
             not normalized
             or len(normalized) > 40
             or any(
-                unicodedata.category(character) in {"Cc", "Cf"}
-                or character in "/\\"
+                character in "/\\"
                 for character in normalized
             )
+            or has_unsafe_name_controls(normalized)
         ):
             raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
         return normalized

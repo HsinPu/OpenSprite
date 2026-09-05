@@ -11,6 +11,20 @@ import unicodedata
 from .models import WorkspaceAvailability, WorkspaceUnavailableReason
 
 
+_SAFE_NAME_FORMAT_CHARACTERS = frozenset({"\u200c", "\u200d"})
+
+
+def has_unsafe_name_controls(value: str) -> bool:
+    return any(
+        unicodedata.category(character) in {"Cc", "Cs"}
+        or (
+            unicodedata.category(character) == "Cf"
+            and character not in _SAFE_NAME_FORMAT_CHARACTERS
+        )
+        for character in value
+    )
+
+
 class UnsafeWorkspaceRoot(ValueError):
     """Raised without embedding a user-controlled path."""
 
@@ -142,11 +156,8 @@ class WorkspaceRootPolicy:
             or normalized != normalized.strip()
             or normalized in {".", ".."}
             or normalized.endswith((" ", "."))
-            or any(
-                character in invalid
-                or unicodedata.category(character) in {"Cc", "Cf"}
-                for character in normalized
-            )
+            or any(character in invalid for character in normalized)
+            or has_unsafe_name_controls(normalized)
             or stem in reserved
         ):
             raise InvalidWorkspaceDirectoryName

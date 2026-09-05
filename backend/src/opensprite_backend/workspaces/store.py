@@ -21,7 +21,11 @@ from .models import (
     WorkspaceRecord,
     WorkspaceUnavailableReason,
 )
-from .policy import InvalidWorkspaceDirectoryName, WorkspaceRootPolicy
+from .policy import (
+    InvalidWorkspaceDirectoryName,
+    WorkspaceRootPolicy,
+    has_unsafe_name_controls,
+)
 
 
 _SCHEMA_VERSION: Final = 2
@@ -296,7 +300,7 @@ class JsonWorkspaceStore:
         revision = raw["revision"]
         if (
             not cls._identifier(identifier)
-            or not cls._name(name, maximum=80)
+            or not cls._legacy_name_valid(name, maximum=80)
             or type(root) is not str
             or not root
             or len(root) > 32_768
@@ -380,15 +384,25 @@ class JsonWorkspaceStore:
             and len(value) <= maximum
             and value == value.strip()
             and value == unicodedata.normalize("NFC", value)
-            and not any(
-                unicodedata.category(character) in {"Cc", "Cf"}
-                for character in value
-            )
+            and not has_unsafe_name_controls(value)
         )
 
     @staticmethod
-    def _legacy_name(name: str, identifier: str, used: set[str]) -> str:
-        if name.casefold() not in used:
+    def _legacy_name_valid(value: object, *, maximum: int) -> bool:
+        return (
+            type(value) is str
+            and bool(value)
+            and len(value) <= maximum
+            and value == value.strip()
+            and value == unicodedata.normalize("NFC", value)
+            and not any(ord(character) < 32 for character in value)
+        )
+
+    @classmethod
+    def _legacy_name(
+        cls, name: str, identifier: str, used: set[str]
+    ) -> str:
+        if cls._name(name, maximum=80) and name.casefold() not in used:
             used.add(name.casefold())
             return name
         base = f"workspace-{identifier[:8]}"

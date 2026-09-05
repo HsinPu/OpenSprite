@@ -34,6 +34,10 @@ activated. Names or directory names that collide with the new fixed Default
 Workspace receive a deterministic `workspace-<UUID prefix>` fallback. The
 complete v2 document is validated before atomic replacement; persistence
 failure preserves the v1 file and removes only new empty migration directories.
+The v1 decoder retains its historical validation rules so old catalogs remain
+readable; migration replaces names that do not satisfy the current policy.
+Current names reject control, surrogate and unsafe formatting characters while
+allowing Unicode ZWNJ and ZWJ required by languages and composed emoji.
 
 Existing first-level managed directories are not adopted implicitly. The
 import-candidates endpoint returns a cursor page, and import requires an

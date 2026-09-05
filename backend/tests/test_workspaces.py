@@ -157,6 +157,24 @@ def test_create_rejects_unsafe_cross_platform_directory_names(
     assert raised.value.failure is WorkspaceFailure.INVALID_DIRECTORY_NAME
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "developer-\U0001f468\u200d\U0001f4bb",
+        "joiner-\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645",
+    ],
+)
+def test_create_accepts_safe_unicode_joiners(tmp_path: Path, name: str) -> None:
+    service, _, managed_root, _ = make_service(tmp_path)
+    run(service.startup())
+
+    created = run(service.create(name=name, expected_revision=0))
+
+    assert created.workspaces[1].name == name
+    assert created.workspaces[1].directory_name == name
+    assert (managed_root / name).is_dir()
+
+
 def test_root_policy_rejects_parents_that_contain_protected_roots(
     tmp_path: Path,
 ) -> None:
@@ -294,6 +312,57 @@ def test_v1_migration_renames_values_reserved_by_the_default_workspace(
     migrated = catalog.workspaces[1]
     assert migrated.name.casefold() != "default workspace"
     assert migrated.directory_name.casefold() != "default"
+    assert (managed_root / migrated.directory_name).is_dir()
+    assert migrated.mounts[0].root_path == str(external_root.resolve())
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "preserved"),
+    [
+        ("developer-\U0001f468\u200d\U0001f4bb", True),
+        ("legacy\x7f", False),
+        ("unsafe\u202e", False),
+    ],
+)
+def test_v1_migration_preserves_joiners_and_sanitizes_newly_unsafe_names(
+    tmp_path: Path,
+    legacy_name: str,
+    preserved: bool,
+) -> None:
+    service, data_root, managed_root, external_root = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "revision": 1,
+                "activeWorkspaceId": WORKSPACE_ID,
+                "workspaces": [
+                    {
+                        "id": WORKSPACE_ID,
+                        "name": legacy_name,
+                        "rootPath": str(external_root.resolve()),
+                        "revision": 1,
+                        "createdAt": NOW.isoformat(),
+                        "updatedAt": NOW.isoformat(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run(service.startup())
+    migrated = run(service.list()).workspaces[1]
+
+    if preserved:
+        assert migrated.name == legacy_name
+        assert migrated.directory_name == legacy_name
+    else:
+        assert migrated.name.startswith("workspace-")
+        assert migrated.directory_name.startswith("workspace-")
     assert (managed_root / migrated.directory_name).is_dir()
     assert migrated.mounts[0].root_path == str(external_root.resolve())
     assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
