@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from asyncio import run
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import os
@@ -131,7 +132,19 @@ def test_create_uses_name_as_managed_directory_and_sets_active(tmp_path: Path) -
 
 @pytest.mark.parametrize(
     "name",
-    [".", "..", "CON", "aux.txt", "bad/name", "bad\\name", "bad:name", "trailing.", "trailing "],
+    [
+        ".",
+        "..",
+        "CON",
+        "aux.txt",
+        "bad/name",
+        "bad\\name",
+        "bad:name",
+        "trailing.",
+        "trailing ",
+        "control\x7f",
+        "format\u202e",
+    ],
 )
 def test_create_rejects_unsafe_cross_platform_directory_names(
     tmp_path: Path, name: str
@@ -142,6 +155,28 @@ def test_create_rejects_unsafe_cross_platform_directory_names(
         run(service.create(name=name, expected_revision=0))
 
     assert raised.value.failure is WorkspaceFailure.INVALID_DIRECTORY_NAME
+
+
+def test_root_policy_rejects_parents_that_contain_protected_roots(
+    tmp_path: Path,
+) -> None:
+    user_home = tmp_path / "home"
+    data_root = user_home / ".opensprite"
+    install_root = user_home / "apps" / "OpenSprite"
+    safe_root = user_home / "projects" / "safe"
+    for path in (data_root, install_root, safe_root):
+        path.mkdir(parents=True)
+    policy = WorkspaceRootPolicy(
+        data_root=data_root,
+        install_root=install_root,
+        user_home=user_home,
+    )
+
+    for unsafe in (tmp_path, user_home / "apps"):
+        with pytest.raises(workspace_policy.UnsafeWorkspaceRoot):
+            policy.validate_new_root(str(unsafe))
+
+    assert policy.validate_new_root(str(safe_root)) == str(safe_root.resolve())
 
 
 def test_create_does_not_adopt_existing_directory_and_import_is_explicit(
@@ -222,6 +257,87 @@ def test_v1_migration_creates_managed_root_and_preserves_external_root_as_mount(
     assert legacy.mounts[0].enabled is True
     assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
     assert external_root.is_dir()
+
+
+@pytest.mark.parametrize("legacy_name", ["default", "Default workspace"])
+def test_v1_migration_renames_values_reserved_by_the_default_workspace(
+    tmp_path: Path,
+    legacy_name: str,
+) -> None:
+    service, data_root, managed_root, external_root = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "revision": 1,
+                "activeWorkspaceId": WORKSPACE_ID,
+                "workspaces": [
+                    {
+                        "id": WORKSPACE_ID,
+                        "name": legacy_name,
+                        "rootPath": str(external_root.resolve()),
+                        "revision": 1,
+                        "createdAt": NOW.isoformat(),
+                        "updatedAt": NOW.isoformat(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run(service.startup())
+    catalog = run(service.list())
+
+    migrated = catalog.workspaces[1]
+    assert migrated.name.casefold() != "default workspace"
+    assert migrated.directory_name.casefold() != "default"
+    assert (managed_root / migrated.directory_name).is_dir()
+    assert migrated.mounts[0].root_path == str(external_root.resolve())
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+
+
+def test_workspace_store_validates_v2_before_replacing_existing_catalog(
+    tmp_path: Path,
+) -> None:
+    _, data_root, _, external_root = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "revision": 1,
+                "activeWorkspaceId": WORKSPACE_ID,
+                "workspaces": [
+                    {
+                        "id": WORKSPACE_ID,
+                        "name": "Legacy",
+                        "rootPath": str(external_root.resolve()),
+                        "revision": 1,
+                        "createdAt": NOW.isoformat(),
+                        "updatedAt": NOW.isoformat(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    original = path.read_bytes()
+    store = JsonWorkspaceStore(path)
+    state = store.get()
+    invalid = replace(
+        state,
+        source_version=2,
+        workspaces=(replace(state.workspaces[0], directory_name="default"),),
+    )
+
+    with pytest.raises(WorkspaceStoreError):
+        store.set(invalid)
+
+    assert path.read_bytes() == original
 
 
 def test_v1_nested_roots_migrate_as_disabled_mounts(tmp_path: Path) -> None:

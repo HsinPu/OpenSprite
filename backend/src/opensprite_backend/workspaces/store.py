@@ -66,32 +66,39 @@ class JsonWorkspaceStore:
         raise WorkspaceStoreError
 
     def set(self, catalog: WorkspaceCatalogState) -> None:
-        payload = json.dumps(
-            {
-                "version": _SCHEMA_VERSION,
-                "revision": catalog.revision,
-                "activeWorkspaceId": catalog.active_workspace_id,
-                "defaultWorkspace": {
-                    "revision": catalog.default_revision,
-                    "mounts": [self._mount_payload(item) for item in catalog.default_mounts],
-                    "updatedAt": self._timestamp(catalog.default_updated_at),
-                },
-                "workspaces": [
-                    {
-                        "id": item.id,
-                        "name": item.name,
-                        "directoryName": item.directory_name,
-                        "mounts": [self._mount_payload(mount) for mount in item.mounts],
-                        "revision": item.revision,
-                        "createdAt": self._timestamp(item.created_at),
-                        "updatedAt": self._timestamp(item.updated_at),
-                    }
-                    for item in catalog.workspaces
-                ],
+        document = {
+            "version": _SCHEMA_VERSION,
+            "revision": catalog.revision,
+            "activeWorkspaceId": catalog.active_workspace_id,
+            "defaultWorkspace": {
+                "revision": catalog.default_revision,
+                "mounts": [self._mount_payload(item) for item in catalog.default_mounts],
+                "updatedAt": self._timestamp(catalog.default_updated_at),
             },
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
+            "workspaces": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "directoryName": item.directory_name,
+                    "mounts": [self._mount_payload(mount) for mount in item.mounts],
+                    "revision": item.revision,
+                    "createdAt": self._timestamp(item.created_at),
+                    "updatedAt": self._timestamp(item.updated_at),
+                }
+                for item in catalog.workspaces
+            ],
+        }
+        try:
+            self._decode_v2(document)
+            payload = json.dumps(
+                document,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        except WorkspaceStoreError:
+            raise
+        except Exception:
+            raise WorkspaceStoreError from None
         if len(payload) > _MAX_BYTES:
             raise WorkspaceStoreError
         try:
@@ -206,9 +213,11 @@ class JsonWorkspaceStore:
             for right in legacy[index + 1 :]:
                 if WorkspaceRootPolicy.paths_overlap(left[2], right[2]):
                     conflicting.update((left[0], right[0]))
-        used_directories: set[str] = set()
+        used_names = {DEFAULT_WORKSPACE_NAME.casefold()}
+        used_directories = {DEFAULT_WORKSPACE_DIRECTORY.casefold()}
         records: list[WorkspaceRecord] = []
         for identifier, name, root, item_revision, created, updated in legacy:
+            migrated_name = cls._legacy_name(name, identifier, used_names)
             directory = cls._legacy_directory(name, identifier, used_directories)
             mount = WorkspaceMountRecord(
                 id=str(uuid5(NAMESPACE_URL, f"opensprite:legacy:{identifier}:{root}")),
@@ -225,7 +234,7 @@ class JsonWorkspaceStore:
             records.append(
                 WorkspaceRecord(
                     identifier,
-                    name,
+                    migrated_name,
                     directory,
                     (mount,),
                     item_revision,
@@ -371,8 +380,25 @@ class JsonWorkspaceStore:
             and len(value) <= maximum
             and value == value.strip()
             and value == unicodedata.normalize("NFC", value)
-            and not any(ord(character) < 32 for character in value)
+            and not any(
+                unicodedata.category(character) in {"Cc", "Cf"}
+                for character in value
+            )
         )
+
+    @staticmethod
+    def _legacy_name(name: str, identifier: str, used: set[str]) -> str:
+        if name.casefold() not in used:
+            used.add(name.casefold())
+            return name
+        base = f"workspace-{identifier[:8]}"
+        candidate = base
+        suffix = 2
+        while candidate.casefold() in used:
+            candidate = f"{base}-{suffix}"
+            suffix += 1
+        used.add(candidate.casefold())
+        return candidate
 
     @classmethod
     def _legacy_directory(cls, name: str, identifier: str, used: set[str]) -> str:
@@ -381,7 +407,12 @@ class JsonWorkspaceStore:
         except InvalidWorkspaceDirectoryName:
             candidate = f"workspace-{identifier[:8]}"
         if candidate.casefold() in used:
-            candidate = f"workspace-{identifier[:8]}"
+            base = f"workspace-{identifier[:8]}"
+            candidate = base
+            suffix = 2
+            while candidate.casefold() in used:
+                candidate = f"{base}-{suffix}"
+                suffix += 1
         used.add(candidate.casefold())
         return candidate
 

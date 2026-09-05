@@ -771,7 +771,14 @@ class WorkspaceCatalogService:
         if type(value) is not str:
             raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
         normalized = unicodedata.normalize("NFC", value).strip()
-        if not normalized or len(normalized) > 80 or any(ord(character) < 32 for character in normalized):
+        if (
+            not normalized
+            or len(normalized) > 80
+            or any(
+                unicodedata.category(character) in {"Cc", "Cf"}
+                for character in normalized
+            )
+        ):
             raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
         return normalized
 
@@ -783,7 +790,11 @@ class WorkspaceCatalogService:
         if (
             not normalized
             or len(normalized) > 40
-            or any(ord(character) < 32 or character in "/\\" for character in normalized)
+            or any(
+                unicodedata.category(character) in {"Cc", "Cf"}
+                or character in "/\\"
+                for character in normalized
+            )
         ):
             raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
         return normalized

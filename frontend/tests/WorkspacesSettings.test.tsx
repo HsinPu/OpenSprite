@@ -110,4 +110,46 @@ describe("Workspace settings", () => {
 
     expect(screen.getByText(/路徑與其他工作區重疊/)).toBeTruthy();
   });
+
+  it.each([
+    ["path", "D:\\NewDocs"],
+    ["permission", "D:\\Docs"],
+  ])("confirms a sensitive mount %s change before saving", async (change, path) => {
+    const mounted = {
+      ...alpha,
+      mounts: [{
+        id: "33333333-3333-4333-8333-333333333333",
+        alias: "Docs",
+        rootPath: "D:\\Docs",
+        rootHash: "a".repeat(64),
+        accessMode: "read_only" as const,
+        enabled: true,
+        availability: "available" as const,
+        unavailableReason: null,
+      }],
+    };
+    render(<WorkspacesSettings controller={{ ...controller, catalog: { ...catalog, workspaces: [defaultWorkspace, mounted, empty] }, activeWorkspace: mounted }} container={null} onActivated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "編輯 Docs" }));
+    if (change === "path") {
+      fireEvent.change(screen.getByRole("textbox", { name: /外部目錄/ }), { target: { value: path } });
+    } else {
+      fireEvent.mouseDown(screen.getByRole("combobox", { name: /存取權限/ }));
+      fireEvent.click((await screen.findByText("可讀寫")).closest(".ant-select-item-option")!);
+    }
+    fireEvent.click(screen.getByRole("button", { name: /儲.*存/ }));
+
+    const confirmation = (await screen.findByText("確認掛載變更")).closest("[role='dialog']") as HTMLElement;
+    expect(updateMount).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: /儲.*存/ }));
+
+    await waitFor(() => expect(updateMount).toHaveBeenCalledWith(
+      mounted,
+      mounted.mounts[0].id,
+      "Docs",
+      path,
+      change === "permission" ? "read_write" : "read_only",
+      true,
+    ));
+  });
 });

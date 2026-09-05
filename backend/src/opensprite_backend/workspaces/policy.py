@@ -142,7 +142,11 @@ class WorkspaceRootPolicy:
             or normalized != normalized.strip()
             or normalized in {".", ".."}
             or normalized.endswith((" ", "."))
-            or any(character in invalid or ord(character) < 32 for character in normalized)
+            or any(
+                character in invalid
+                or unicodedata.category(character) in {"Cc", "Cf"}
+                for character in normalized
+            )
             or stem in reserved
         ):
             raise InvalidWorkspaceDirectoryName
@@ -186,11 +190,18 @@ class WorkspaceRootPolicy:
         return bool(attributes & reparse_flag)
 
     def _is_unsafe(self, path: Path) -> bool:
-        if path.parent == path or self._same(path, self._user_home):
+        if (
+            path.parent == path
+            or self._same(path, self._user_home)
+            or self._within(self._user_home, path)
+        ):
             return True
-        if self._within(path, self._data_root):
+        if self._within(path, self._data_root) or self._within(self._data_root, path):
             return True
-        return self._install_root is not None and self._within(path, self._install_root)
+        return self._install_root is not None and (
+            self._within(path, self._install_root)
+            or self._within(self._install_root, path)
+        )
 
     @classmethod
     def _same(cls, left: Path, right: Path) -> bool:

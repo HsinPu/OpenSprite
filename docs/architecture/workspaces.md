@@ -30,8 +30,10 @@ On startup the backend creates the container and Default Workspace. A v1
 catalog is converted without moving source files: every previous external root
 becomes a `legacy-root` read-write mount and a new managed root is created.
 Nested legacy roots are imported disabled so no ambiguous authority is
-activated. Atomic persistence failure preserves the v1 file and removes only
-new empty migration directories.
+activated. Names or directory names that collide with the new fixed Default
+Workspace receive a deterministic `workspace-<UUID prefix>` fallback. The
+complete v2 document is validated before atomic replacement; persistence
+failure preserves the v1 file and removes only new empty migration directories.
 
 Existing first-level managed directories are not adopted implicitly. The
 import-candidates endpoint returns a cursor page, and import requires an
@@ -45,11 +47,12 @@ Mounts have UUID, NFC-normalized alias, canonical root, `read_only` or
 read-only.
 
 Enabled roots may not be equal, ancestors or descendants of any managed root
-or another enabled mount. Filesystem roots, the exact home directory,
-`.opensprite`, the installation directory, symlinks, junctions and Windows
-reparse points are rejected. Missing or inaccessible saved paths become
-unavailable without substitution. Mount mutations are blocked while the
-Workspace has a queued, running or cancelling Run.
+or another enabled mount. Filesystem roots, the home directory and its
+ancestors, plus `.opensprite`, the installation directory and any parent that
+would expose either protected tree are rejected. Symlinks, junctions and
+Windows reparse points are also rejected. Missing or inaccessible saved paths
+become unavailable without substitution. Mount mutations are blocked while
+the Workspace has a queued, running or cancelling Run.
 
 This release defines authority metadata but adds no file tool. A future
 Workspace-aware tool must enforce the immutable snapshot and fail closed.
@@ -74,6 +77,8 @@ The Sidebar selects one active Workspace and Conversation pagination remains
 Workspace-scoped. Settings can create managed roots, explicitly import existing
 first-level directories, and add, edit, enable, disable or remove mounts.
 Desktop uses modal editors and the 390px layout uses full-width drawers.
+Changing an existing mount path or raising access from read-only to read-write
+requires a separate confirmation before the mutation is submitted.
 
 The UI explicitly states that this release does not provide file-content
 access. Unavailable roots warn the user but do not disable plain text chat.

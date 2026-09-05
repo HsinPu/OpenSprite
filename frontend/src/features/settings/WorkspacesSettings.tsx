@@ -55,6 +55,7 @@ export function WorkspacesSettings({
   const [editingMount, setEditingMount] = useState<WorkspaceMount | null>(null);
   const [mountDraft, setMountDraft] = useState<MountDraft>(emptyMount);
   const [formError, setFormError] = useState<string | null>(null);
+  const [mountConfirmationOpen, setMountConfirmationOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function WorkspacesSettings({
     return () => window.removeEventListener("resize", resize);
   }, []);
 
-  const anyOverlay = workspaceEditorOpen || importOpen || mountEditorOpen;
+  const anyOverlay = workspaceEditorOpen || importOpen || mountEditorOpen || mountConfirmationOpen;
   useEffect(() => { onOverlayChange?.(anyOverlay); }, [anyOverlay, onOverlayChange]);
   useEffect(() => () => onOverlayChange?.(false), [onOverlayChange]);
 
@@ -71,7 +72,7 @@ export function WorkspacesSettings({
   const restoreFocus = () => window.requestAnimationFrame(() => opener.current?.focus());
   const closeWorkspaceEditor = () => { setWorkspaceEditorOpen(false); restoreFocus(); };
   const closeImport = () => { setImportOpen(false); restoreFocus(); };
-  const closeMountEditor = () => { setMountEditorOpen(false); restoreFocus(); };
+  const closeMountEditor = () => { setMountConfirmationOpen(false); setMountEditorOpen(false); restoreFocus(); };
 
   const openWorkspaceEditor = (item: Workspace | null, source: HTMLElement) => {
     rememberOpener(source);
@@ -90,6 +91,7 @@ export function WorkspacesSettings({
     rememberOpener(source);
     setMountWorkspace(workspace);
     setEditingMount(mount);
+    setMountConfirmationOpen(false);
     setMountDraft(mount ? {
       alias: mount.alias,
       rootPath: mount.rootPath,
@@ -126,12 +128,18 @@ export function WorkspacesSettings({
     }
   };
 
-  const saveMount = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!mountWorkspace || !mountDraft.alias.trim() || !mountDraft.rootPath.trim()) {
-      setFormError(t("workspaces.error.invalid"));
-      return;
-    }
+  const mountPathChanged = Boolean(
+    editingMount && mountDraft.rootPath !== editingMount.rootPath,
+  );
+  const mountPermissionRaised = Boolean(
+    editingMount
+    && editingMount.accessMode === "read_only"
+    && mountDraft.accessMode === "read_write",
+  );
+
+  const persistMount = async () => {
+    if (!mountWorkspace) return;
+    setMountConfirmationOpen(false);
     try {
       if (editingMount) {
         await controller.updateMount(
@@ -154,6 +162,19 @@ export function WorkspacesSettings({
     } catch (error) {
       setFormError(workspaceErrorText(error, t));
     }
+  };
+
+  const saveMount = (event: FormEvent) => {
+    event.preventDefault();
+    if (!mountWorkspace || !mountDraft.alias.trim() || !mountDraft.rootPath.trim()) {
+      setFormError(t("workspaces.error.invalid"));
+      return;
+    }
+    if (mountPathChanged || mountPermissionRaised) {
+      setMountConfirmationOpen(true);
+      return;
+    }
+    void persistMount();
   };
 
   const displayName = (item: Workspace) => workspaceName(item.kind, item.name, t("workspaces.default"));
@@ -210,5 +231,19 @@ export function WorkspacesSettings({
     {overlay(workspaceEditorOpen, editingWorkspace ? t("workspaces.editTitle") : t("workspaces.createTitle"), closeWorkspaceEditor, workspaceEditor)}
     {overlay(importOpen, t("workspaces.importTitle"), closeImport, importBody)}
     {overlay(mountEditorOpen, editingMount ? t("workspaces.editMountTitle") : t("workspaces.addMountTitle"), closeMountEditor, mountEditor)}
+    <Modal
+      getContainer={container ?? false}
+      open={mountConfirmationOpen}
+      title={t("workspaces.confirmMountChangeTitle")}
+      okText={t("common.save")}
+      cancelText={t("common.cancel")}
+      confirmLoading={controller.saving}
+      onCancel={() => setMountConfirmationOpen(false)}
+      onOk={() => void persistMount()}
+      destroyOnHidden
+    >
+      {mountPathChanged ? <p>{t("workspaces.confirmMountPathChange")}</p> : null}
+      {mountPermissionRaised ? <p>{t("workspaces.confirmMountPermission")}</p> : null}
+    </Modal>
   </section>;
 }
