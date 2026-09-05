@@ -10,6 +10,7 @@ import {
   listConversationMessages,
   openRunEventStream,
   startRun,
+  type RunEvent,
 } from "../src/api/agentChat";
 
 
@@ -294,6 +295,59 @@ describe("Agent chat SSE contract", () => {
     expect(errors).toEqual([]);
     stream.close();
     expect(source.closed).toBe(true);
+  });
+
+  it("normalizes the version 0.11 run.started workspace payload", () => {
+    class FakeEventSource {
+      static instance: FakeEventSource;
+      listeners = new Map<string, (event: MessageEvent<string>) => void>();
+      onerror: ((event: Event) => void) | null = null;
+      closed = false;
+      constructor(_url: string) { FakeEventSource.instance = this; }
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) { this.listeners.set(type, listener as (event: MessageEvent<string>) => void); }
+      close() { this.closed = true; }
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const events: RunEvent[] = [];
+    const errors: AgentChatApiError[] = [];
+
+    openRunEventStream(runId, {
+      onEvent: (event) => events.push(event),
+      onError: (error) => errors.push(error),
+    });
+    const source = FakeEventSource.instance;
+    source.listeners.get("run.started")?.(new MessageEvent("run.started", {
+      data: JSON.stringify({
+        sequence: 1,
+        type: "run.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:00Z",
+        data: {
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          workspaceRevision: 1,
+          workspaceName: "Default workspace",
+          workspaceRootHash: null,
+          workspaceAvailability: "not_applicable",
+        },
+      }),
+    }));
+
+    expect(source.closed).toBe(false);
+    expect(errors).toEqual([]);
+    expect(events).toEqual([expect.objectContaining({
+      type: "run.started",
+      data: {
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceRevision: 1,
+        workspaceName: "Default workspace",
+        workspaceRootHash: null,
+        workspaceAvailability: "not_applicable",
+        workspaceMountManifestHash: emptyMountManifest,
+        workspaceMountCount: 0,
+        workspaceMounts: [],
+      },
+    })]);
   });
 
   it("closes and reports malformed event data", () => {

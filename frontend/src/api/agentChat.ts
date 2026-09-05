@@ -5,6 +5,7 @@ export const completionReasons = ["stop", "output_limit", "context_limit"] as co
 export type CompletionReason = (typeof completionReasons)[number];
 
 export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
+const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 
 export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
@@ -256,10 +257,40 @@ export async function cancelRun(runId: string): Promise<CancelRunResult> {
 
 function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
-  const data = value.data;
+  let data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
   if (expectedType === "run.started" && !exactKeys(data, [])) {
-    if (!exactKeys(data, ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability", "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"]) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash))) || !["available", "unavailable", "not_applicable"].includes(data.workspaceAvailability as string) || typeof data.workspaceMountManifestHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceMountManifestHash) || !Number.isInteger(data.workspaceMountCount) || (data.workspaceMountCount as number) < 0 || (data.workspaceMountCount as number) > 20 || !Array.isArray(data.workspaceMounts) || data.workspaceMounts.length !== data.workspaceMountCount || data.workspaceMounts.some((mount) => !record(mount) || !exactKeys(mount, ["id", "alias", "rootHash", "accessMode", "enabled", "availability"]) || !isIdentifier(mount.id) || !boundedString(mount.alias, 1, 40) || typeof mount.rootHash !== "string" || !/^[0-9a-f]{64}$/.test(mount.rootHash) || !["read_only", "read_write"].includes(mount.accessMode as string) || typeof mount.enabled !== "boolean" || !["available", "unavailable", "not_applicable"].includes(mount.availability as string))) throw new AgentChatApiError("malformed_response");
+    const legacyKeys = ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"] as const;
+    const currentKeys = [...legacyKeys, "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"] as const;
+    const legacyPayload = exactKeys(data, legacyKeys);
+    const currentPayload = exactKeys(data, currentKeys);
+    if ((!legacyPayload && !currentPayload) || !isIdentifier(data.workspaceId) || !Number.isInteger(data.workspaceRevision) || (data.workspaceRevision as number) < 1 || !boundedString(data.workspaceName, 1, 80) || (data.workspaceRootHash !== null && (typeof data.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(data.workspaceRootHash))) || !["available", "unavailable", "not_applicable"].includes(data.workspaceAvailability as string)) throw new AgentChatApiError("malformed_response");
+    const validCurrentMounts = currentPayload
+      && typeof data.workspaceMountManifestHash === "string"
+      && /^[0-9a-f]{64}$/.test(data.workspaceMountManifestHash)
+      && Number.isInteger(data.workspaceMountCount)
+      && (data.workspaceMountCount as number) >= 0
+      && (data.workspaceMountCount as number) <= 20
+      && Array.isArray(data.workspaceMounts)
+      && data.workspaceMounts.length === data.workspaceMountCount
+      && data.workspaceMounts.every((mount) => record(mount)
+        && exactKeys(mount, ["id", "alias", "rootHash", "accessMode", "enabled", "availability"])
+        && isIdentifier(mount.id)
+        && boundedString(mount.alias, 1, 40)
+        && typeof mount.rootHash === "string"
+        && /^[0-9a-f]{64}$/.test(mount.rootHash)
+        && ["read_only", "read_write"].includes(mount.accessMode as string)
+        && typeof mount.enabled === "boolean"
+        && ["available", "unavailable", "not_applicable"].includes(mount.availability as string));
+    if (currentPayload && !validCurrentMounts) throw new AgentChatApiError("malformed_response");
+    if (legacyPayload) {
+      data = {
+        ...data,
+        workspaceMountManifestHash: EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+        workspaceMountCount: 0,
+        workspaceMounts: [],
+      };
+    }
   }
   if (["context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {
@@ -287,7 +318,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId", "completionReason"]) || !isIdentifier(data.assistantMessageId) || !completionReasons.includes(data.completionReason as CompletionReason))) throw new AgentChatApiError("malformed_response");
   if (["run.failed", "run.interrupted"].includes(expectedType) && (!exactKeys(data, ["error"]) || !record(data.error))) throw new AgentChatApiError("malformed_response");
   if (["run.failed", "run.interrupted"].includes(expectedType)) safeError(data.error);
-  return value as RunEvent;
+  return { ...value, data } as RunEvent;
 }
 
 export function openRunEventStream(runId: string, handlers: RunEventStreamHandlers): RunEventStream {
