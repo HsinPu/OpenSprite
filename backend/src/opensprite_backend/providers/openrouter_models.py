@@ -143,4 +143,5 @@ class OpenRouterModelDiscovery:
             name=name,
             contextWindowTokens=context_length,
             maxOutputTokens=max_output_tokens,
+            supports_tools=("tools" in record["supported_parameters"] if isinstance(record.get("supported_parameters"), list) else None),
         )

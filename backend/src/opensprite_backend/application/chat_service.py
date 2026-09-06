@@ -1,6 +1,8 @@
 """Application orchestration between settings, Providers, Runs, and storage."""
 
 from __future__ import annotations
+from opensprite_backend.skills.service import SkillsService
+from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -109,6 +111,7 @@ class AgentChatOperations(Protocol):
         workspace_id: str,
         client_request_id: str,
         message: str,
+        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult: ...
 
     async def get_run(self, run_id: str) -> RunSnapshot: ...
@@ -165,8 +168,9 @@ class UnavailableAgentChat:
         workspace_id: str,
         client_request_id: str,
         message: str,
+        skill_ids: tuple[str, ...] = (),
     ):
-        del conversation_id, workspace_id, client_request_id, message
+        del conversation_id, workspace_id, client_request_id, message, skill_ids
         raise self._unavailable()
 
     async def get_run(self, run_id: str):
@@ -202,6 +206,7 @@ class AgentChatService:
         workspace_mutation_gate: WorkspaceMutationGate,
         *,
         event_notifier: RunEventNotifier | None = None,
+        skills: SkillsService | None = None,
         event_poll_seconds: float = 0.05,
         event_wait_seconds: float = 5.0,
     ) -> None:
@@ -214,6 +219,7 @@ class AgentChatService:
         self._provider_connections = provider_connections
         self._run_manager = run_manager
         self._workspaces = workspaces
+        self._skills = skills
         self._workspace_mutation_gate = workspace_mutation_gate
         self._event_poll_seconds = event_poll_seconds
         self._event_wait_seconds = event_wait_seconds
@@ -318,6 +324,7 @@ class AgentChatService:
         workspace_id: str,
         client_request_id: str,
         message: str,
+        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
         try:
             settings = await self._ai_settings.get()
@@ -342,6 +349,7 @@ class AgentChatService:
             source="user",
             occurrence_id=None,
             log_full_prompts=settings.logFullPrompts,
+            skill_ids=skill_ids,
         )
 
     async def start_scheduled_run(
@@ -378,6 +386,7 @@ class AgentChatService:
         source: str,
         occurrence_id: str | None,
         log_full_prompts: bool,
+        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
         try:
             providers = await self._provider_connections.list_providers()
@@ -401,6 +410,9 @@ class AgentChatService:
         async with self._workspace_mutation_gate.hold():
             try:
                 workspace = self._workspaces.execution_context(workspace_id)
+                skill_snapshot = self._skills.snapshot(workspace_id, skill_ids) if self._skills else SkillExecutionSnapshot()
+                if skill_ids and self._skills is None:
+                    raise SkillError("skill_unavailable")
                 accepted = await asyncio.to_thread(
                     self._repository.start_run,
                     conversation_id=conversation_id,
@@ -420,13 +432,17 @@ class AgentChatService:
                     workspace_name_snapshot=workspace.name,
                     workspace_root_hash=workspace.root_hash,
                     workspace_mount_manifest_hash=workspace.mount_manifest_hash,
+                    skill_ids=skill_ids,
                 )
             except WorkspaceError as error:
                 raise _workspace_error(error) from error
             except ConversationStoreError as error:
                 raise _store_error(error) from error
         if accepted.run.status is RunStatus.QUEUED:
-            await self._run_manager.start(accepted.run.id, workspace)
+            if self._skills is None:
+                await self._run_manager.start(accepted.run.id, workspace)
+            else:
+                await self._run_manager.start(accepted.run.id, workspace, skill_snapshot)
         return accepted
 
     async def get_run(self, run_id: str) -> RunSnapshot:

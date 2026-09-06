@@ -50,6 +50,8 @@ class RunEventType(str, Enum):
     TOOL_APPROVAL_DECIDED = "tool.approval_decided"
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
+    SKILL_LOADED = "skill.loaded"
+    SKILL_LOAD_FAILED = "skill.load_failed"
     TOOL_FAILED = "tool.failed"
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"

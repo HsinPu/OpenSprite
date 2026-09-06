@@ -1,5 +1,5 @@
 """Strict persisted policy and immutable per-run instruction snapshots."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -42,7 +42,7 @@ class SkillContent:
     description: str
     revision: int
     content_hash: str
-    body: str
+    body: str = field(repr=False)
 
 
 @dataclass(frozen=True)

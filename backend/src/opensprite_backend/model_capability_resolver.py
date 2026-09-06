@@ -86,6 +86,7 @@ class ProviderModelCapabilityResolver:
                 context_window_tokens=item.context_window_tokens,
                 max_output_tokens=item.max_output_tokens
                 or min(32_768, item.context_window_tokens),
+                supports_tools=item.supports_tools is not False,
             )
             for item in catalog.models
         }

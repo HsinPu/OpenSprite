@@ -371,6 +371,7 @@ def test_generated_chat_schema_keeps_strict_request_and_sse_content_type() -> No
         "workspaceId",
         "clientRequestId",
         "message",
+        "skillIds",
     }
     stream = schema["paths"]["/api/runs/{run_id}/events"]["get"]
     assert "text/event-stream" in stream["responses"]["200"]["content"]

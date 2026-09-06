@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
+from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool
 from datetime import UTC, datetime
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
@@ -205,6 +207,7 @@ class AgentLoop:
         run_id: str,
         cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
+        skills: SkillExecutionSnapshot | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -261,6 +264,16 @@ class AgentLoop:
                 run_id=run_id,
                 workspace=workspace,
             )
+            skill_state = SkillRunState(skills or SkillExecutionSnapshot())
+            base_system_prompt = system_prompt
+            system_prompt = skill_state.prompt(base_system_prompt)
+            if skill_state.snapshot.available:
+                capability = await self._await_with_cancellation(self._capability_resolver.resolve(run.provider_id, run.model_id), cancellation_event)
+                if capability.supports_tools:
+                    run_tools = run_tools.extended((LoadSkillTool(),))
+                    availability = ToolAvailabilitySnapshot(availability.enabled_names | {"load_skill"})
+                else:
+                    system_prompt += "\nAutomatic Skill selection is unavailable for this model. Only manually selected Skills are loaded."
             prepared = await self._prepare_context(
                 run=run,
                 system_prompt=system_prompt,
@@ -270,6 +283,9 @@ class AgentLoop:
                 current_user_message_id=run.user_message_id,
             )
             transcript = list(prepared.messages)
+            for identifier in skill_state.loaded:
+                await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOADED,
+                                        skill_state.event(identifier, "manual"))
             tool_definitions = prepared.tools
             accumulated_text = run.partial_text
             tool_call_count = 0
@@ -465,6 +481,29 @@ class AgentLoop:
                     )
                 )
                 for call in tool_calls:
+                    if call.name == "load_skill":
+                        identifier = call.arguments.get("skillId") if isinstance(call.arguments, dict) else None
+                        try:
+                            if not isinstance(call.arguments, dict) or set(call.arguments) != {"skillId"} or not isinstance(identifier, str):
+                                raise SkillError("invalid_request")
+                            candidate = skill_state.candidate(identifier)
+                            candidate_prompt = skill_state.prompt(base_system_prompt, candidate)
+                            confirmation = ModelMessage(role="tool", content="Skill loaded for this run.", tool_call_id=call.call_id, tool_name=call.name)
+                            updated = [ModelMessage(role="system", content=candidate_prompt), *transcript[1:], confirmation]
+                            if self._counter.request(tuple(updated), tool_definitions) > prepared.budget.input_budget_tokens:
+                                raise SkillError("context_limit")
+                            if identifier not in skill_state.loaded:
+                                await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOADED,
+                                                        skill_state.event(identifier, "model"))
+                            skill_state.loaded = candidate
+                            system_prompt = candidate_prompt
+                            transcript = updated
+                        except SkillError as error:
+                            await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOAD_FAILED,
+                                                    skill_state.failure(identifier, error.code))
+                            transcript.append(ModelMessage(role="tool", content="Skill could not be loaded: " + error.code,
+                                                           tool_call_id=call.call_id, tool_name=call.name))
+                        continue
                     tool_call_count += 1
                     if tool_call_count > self._max_tool_calls:
                         await delta_buffer.flush()

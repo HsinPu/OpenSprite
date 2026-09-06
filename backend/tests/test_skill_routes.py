@@ -38,3 +38,12 @@ def test_revision_and_changed_content(tmp_path):
         assert client.put("/api/skills/settings", json={"enabled": False, "expectedRevision": 5}).status_code == 409
         item = client.post("/api/skills", json={"scope": "global", "content": CONTENT, "expectedRevision": 0}).json()["skill"]
         assert client.put(f'/api/skills/{item["id"]}/enabled', json={"enabled": True, "confirmedHash": "0" * 64, "expectedRevision": 1}).status_code == 409
+
+
+def test_skills_routes_require_authentication(tmp_path):
+    from test_authentication import authentication
+    auth, _ = authentication(tmp_path)
+    app = create_app(local_authentication=auth, enforce_authentication=True)
+    with TestClient(app) as client:
+        for method, path in [("GET", "/settings"), ("PUT", "/settings"), ("GET", "?scope=global"), ("POST", ""), ("POST", "/scan"), ("GET", "/11111111-1111-4111-8111-111111111111"), ("PUT", "/11111111-1111-4111-8111-111111111111"), ("DELETE", "/11111111-1111-4111-8111-111111111111?expectedRevision=0"), ("PUT", "/11111111-1111-4111-8111-111111111111/enabled"), ("PUT", "/11111111-1111-4111-8111-111111111111/workspace-override")]:
+            assert client.request(method, "/api/skills" + path).status_code == 401

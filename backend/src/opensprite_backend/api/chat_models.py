@@ -37,6 +37,14 @@ class StartRunRequest(BaseModel):
     workspaceId: UUID
     clientRequestId: UUID
     message: str = Field(min_length=1, max_length=32768)
+    skillIds: list[UUID] = Field(default_factory=list, max_length=5)
+
+    @field_validator("skillIds")
+    @classmethod
+    def unique_skills(cls, value):
+        if len(value) != len(set(value)):
+            raise ValueError("duplicate skills")
+        return value
 
     @field_validator("message")
     @classmethod

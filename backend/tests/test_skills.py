@@ -81,3 +81,37 @@ def test_transaction_recovers_file_write_before_catalog(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "atomic_write", original)
     assert service.list("global")["skills"][0]["name"] == "review"
     assert not service.paths.skills_transaction_file.exists()
+
+
+def test_missing_skill_can_be_removed_without_blocking_catalog(tmp_path):
+    service = setup(tmp_path)
+    item = service.save(scope="global", workspace_id=None, content=CONTENT, expected=0)["skill"]
+    path = service.paths.skills_dir / "review" / "SKILL.md"
+    path.unlink()
+    path.parent.rmdir()
+    service.delete(item["id"], 1)
+    assert service.list("global")["skills"] == []
+    assert not service.paths.skills_transaction_file.exists()
+
+
+def test_scope_same_names_and_workspace_removal_disable_registry(tmp_path):
+    service = setup(tmp_path)
+    global_item = service.save(scope="global", workspace_id=None, content=CONTENT, expected=0)["skill"]
+    local = service.save(scope="workspace", workspace_id=WORKSPACE_ID, content=CONTENT, expected=1)["skill"]
+    service.configure(expected=2, identifier=local["id"], enabled=True, confirmed_hash=local["contentHash"])
+    service.configure(expected=3, identifier=global_item["id"], workspace_id=WORKSPACE_ID, disabled=True)
+    service.forget_workspace(WORKSPACE_ID)
+    assert service.list("workspace", WORKSPACE_ID)["skills"] == []
+    assert service.get(global_item["id"])["skill"]["disabledWorkspaces"] == []
+    assert (service.paths.managed_workspaces_dir / "project" / "skills" / "review" / "SKILL.md").exists()
+
+
+def test_scan_registers_invalid_documents_without_enabling(tmp_path):
+    service = setup(tmp_path)
+    directory = service.paths.skills_dir / "broken"
+    directory.mkdir(parents=True)
+    directory.joinpath("SKILL.md").write_text("invalid", encoding="utf-8")
+    result = service.scan("global", None, 0)
+    assert result["skills"][0]["state"] == "invalid_format"
+    assert not result["skills"][0]["enabled"]
+    assert not service.snapshot(WORKSPACE_ID).available

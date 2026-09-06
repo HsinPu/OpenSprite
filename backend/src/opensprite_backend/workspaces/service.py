@@ -180,6 +180,7 @@ class WorkspaceCatalogService:
         mutation_gate: WorkspaceMutationGate | None = None,
         clock: Callable[[], datetime] | None = None,
         identifier_factory: Callable[[], str] | None = None,
+        on_removed: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._root_policy = root_policy
@@ -190,6 +191,7 @@ class WorkspaceCatalogService:
         self.mutation_gate = mutation_gate or WorkspaceMutationGate()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._identifier_factory = identifier_factory or (lambda: str(uuid4()))
+        self.on_removed = on_removed
 
     async def startup(self) -> None:
         async with self.mutation_gate.hold():
@@ -402,6 +404,8 @@ class WorkspaceCatalogService:
                 workspaces=tuple(item for item in state.workspaces if item.id != workspace_id),
                 source_version=3,
             )
+            if self.on_removed is not None:
+                self.on_removed(workspace_id)
             self._write(next_state)
 
     async def set_active(

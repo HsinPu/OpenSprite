@@ -15,6 +15,7 @@ class ModelCapability:
     name: str
     context_window_tokens: int
     max_output_tokens: int
+    supports_tools: bool = True
 
     def __post_init__(self) -> None:
         if not self.model_id or not self.name:

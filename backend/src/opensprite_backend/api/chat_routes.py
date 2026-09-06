@@ -170,6 +170,7 @@ async def start_run(
         workspace_id=str(payload.workspaceId),
         client_request_id=str(payload.clientRequestId),
         message=payload.message,
+        **({"skill_ids": tuple(str(value) for value in payload.skillIds)} if payload.skillIds else {}),
     )
     return StartRunResponse(
         conversationId=accepted.conversation.id,

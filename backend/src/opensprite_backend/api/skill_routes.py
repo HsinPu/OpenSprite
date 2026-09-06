@@ -6,14 +6,21 @@ import json
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import Field, ValidationError
 
-from opensprite_backend.skills.models import StrictModel, SkillError
+from opensprite_backend.skills.models import StrictModel, SkillError, SkillRecord
 from opensprite_backend.skills.service import unique
 
-router = APIRouter(prefix="/api/skills", tags=["skills"])
+async def workspace_gate(request: Request):
+    if request.method not in {"GET", "DELETE"} and request.query_params:
+        raise SkillError("invalid_request")
+    async with service(request).workspaces.mutation_gate.hold():
+        yield
+
+
+router = APIRouter(prefix="/api/skills", tags=["skills"], dependencies=[Depends(workspace_gate)])
 
 
 class Revision(StrictModel):
@@ -48,6 +55,32 @@ class Enabled(Settings):
 class Override(Revision):
     workspaceId: str
     disabled: bool
+
+
+class SettingsResponse(StrictModel):
+    enabled: bool
+    revision: int = Field(ge=0)
+
+
+class SkillView(SkillRecord):
+    contentHash: str | None
+    state: Literal["ready", "pending", "disabled", "missing", "invalid_format", "content_too_large", "unsafe_path", "workspace_unavailable"]
+    effective: bool
+    reason: str
+    content: str | None = None
+
+
+class SkillListResponse(SettingsResponse):
+    skills: list[SkillView]
+
+
+class SkillDetailResponse(StrictModel):
+    revision: int = Field(ge=0)
+    skill: SkillView
+
+
+def request_schema(model):
+    return {"requestBody": {"required": True, "content": {"application/json": {"schema": model.model_json_schema()}}}}
 
 
 async def body(request: Request, model):
@@ -94,19 +127,22 @@ async def skill_error_handler(request: Request, error: SkillError):
     }})
 
 
-@router.get("/settings")
+@router.get("/settings", operation_id="getSkillsSettings", response_model=SettingsResponse)
 async def get_settings(request: Request):
     query(request, set())
     return await asyncio.to_thread(service(request).settings)
 
 
-@router.put("/settings")
+@router.put("/settings", operation_id="putSkillsSettings", response_model=SettingsResponse, openapi_extra=request_schema(Settings))
 async def put_settings(request: Request):
     value = await body(request, Settings)
     return await asyncio.to_thread(service(request).configure, expected=value.expectedRevision, enabled=value.enabled)
 
 
-@router.get("")
+@router.get("", operation_id="listSkills", response_model=SkillListResponse, response_model_exclude_unset=True, openapi_extra={"parameters": [
+    {"name": "scope", "in": "query", "required": True, "schema": {"type": "string", "enum": ["global", "workspace"]}},
+    {"name": "workspaceId", "in": "query", "required": False, "description": "Required for workspace scope; global scope uses this to calculate workspace overrides.", "schema": {"type": "string", "format": "uuid"}},
+]})
 async def list_skills(request: Request):
     params = query(request, {"scope", "workspaceId"})
     try:
@@ -114,46 +150,48 @@ async def list_skills(request: Request):
     except ValidationError:
         raise SkillError("invalid_request") from None
     if value.workspaceId is not None:
-        identifier(value.workspaceId)
+        value.workspaceId = identifier(value.workspaceId)
     if value.scope == "workspace" and value.workspaceId is None:
         raise SkillError("invalid_request")
     return await asyncio.to_thread(service(request).list, value.scope, value.workspaceId)
 
 
-@router.post("")
+@router.post("", operation_id="createSkill", response_model=SkillDetailResponse, openapi_extra=request_schema(Create))
 async def create_skill(request: Request):
     value = await body(request, Create)
     if value.workspaceId is not None:
-        identifier(value.workspaceId)
+        value.workspaceId = identifier(value.workspaceId)
     return await asyncio.to_thread(service(request).save, scope=value.scope, workspace_id=value.workspaceId,
                                    content=value.content, expected=value.expectedRevision)
 
 
-@router.post("/scan")
+@router.post("/scan", operation_id="scanSkills", response_model=SkillListResponse, response_model_exclude_unset=True, openapi_extra=request_schema(Scan))
 async def scan_skills(request: Request):
     value = await body(request, Scan)
     if value.workspaceId is not None:
-        identifier(value.workspaceId)
+        value.workspaceId = identifier(value.workspaceId)
     return await asyncio.to_thread(service(request).scan, value.scope, value.workspaceId, value.expectedRevision)
 
 
-@router.get("/{skill_id}")
+@router.get("/{skill_id}", operation_id="getSkill", response_model=SkillDetailResponse)
 async def get_skill(skill_id: str, request: Request):
     query(request, set())
     return await asyncio.to_thread(service(request).get, identifier(skill_id))
 
 
-@router.put("/{skill_id}")
+@router.put("/{skill_id}", operation_id="updateSkill", response_model=SkillDetailResponse, openapi_extra=request_schema(Update))
 async def update_skill(skill_id: str, request: Request):
     value = await body(request, Update)
     manager = service(request)
     item = await asyncio.to_thread(manager.get, identifier(skill_id))
     item = item["skill"]
     return await asyncio.to_thread(manager.save, scope=item["scope"], workspace_id=item["workspaceId"], content=value.content,
-                                   expected=value.expectedRevision, identifier=skill_id)
+                                   expected=value.expectedRevision, identifier=identifier(skill_id))
 
 
-@router.delete("/{skill_id}")
+@router.delete("/{skill_id}", operation_id="deleteSkill", response_model=None, openapi_extra={"parameters": [
+    {"name": "expectedRevision", "in": "query", "required": True, "schema": {"type": "integer", "minimum": 0}},
+], "responses": {"200": {"description": "Archived or already missing directory; registration removed.", "content": {"application/json": {"schema": {"type": "null"}}}}}})
 async def delete_skill(skill_id: str, request: Request):
     params = query(request, {"expectedRevision"})
     raw = params.get("expectedRevision", "")
@@ -162,7 +200,7 @@ async def delete_skill(skill_id: str, request: Request):
     return await asyncio.to_thread(service(request).delete, identifier(skill_id), int(raw))
 
 
-@router.put("/{skill_id}/enabled")
+@router.put("/{skill_id}/enabled", operation_id="setSkillEnabled", response_model=SettingsResponse, openapi_extra=request_schema(Enabled))
 async def enable_skill(skill_id: str, request: Request):
     value = await body(request, Enabled)
     return await asyncio.to_thread(service(request).configure, expected=value.expectedRevision,
@@ -170,7 +208,7 @@ async def enable_skill(skill_id: str, request: Request):
                                    confirmed_hash=value.confirmedHash)
 
 
-@router.put("/{skill_id}/workspace-override")
+@router.put("/{skill_id}/workspace-override", operation_id="setSkillWorkspaceOverride", response_model=SettingsResponse, openapi_extra=request_schema(Override))
 async def override_skill(skill_id: str, request: Request):
     value = await body(request, Override)
     return await asyncio.to_thread(service(request).configure, expected=value.expectedRevision,

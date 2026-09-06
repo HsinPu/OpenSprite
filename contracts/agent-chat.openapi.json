@@ -747,6 +747,7 @@
           "message"
         ],
         "properties": {
+          "skillIds": {"type": "array", "items": {"$ref": "#/components/schemas/Identifier"}, "maxItems": 5, "uniqueItems": true, "default": []},
           "conversationId": {
             "oneOf": [
               {
@@ -837,6 +838,8 @@
           "tool.started",
           "tool.completed",
           "tool.failed",
+          "skill.loaded",
+          "skill.load_failed",
           "run.completed",
           "run.failed",
           "run.cancelled",

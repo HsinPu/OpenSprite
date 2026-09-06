@@ -146,6 +146,16 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
     }
 
     assert operations == {
+        ("/api/skills/settings", "get", "getSkillsSettings"),
+        ("/api/skills/settings", "put", "putSkillsSettings"),
+        ("/api/skills", "get", "listSkills"),
+        ("/api/skills", "post", "createSkill"),
+        ("/api/skills/scan", "post", "scanSkills"),
+        ("/api/skills/{skill_id}", "get", "getSkill"),
+        ("/api/skills/{skill_id}", "put", "updateSkill"),
+        ("/api/skills/{skill_id}", "delete", "deleteSkill"),
+        ("/api/skills/{skill_id}/enabled", "put", "setSkillEnabled"),
+        ("/api/skills/{skill_id}/workspace-override", "put", "setSkillWorkspaceOverride"),
         ("/healthz", "get", "getHealth"),
         ("/api/app-info", "get", "getAppInfo"),
         ("/api/auth/status", "get", "getAuthStatus"),

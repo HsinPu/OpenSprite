@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from pathlib import Path
 from threading import RLock
 from uuid import UUID, uuid4
@@ -10,7 +11,7 @@ from pydantic import ValidationError
 from opensprite_backend.app_paths import AppPaths
 from opensprite_backend.atomic_file import atomic_write
 from opensprite_backend.workspaces import WorkspaceAvailability, WorkspaceRootPolicy
-from opensprite_backend.workspaces.relocation import require_plain_directory, ensure_plain_directory
+from opensprite_backend.workspaces.relocation import require_plain_directory, ensure_plain_directory, WorkspaceRelocationError
 from .format import parse
 from .models import SkillCatalog, SkillRecord, SkillError, SkillContent, SkillExecutionSnapshot
 
@@ -60,7 +61,7 @@ class SkillsService:
                 raise SkillError("unsafe_path")
             if not missing and not path.is_file():
                 raise SkillError("missing")
-        except (OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError, WorkspaceRelocationError):
             raise SkillError("unsafe_path") from None
 
     def _read_file(self, item: SkillRecord) -> str:
@@ -89,6 +90,10 @@ class SkillsService:
         catalog = SkillCatalog.model_validate(raw)
         ids, names, directories, counts = set(), set(), set(), {}
         for item in catalog.skills:
+            if not 1 <= len(item.name) <= 80 or item.name != unicodedata.normalize("NFC", item.name).strip() or len(item.description) > 500:
+                raise ValueError
+            if any(unicodedata.category(c) in {"Cc", "Cs"} for c in item.name):
+                raise ValueError
             UUID(item.id)
             if item.scope == "workspace":
                 UUID(item.workspaceId)
@@ -128,8 +133,8 @@ class SkillsService:
                     raise SkillError("store_unavailable")
                 require_plain_directory(path.parent)
                 path.parent.rename(archive)
-            elif not archive.is_dir():
-                raise SkillError("store_unavailable")
+            elif archive.exists():
+                require_plain_directory(archive)
         else:
             parse(tx["content"])
             ensure_plain_directory(path.parent)
@@ -279,6 +284,8 @@ class SkillsService:
                 require_plain_directory(base)
                 peers = [i for i in cat.skills if i.scope == scope and i.workspaceId == workspace_id]
                 for child in sorted(base.iterdir()):
+                    if not child.is_dir() or not child.joinpath("SKILL.md").exists():
+                        continue
                     if any(i.directoryName.casefold() == child.name.casefold() for i in peers):
                         continue
                     if len(peers) >= 100:
@@ -286,11 +293,17 @@ class SkillsService:
                     try:
                         directory = WorkspaceRootPolicy.directory_name(child.name)
                         item = SkillRecord(id=str(uuid4()), scope=scope, workspaceId=workspace_id, directoryName=directory, name=directory, description="", revision=1)
-                        name, description, _, _ = parse(self._read_file(item))
+                        require_plain_directory(child)
+                        try:
+                            name, description, _, _ = parse(self._read_file(item))
+                        except SkillError as error:
+                            if error.code not in {"invalid_format", "content_too_large"} or len(directory) > 80:
+                                raise
+                            name, description = directory, ""
                         if any(i.name.casefold() == name.casefold() for i in peers):
                             continue
                         item.name, item.description = name, description
-                    except (SkillError, ValueError):
+                    except (SkillError, ValueError, WorkspaceRelocationError):
                         continue
                     peers.append(item); cat.skills.append(item)
                 cat.revision += 1; self._write(cat)

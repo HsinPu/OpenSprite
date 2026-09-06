@@ -216,6 +216,8 @@ def create_system_runtime(
         prompt_log_writer=FilePromptLogWriter(paths),
     )
     run_manager = RunManager(repository, agent_loop)
+    skills = SkillsService(paths, workspaces)
+    workspaces.on_removed = skills.forget_workspace
     agent_chat = AgentChatService(
         repository,
         ai_settings,
@@ -224,6 +226,7 @@ def create_system_runtime(
         workspaces,
         workspace_mutation_gate,
         event_notifier=event_notifier,
+        skills=skills,
     )
     schedule_repository = SqliteScheduleRepository(paths.database_file)
     schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
@@ -245,7 +248,7 @@ def create_system_runtime(
         agent_chat,
         schedules,
         schedule_coordinator,
-        SkillsService(paths, workspaces),
+        skills,
     )
 
 
@@ -337,6 +340,7 @@ def create_system_app(
             app.state.skills = getattr(runtime, "skills", None)
             yield
         finally:
+            app.state.skills = None
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()

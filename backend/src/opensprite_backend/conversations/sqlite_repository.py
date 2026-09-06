@@ -48,7 +48,7 @@ from opensprite_backend.workspaces import (
 from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_NAME
 
 
-_SCHEMA_VERSION = 13
+_SCHEMA_VERSION = 14
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -187,6 +187,7 @@ CREATE TABLE run_events (
         'response.continuation.started',
         'assistant.delta', 'tool.approval_requested', 'tool.approval_decided',
         'tool.started', 'tool.completed', 'tool.failed',
+        'skill.loaded', 'skill.load_failed',
         'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
     )),
     payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
@@ -263,7 +264,7 @@ WHERE status IN ('queued', 'running', 'cancelling');
 CREATE INDEX schedules_by_workspace
 ON schedules(workspace_id, status, next_run_at, id);
 
-PRAGMA user_version = 13;
+PRAGMA user_version = 14;
 COMMIT;
 """
 
@@ -1109,6 +1110,7 @@ class SqliteConversationRepository:
         workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
         workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -1151,12 +1153,17 @@ class SqliteConversationRepository:
             or re.fullmatch(r"[0-9a-f]{64}", workspace_mount_manifest_hash) is None
         ):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if len(skill_ids) > 5 or len(set(skill_ids)) != len(skill_ids):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        for skill_id in skill_ids:
+            self._require_identifier(skill_id)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
             workspace_id,
             normalized_message,
             source,
             occurrence_id,
+            skill_ids,
         )
         with self._lock:
             connection = self._open_write()
@@ -2086,6 +2093,10 @@ class SqliteConversationRepository:
                     version = 12
                 if version == 12:
                     _migrate_v12_to_v13(connection)
+                    version = 13
+                if version == 13:
+                    from .skill_event_migration import migrate
+                    migrate(connection)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -2374,9 +2385,11 @@ class SqliteConversationRepository:
         message: str,
         source: RunSource = "user",
         occurrence_id: str | None = None,
+        skill_ids: tuple[str, ...] = (),
     ) -> str:
         canonical = json.dumps(
-            {"conversationId": conversation_id, "workspaceId": workspace_id, "message": message, "source": source, "occurrenceId": occurrence_id},
+            {"conversationId": conversation_id, "workspaceId": workspace_id, "message": message, "source": source, "occurrenceId": occurrence_id,
+             **({"skillIds": list(skill_ids)} if skill_ids else {})},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -2475,6 +2488,20 @@ class SqliteConversationRepository:
         data: dict[str, object],
     ) -> None:
         keys = set(data)
+        if event_type in {RunEventType.SKILL_LOADED, RunEventType.SKILL_LOAD_FAILED}:
+            expected = {"skillId", "scope", "name", "revision", "contentHash", "source"}
+            if event_type is RunEventType.SKILL_LOAD_FAILED:
+                expected.add("errorCode")
+                if keys == expected and data["source"] == "model" and data["errorCode"] in {"invalid_request", "skill_unavailable"} and all(data[key] is None for key in {"skillId", "scope", "name", "revision", "contentHash"}):
+                    return
+            if keys != expected or data["scope"] not in {"global", "workspace"} or data["source"] not in {"manual", "model"}:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            SqliteConversationRepository._require_identifier(data["skillId"])
+            if not isinstance(data["name"], str) or not 1 <= len(data["name"]) <= 80 or type(data["revision"]) is not int or data["revision"] < 1 or not isinstance(data["contentHash"], str) or re.fullmatch(r"[0-9a-f]{64}", data["contentHash"]) is None:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            if event_type is RunEventType.SKILL_LOAD_FAILED and data["errorCode"] not in {"context_limit", "limit_reached", "invalid_request", "skill_unavailable"}:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
         if event_type is RunEventType.RUN_STARTED:
             expected = {
                 "workspaceId",

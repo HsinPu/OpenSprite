@@ -194,6 +194,7 @@ class ProviderListResponse(ContractModel):
 
 
 class OpenRouterModel(ContractModel):
+    supports_tools: bool | None = Field(default=None, exclude=True)
     id: str = Field(min_length=1, max_length=256)
     name: str = Field(min_length=1, max_length=256)
     context_window_tokens: int = Field(

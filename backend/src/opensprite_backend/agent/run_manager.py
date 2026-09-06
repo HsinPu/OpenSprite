@@ -15,6 +15,7 @@ from opensprite_backend.conversations.repository import (
     ConversationStoreError,
 )
 from opensprite_backend.workspaces import WorkspaceExecutionContext
+from opensprite_backend.skills.models import SkillExecutionSnapshot
 
 from .loop import AgentLoop
 from .events import INTERNAL_ERROR
@@ -39,6 +40,7 @@ class RunManager:
         self,
         run_id: str,
         workspace: WorkspaceExecutionContext,
+        skills: SkillExecutionSnapshot | None = None,
     ) -> bool:
         async with self._lock:
             if self._closed:
@@ -53,7 +55,7 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace),
+                self._execute(run_id, cancellation, workspace, skills),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
@@ -71,9 +73,12 @@ class RunManager:
         run_id: str,
         cancellation: asyncio.Event,
         workspace: WorkspaceExecutionContext,
+        skills: SkillExecutionSnapshot | None = None,
     ) -> RunSnapshot:
         try:
-            return await self._loop.execute(run_id, cancellation, workspace)
+            if skills is None:
+                return await self._loop.execute(run_id, cancellation, workspace)
+            return await self._loop.execute(run_id, cancellation, workspace, skills)
         except ConversationStoreError as execution_error:
             _LOGGER.exception("run execution failed run_id=%s", run_id)
             try:
