@@ -21,6 +21,17 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
   const generation = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => { onOverlayChange?.(editor); return () => onOverlayChange?.(false); }, [editor, onOverlayChange]);
+  useEffect(() => {
+    if (!editor) return;
+    const dismissEditor = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!busy) { setEditor(false); opener.current?.focus(); }
+    };
+    document.addEventListener("keydown", dismissEditor, true);
+    return () => document.removeEventListener("keydown", dismissEditor, true);
+  }, [editor, busy]);
   const reload = useCallback(async () => {
     const current = ++generation.current;
     setLoading(true);

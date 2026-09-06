@@ -27,3 +27,19 @@ it("preserves visible settings and reports mutation failure", async () => {
   expect((await screen.findByRole("alert")).textContent).toContain("revision_conflict");
   expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
 });
+
+it("consumes Escape inside the editor and restores its opener", async () => {
+  const changed = vi.fn();
+  const outer = vi.fn();
+  window.addEventListener("keydown", outer);
+  try {
+    render(<SkillsSettings workspaces={{ catalog: null }} container={null} onOverlayChange={changed} />);
+    const edit = await screen.findByRole("button", { name: /編\s*輯/ });
+    fireEvent.click(edit);
+    await screen.findByRole("button", { name: "確認此版本並啟用" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(changed).toHaveBeenLastCalledWith(false));
+    expect(outer).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(edit));
+  } finally { window.removeEventListener("keydown", outer); }
+});
