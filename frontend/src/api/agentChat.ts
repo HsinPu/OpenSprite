@@ -7,12 +7,12 @@ export type CompletionReason = (typeof completionReasons)[number];
 export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
 const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 
-export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
 export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
-export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
+export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error" | "skill_unavailable";
 
 export type ConversationSummary = {
   id: string;
@@ -95,6 +95,7 @@ export type StartRunInput = {
   workspaceId: string;
   clientRequestId: string;
   message: string;
+  skillIds?: string[];
 };
 
 export type StartRunResult = {
@@ -198,6 +199,7 @@ async function jsonRequest(path: string, init: RequestInit | undefined, successS
     throw new AgentChatApiError("malformed_response");
   }
   if (response.status !== successStatus) {
+    if (path === "/api/runs" && response.status === 400 && record(body) && exactKeys(body, ["error"]) && record(body.error) && exactKeys(body.error, ["code", "message", "retryable"]) && body.error.code === "skill_unavailable" && typeof body.error.message === "string" && typeof body.error.retryable === "boolean") throw new AgentChatApiError("skill_unavailable");
     if (response.ok) throw new AgentChatApiError("malformed_response");
     throw new AgentChatApiError(errorCode(body, errors.get(response.status) ?? []));
   }
@@ -237,6 +239,7 @@ export async function moveConversationToWorkspace(conversationId: string, worksp
 }
 
 export async function startRun(input: StartRunInput): Promise<StartRunResult> {
+  if (input.skillIds && (input.skillIds.length > 5 || new Set(input.skillIds).size !== input.skillIds.length || input.skillIds.some(id => !isIdentifier(id)))) throw new AgentChatApiError("malformed_response");
   if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.workspaceId) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
   const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [409, ["run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
   if (!record(body) || !exactKeys(body, ["conversationId", "workspaceId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.workspaceId) || body.workspaceId !== input.workspaceId || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
@@ -258,6 +261,12 @@ export async function cancelRun(runId: string): Promise<CancelRunResult> {
 function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   let data = value.data;
+  if (expectedType === "skill.loaded" || expectedType === "skill.load_failed") {
+    const keys = ["skillId", "scope", "name", "revision", "contentHash", "source"];
+    if (expectedType === "skill.load_failed") keys.push("errorCode");
+    if (expectedType === "skill.load_failed" && exactKeys(data, keys) && data.source === "model" && ["invalid_request", "skill_unavailable"].includes(String(data.errorCode)) && ["skillId", "scope", "name", "revision", "contentHash"].every(key => data[key] === null)) return value as RunEvent;
+    if (!exactKeys(data, keys) || !isIdentifier(data.skillId) || !["global", "workspace"].includes(String(data.scope)) || !boundedString(data.name, 1, 80) || !Number.isInteger(data.revision) || Number(data.revision) < 1 || typeof data.contentHash !== "string" || !/^[0-9a-f]{64}$/.test(data.contentHash) || !["manual", "model"].includes(String(data.source)) || (expectedType === "skill.load_failed" && !["context_limit", "limit_reached", "invalid_request", "skill_unavailable"].includes(String(data.errorCode)))) throw new AgentChatApiError("malformed_response");
+  }
   const safeError = (candidate: unknown) => runError(candidate);
   if (expectedType === "run.started" && !exactKeys(data, [])) {
     const legacyKeys = ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"] as const;
@@ -361,6 +370,7 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     not_found: "error.chat.notFound",
     run_busy: "error.chat.runBusy",
     run_not_active: "error.chat.runNotActive",
+    skill_unavailable: "skills.unavailable",
     model_not_selected: "error.chat.modelNotSelected",
     provider_not_connected: "error.chat.providerNotConnected",
     invalid_credentials: "error.chat.invalidCredentials",

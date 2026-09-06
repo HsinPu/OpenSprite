@@ -310,7 +310,7 @@ export function useConversationRun({
     };
   }, [closeStream, commitRun, conversationId, t, watchRun]);
 
-  const send = useCallback(async (content: string): Promise<boolean> => {
+  const send = useCallback(async (content: string, skillIds: string[] = []): Promise<boolean> => {
     const message = content.trim();
     if (!message || (activeRunRef.current && activeStatuses.has(activeRunRef.current.status))) return false;
     const generation = generationRef.current;
@@ -332,14 +332,17 @@ export function useConversationRun({
       runId: null,
       delivery: "sending",
     }]);
+    let wasAccepted = false;
     try {
       const accepted = await startRun({
         conversationId: resolvedConversationRef.current,
         workspaceId,
         clientRequestId,
         message,
+        ...(skillIds.length ? { skillIds } : {}),
       });
-      if (generationRef.current !== generation) return false;
+      wasAccepted = true;
+      if (generationRef.current !== generation) return true;
       resolvedConversationRef.current = accepted.conversationId;
       onConversationAccepted(accepted.conversationId, message);
       const [page, run] = await Promise.all([
@@ -358,7 +361,7 @@ export function useConversationRun({
         setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));
         setError(agentChatErrorText(nextError, t));
       }
-      return false;
+      return wasAccepted;
     }
   }, [commitRun, onConversationAccepted, requestIdFactory, t, watchRun, workspaceId]);
 

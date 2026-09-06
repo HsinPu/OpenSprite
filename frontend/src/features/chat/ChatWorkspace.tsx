@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button, Drawer } from "antd";
+import { Button, Drawer, Select } from "antd";
+import { listSkills, type Skill } from "../../api/skills";
 import { createPortal } from "react-dom";
 
 import { AgentChatApiError, DEFAULT_WORKSPACE_ID, agentChatErrorText } from "../../api/agentChat";
@@ -92,6 +93,20 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { locale, t } = useI18n();
   const [draft, setDraft] = useState("");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
+  const [skillsError, setSkillsError] = useState(false);
+  const skillsGeneration = useRef(0);
+  useEffect(() => { skillsGeneration.current++; setSelectedSkills([]); setAvailableSkills([]); setSkillsError(false); return () => { skillsGeneration.current++; }; }, [workspaceId]);
+  const refreshSkills = async () => {
+    const current = ++skillsGeneration.current;
+    try {
+      const [global, local] = await Promise.all([listSkills("global", workspaceId), listSkills("workspace", workspaceId)]);
+      if (current !== skillsGeneration.current) return;
+      setAvailableSkills([...global.skills, ...local.skills].filter(item => item.effective));
+      setSkillsError(false);
+    } catch { if (current === skillsGeneration.current) { setAvailableSkills([]); setSkillsError(true); } }
+  };
   const [executionPanelExpanded, setExecutionPanelExpanded] = useState(executionPanelDefaultExpanded);
   const [mobileExecutionOpen, setMobileExecutionOpen] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
@@ -208,7 +223,8 @@ export function ChatWorkspace({
     if (!content || chat.isRunning || !modelSelection) return;
     scrolling.followLatest();
     setDraft("");
-    void chat.send(content);
+    const sent = selectedSkills.length ? chat.send(content, selectedSkills) : chat.send(content);
+    void sent.then(accepted => { if (accepted && selectedSkills.length) setSelectedSkills([]); });
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -332,6 +348,8 @@ export function ChatWorkspace({
               <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.optionsTitle")} aria-label={t("chat.optionsLabel")}>☷</button>
             </div>
             <div className="chat-workspace__composer-primary-actions">
+              {skillsError ? <span role="alert" title={t("skills.unavailable")}>{t("skills.unavailable")}</span> : null}
+              <Select id={`${executionPanelId}-skills`} mode="multiple" maxCount={5} maxTagCount={0} style={{ minWidth: 80, maxWidth: 160 }} aria-label={t("skills.select")} title={t("skills.capabilityHint")} placeholder="Skills" disabled={chat.isRunning} value={selectedSkills} onChange={setSelectedSkills} onOpenChange={open => { if (open) void refreshSkills(); }} options={availableSkills.map(item => ({ value: item.id, label: `${item.name} · ${t(item.scope === "global" ? "skills.global" : "skills.workspace")}` }))} />
               <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
               <select
                 className="chat-workspace__model-select chat-workspace__model-select--composer"

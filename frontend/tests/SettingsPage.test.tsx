@@ -292,7 +292,7 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "工作區", "AI 模型", "記憶與資料Demo", "工具", "排程", "外觀Demo", "隱私", "關於"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "工作區", "AI 模型", "記憶與資料Demo", "工具", "Skills", "排程", "外觀Demo", "隱私", "關於"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
     expect(screen.getAllByText("Demo")).toHaveLength(2);
