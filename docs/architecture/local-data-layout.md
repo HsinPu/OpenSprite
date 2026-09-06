@@ -20,6 +20,12 @@ the user explicitly requests verified user-data deletion.
 
 ## Authoritative layout
 
+Skills (0.13.0) add lazy-created `skills/<directory>/SKILL.md` globally and
+`workspace/<workspace-directory>/skills/<directory>/SKILL.md` per Workspace.
+`config/skills.json` owns activation and approved hashes; temporary
+`config/skills-transaction.json` owns recoverable writes. Archive deletion moves
+the Skill directory to `archive/skills/<UUID>`, within the same user-data root.
+
 ```text
 .opensprite/
 ├─ auth.json

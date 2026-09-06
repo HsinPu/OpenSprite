@@ -2,7 +2,35 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.12.1`。
+目前產品版本為 `0.13.0`。
+
+## Skills：全域與工作區指引
+
+在「設定 → Skills」管理文字型指引。全域 Skills 位於
+`.opensprite/skills/<名稱>/SKILL.md`；工作區 Skills 位於
+`.opensprite/workspace/<工作區目錄>/skills/<名稱>/SKILL.md`。
+檔案必須包含 YAML 的 `name`、`description` 與非空 Markdown 正文，最大 64 KiB。
+
+```markdown
+---
+name: review
+description: 在需要程式碼審查時使用
+---
+先檢查正確性與回歸風險，再列出有證據支持的問題。
+```
+
+- 新增、匯入、重新掃描發現或修改的內容，不會自動啟用；預覽並確認該版本後才可使用。
+- 總開關預設開啟，個別 Skill 預設停用。工作區可額外停用全域 Skill，但不能覆蓋全域停用。
+- 模型起初只收到已生效 Skill 的簡介，需要時才透過 `load_skill` 載入全文。
+- 輸入框可手動指定最多 5 個 Skills，只對下一次送出有效；自動選用需要模型支援工具呼叫。
+- 「允許 AI 使用工具」關閉不會禁止文字 Skill；Skills 也不能啟用工具、執行腳本或繞過核准。
+- 外部修改會使舊確認失效；已開始的 Run 使用固定版本，新 Run 重新判定。
+- 刪除會封存到 `.opensprite/archive/skills`，不立即永久刪除。工作區移除保留實體檔案，但撤銷啟用登記。
+- 「本次執行」顯示真正載入的 Skills，而不是整份可用清單。
+
+本版不讀取參照檔、不執行 Skill scripts、不掃描外部掛載，也不下載遠端 Skills。
+完整 Prompt log 若啟用可能包含指引全文；一般事件與 Log 不保存全文或絕對路徑。
+詳見 [Skills 架構](docs/architecture/skills.md)。
 
 Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後透過
 `http://localhost:8765/` 使用；backend 固定只監聽 loopback，不直接提供公網模式。

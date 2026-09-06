@@ -1089,6 +1089,144 @@
           }
         }
       },
+      "SkillLoadedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "skillId",
+          "scope",
+          "name",
+          "revision",
+          "contentHash",
+          "source"
+        ],
+        "properties": {
+          "skillId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "global",
+              "workspace"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "model"
+            ]
+          }
+        }
+      },
+      "SkillLoadFailedEventData": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "skillId",
+              "scope",
+              "name",
+              "revision",
+              "contentHash",
+              "source",
+              "errorCode"
+            ],
+            "properties": {
+              "skillId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "global",
+                  "workspace"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "contentHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "source": {
+                "const": "model"
+              },
+              "errorCode": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "skill_unavailable",
+                  "limit_reached",
+                  "context_limit"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "skillId",
+              "scope",
+              "name",
+              "revision",
+              "contentHash",
+              "source",
+              "errorCode"
+            ],
+            "properties": {
+              "skillId": {
+                "type": "null"
+              },
+              "scope": {
+                "type": "null"
+              },
+              "name": {
+                "type": "null"
+              },
+              "revision": {
+                "type": "null"
+              },
+              "contentHash": {
+                "type": "null"
+              },
+              "source": {
+                "const": "model"
+              },
+              "errorCode": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "skill_unavailable"
+                ]
+              }
+            }
+          }
+        ]
+      },
       "RunEvent": {
         "type": "object",
         "additionalProperties": false,
@@ -1148,6 +1286,12 @@
               },
               {
                 "$ref": "#/components/schemas/ToolFailedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/SkillLoadedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/SkillLoadFailedEventData"
               },
               {
                 "$ref": "#/components/schemas/RunCompletedEventData"

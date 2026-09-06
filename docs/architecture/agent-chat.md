@@ -2,6 +2,11 @@
 
 ## Purpose
 
+Version 0.13.0 adds a frozen Skill snapshot alongside the Workspace snapshot.
+Manual skillIds participate in Run idempotency; internal load_skill is separate
+from business tools and updates the bounded Run instruction projection.
+See [Skills](skills.md) for policy, Context and audit boundaries.
+
 OpenSprite treats each submitted user message as one bounded agent run. Every
 message enters the same path; there is no keyword classifier, legacy Task
 lifecycle, or alternate direct-to-model branch.

@@ -147,6 +147,8 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "tool.started",
         "tool.completed",
         "tool.failed",
+        "skill.loaded",
+        "skill.load_failed",
         "run.completed",
         "run.failed",
         "run.cancelled",

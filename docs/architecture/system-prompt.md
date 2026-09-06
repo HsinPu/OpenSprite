@@ -2,10 +2,12 @@
 
 ## Purpose
 
-OpenSprite builds one bounded system-prompt snapshot when a Run starts. The
-same snapshot is sent in every model round of that Run, including rounds after
-tool results. Settings changed during an active Run take effect only on the
-next Run.
+OpenSprite builds one bounded base system-prompt snapshot when a Run starts.
+Settings changed during an active Run take effect only on the next Run.
+Since 0.13.0 a separate Skills JSON projection initially supplies metadata and
+adds explicitly loaded instructions from the immutable Run snapshot. Its full
+content and tool definition count against Context budget; compaction and
+continuation preserve loaded versions. See [Skills](skills.md).
 
 The initial dynamic surface is intentionally small:
 
