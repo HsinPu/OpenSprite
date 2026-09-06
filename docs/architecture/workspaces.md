@@ -2,11 +2,10 @@
 
 ## Managed roots and sensitive data
 
-OpenSprite owns one user-visible managed Workspace container outside the
-sensitive `.opensprite` data root:
+OpenSprite owns one managed Workspace container inside the `.opensprite` data root:
 
-- Windows: `%USERPROFILE%\OpenSprite\workspace`
-- Linux: `~/OpenSprite/workspace`
+- Windows: `%USERPROFILE%\.opensprite\workspace`
+- Linux: `~/.opensprite/workspace`
 
 The fixed UUID `00000000-0000-4000-8000-000000000000` identifies the Default
 Workspace at `workspace/default`. It cannot be renamed or removed. A new
@@ -18,13 +17,13 @@ Conversation messages, attachments, generated-output records, SQLite,
 credentials, state, logs and cache remain below `.opensprite`. Managed roots
 are user project scopes, not a second internal product-data store.
 
-## Catalog v2 and migration
+## Catalog v3 and migration
 
-`config/workspaces.json` schema v2 stores catalog revision, active Workspace,
+`config/workspaces.json` schema v3 stores catalog revision, active Workspace,
 the Default Workspace mount revision, and up to 100 managed Workspace records.
 Each record contains UUID, display name, immutable directory name, at most 20
 mounts, revision and UTC timestamps. Absolute managed-root paths are derived
-from the current user home and are not persisted in the catalog.
+from AppPaths' data root and are not persisted in the catalog.
 
 On startup the backend creates the container and Default Workspace. A v1
 catalog is converted without moving source files: every previous external root
@@ -32,7 +31,7 @@ becomes a `legacy-root` read-write mount and a new managed root is created.
 Nested legacy roots are imported disabled so no ambiguous authority is
 activated. Names or directory names that collide with the new fixed Default
 Workspace receive a deterministic `workspace-<UUID prefix>` fallback. The
-complete v2 document is validated before atomic replacement; persistence
+complete v3 document is validated before atomic replacement; persistence
 failure preserves the v1 file and removes only new empty migration directories.
 The v1 decoder retains its historical validation rules so old catalogs remain
 readable; migration replaces names that do not satisfy the current policy.
@@ -45,6 +44,10 @@ import-candidates endpoint returns a cursor page, and import requires an
 explicit user action.
 
 ## Mount policy
+
+Managed-root validation is separate: only direct children of the injected
+container are allowed, with symlink/reparse checks on the ancestry. This does
+not relax the external-mount denial of the complete `.opensprite` tree.
 
 A Workspace has one writable managed root and zero to twenty external mounts.
 Mounts have UUID, NFC-normalized alias, canonical root, `read_only` or
@@ -63,6 +66,18 @@ This release defines authority metadata but adds no file tool. A future
 Workspace-aware tool must enforce the immutable snapshot and fail closed.
 
 ## Execution and persistence
+
+In 0.12.1, v2 catalogs relocate their registered managed roots and default from
+the old container. Files are copied to private staging, SHA-256 manifests are
+verified against the source before/after, and originals remain untouched.
+Existing destinations are refused unless a private relocation journal proves
+a previous verified copy. Missing old roots remain unavailable. A failed copy
+or catalog write leaves the old catalog intact and reports `migration_failed`;
+reload retries under the mutation gate. Catalog mutations stay blocked until
+relocation succeeds. Unregistered old directories and external mounts are not
+moved. Failed staging copies are retained. Successful migration advances the
+catalog and Workspace revisions once; older applications cannot read v3.
+Run recovery precedes relocation, and the scheduler starts after relocation.
 
 Each accepted Run holds one `WorkspaceExecutionContext` with the managed root,
 mount tuple, permissions, availability and hashes. Retry, Context compaction,

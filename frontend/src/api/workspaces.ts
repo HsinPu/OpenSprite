@@ -5,7 +5,7 @@ export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
 
 export type WorkspaceAvailability = "available" | "unavailable";
 export type WorkspaceMountAvailability = WorkspaceAvailability | "not_applicable";
-export type WorkspaceUnavailableReason = "missing" | "not_directory" | "access_denied" | "unsafe" | "overlap";
+export type WorkspaceUnavailableReason = "missing" | "not_directory" | "access_denied" | "unsafe" | "overlap" | "migration_failed";
 export type WorkspaceMountAccess = "read_only" | "read_write";
 export type WorkspaceUsage = {
   conversationCount: number;
@@ -93,7 +93,7 @@ function usage(value: unknown): WorkspaceUsage {
 
 function mount(value: unknown): WorkspaceMount {
   const keys = ["id", "alias", "rootPath", "rootHash", "accessMode", "enabled", "availability", "unavailableReason"];
-  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || typeof value.alias !== "string" || !value.alias || value.alias.length > 40 || typeof value.rootPath !== "string" || !value.rootPath || value.rootPath.length > 32768 || typeof value.rootHash !== "string" || !hash.test(value.rootHash) || !["read_only", "read_write"].includes(value.accessMode as string) || typeof value.enabled !== "boolean" || !["available", "unavailable", "not_applicable"].includes(value.availability as string) || !(value.unavailableReason === null || ["missing", "not_directory", "access_denied", "unsafe", "overlap"].includes(value.unavailableReason as string))) throw new WorkspaceApiError("malformed_response");
+  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || typeof value.alias !== "string" || !value.alias || value.alias.length > 40 || typeof value.rootPath !== "string" || !value.rootPath || value.rootPath.length > 32768 || typeof value.rootHash !== "string" || !hash.test(value.rootHash) || !["read_only", "read_write"].includes(value.accessMode as string) || typeof value.enabled !== "boolean" || !["available", "unavailable", "not_applicable"].includes(value.availability as string) || !(value.unavailableReason === null || ["missing", "not_directory", "access_denied", "unsafe", "overlap", "migration_failed"].includes(value.unavailableReason as string))) throw new WorkspaceApiError("malformed_response");
   if (
     (value.availability === "unavailable") !== (value.unavailableReason !== null)
     || (value.enabled && value.availability === "not_applicable")
@@ -107,7 +107,7 @@ function mount(value: unknown): WorkspaceMount {
 
 function workspace(value: unknown): Workspace {
   const keys = ["id", "kind", "name", "directoryName", "rootPath", "availability", "unavailableReason", "mounts", "revision", "createdAt", "updatedAt", "usage"];
-  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || !["default", "managed"].includes(value.kind as string) || typeof value.name !== "string" || !value.name || value.name.length > 80 || typeof value.directoryName !== "string" || !value.directoryName || value.directoryName.length > 80 || typeof value.rootPath !== "string" || !value.rootPath || value.rootPath.length > 32768 || !["available", "unavailable"].includes(value.availability as string) || !(value.unavailableReason === null || ["missing", "not_directory", "access_denied", "unsafe", "overlap"].includes(value.unavailableReason as string)) || !Array.isArray(value.mounts) || value.mounts.length > 20 || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !utc(value.createdAt) || !utc(value.updatedAt)) throw new WorkspaceApiError("malformed_response");
+  if (!record(value) || !exact(value, keys) || typeof value.id !== "string" || !identifier.test(value.id) || !["default", "managed"].includes(value.kind as string) || typeof value.name !== "string" || !value.name || value.name.length > 80 || typeof value.directoryName !== "string" || !value.directoryName || value.directoryName.length > 80 || typeof value.rootPath !== "string" || !value.rootPath || value.rootPath.length > 32768 || !["available", "unavailable"].includes(value.availability as string) || !(value.unavailableReason === null || ["missing", "not_directory", "access_denied", "unsafe", "overlap", "migration_failed"].includes(value.unavailableReason as string)) || !Array.isArray(value.mounts) || value.mounts.length > 20 || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !utc(value.createdAt) || !utc(value.updatedAt)) throw new WorkspaceApiError("malformed_response");
   if ((value.availability === "unavailable") !== (value.unavailableReason !== null) || (value.kind === "default") !== (value.id === DEFAULT_WORKSPACE_ID)) throw new WorkspaceApiError("malformed_response");
   return { ...value, mounts: value.mounts.map(mount), usage: usage(value.usage) } as Workspace;
 }

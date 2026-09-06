@@ -66,9 +66,17 @@ class AppPaths:
 
     @property
     def managed_workspaces_dir(self) -> Path:
-        """User-visible project roots, separate from sensitive app data."""
+        """Managed project roots inside the single product-data boundary."""
 
+        return self.home / "workspace"
+
+    @property
+    def legacy_managed_workspaces_dir(self) -> Path:
         return self.home.parent / "OpenSprite" / "workspace"
+
+    @property
+    def workspace_relocation_file(self) -> Path:
+        return self.config_dir / "workspace-relocation.json"
 
     @property
     def data_dir(self) -> Path:

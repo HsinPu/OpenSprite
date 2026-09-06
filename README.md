@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.12.0`。
+目前產品版本為 `0.12.1`。
 
 Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後透過
 `http://localhost:8765/` 使用；backend 固定只監聽 loopback，不直接提供公網模式。
@@ -23,7 +23,7 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 
 ## 工作區
 
-Workspace 是網頁聊天、排程以及後續 Skills／外部 Channel Adapter 共用的執行範圍。Windows 使用 `%USERPROFILE%\OpenSprite\workspace`，Linux 使用 `~/OpenSprite/workspace`；固定的「預設工作區」位於 `workspace/default`。建立 `test` 會建立 `workspace/test`，也能明確加入容器內既有的第一層目錄。
+Workspace 是網頁聊天、排程以及後續 Skills／外部 Channel Adapter 共用的執行範圍。Windows 使用 `%USERPROFILE%\.opensprite\workspace`，Linux 使用 `~/.opensprite/workspace`；固定的「預設工作區」位於 `workspace/default`。建立 `test` 會建立 `workspace/test`，也能明確加入容器內既有的第一層目錄。
 
 - Workspace catalog 與目前選擇保存在 `.opensprite/config/workspaces.json`；managed root 路徑由使用者家目錄推導，不使用瀏覽器儲存。
 - 外部目錄以預設唯讀的 mount 掛入 Workspace，可明確提升為可讀寫；重疊、系統敏感與 reparse/symlink 路徑會被拒絕。
@@ -31,9 +31,11 @@ Workspace 是網頁聊天、排程以及後續 Skills／外部 Channel Adapter �
 - Conversation 清單依目前 Workspace 隔離；一般 Conversation 可在沒有執行中 Run 時安全移動。
 - Schedule 保存自己的 Workspace，不會隨 Sidebar 目前選擇改變。
 - managed root 或 mount 失效時仍可文字聊天；未來需要檔案路徑的工具必須拒絕執行。
-- `0.12.0` 只建立目錄權限架構，尚未提供檔案、Git、Terminal 或檔案樹工具。模型知道 Workspace 路徑不代表取得檔案能力。
+- `0.12.1` 只建立目錄權限架構，尚未提供檔案、Git、Terminal 或檔案樹工具。模型知道 Workspace 路徑不代表取得檔案能力。
 
-根目錄會經後端 canonicalization；磁碟根目錄、家目錄、`.opensprite`、OpenSprite 安裝目錄，以及 symlink／junction／reparse-point 根目錄會被拒絕。完整設計見 [`docs/architecture/workspaces.md`](docs/architecture/workspaces.md)。
+Managed root 僅允許 `.opensprite/workspace` 的合法第一層子目錄。外部掛載仍拒絕磁碟根目錄、家目錄、`.opensprite` 及其子目錄、OpenSprite 安裝目錄，以及 symlink／junction／reparse-point。完整設計見 [`docs/architecture/workspaces.md`](docs/architecture/workspaces.md)。
+
+升級至 0.12.1 時，已登記的舊工作區與 default 會複製到新位置，核對內容後才切換；原始目錄保留。目的地衝突、權限不足或來源檔案變動會阻止切換，設定頁顯示搬遷未完成；排除問題後重新整理重試。未登記的舊目錄及外部掛載不會自動搬動。請勿直接降版讀取新版 catalog。失敗的暫存副本位於 `.opensprite/cache/workspace-relocation`，不會自動刪除。
 
 ## 存取與登入
 

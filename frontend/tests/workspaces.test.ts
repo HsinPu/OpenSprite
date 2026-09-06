@@ -58,6 +58,12 @@ const catalog: WorkspaceCatalog = { revision: 1, activeWorkspaceId: alpha.id, wo
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Workspace API", () => {
+  it("accepts relocation failures without discarding the workspace catalog", async () => {
+    const unavailable = { ...defaultWorkspace, rootPath: "C:\\Users\\Test\\.opensprite\\workspace\\default", availability: "unavailable", unavailableReason: "migration_failed" };
+    const response = { ...catalog, workspaces: [unavailable, alpha] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(response))));
+    await expect(listWorkspaces()).resolves.toEqual(response);
+  });
   it("strictly parses managed roots, mounts and availability", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...catalog, workspaces: [defaultWorkspace, mounted] }))));
 

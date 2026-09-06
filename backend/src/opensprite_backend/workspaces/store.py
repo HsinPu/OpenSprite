@@ -28,7 +28,7 @@ from .policy import (
 )
 
 
-_SCHEMA_VERSION: Final = 2
+_SCHEMA_VERSION: Final = 3
 _MAX_BYTES: Final = 80 * 1024 * 1024
 _MAX_WORKSPACES: Final = 100
 _MAX_MOUNTS: Final = 20
@@ -65,7 +65,7 @@ class JsonWorkspaceStore:
             raise WorkspaceStoreError
         if raw["version"] == 1:
             return self._decode_v1(raw)
-        if raw["version"] == _SCHEMA_VERSION:
+        if raw["version"] in (2, _SCHEMA_VERSION):
             return self._decode_v2(raw)
         raise WorkspaceStoreError
 
@@ -181,7 +181,7 @@ class JsonWorkspaceStore:
             default_revision=default["revision"],
             default_mounts=default_mounts,
             default_updated_at=cls._datetime(default["updatedAt"]),
-            source_version=2,
+            source_version=raw["version"],
         )
 
     @classmethod

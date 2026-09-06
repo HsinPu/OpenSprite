@@ -25,7 +25,7 @@ revision, availability, managed root and external mounts with their access modes
 Workspace names and roots are JSON-encoded untrusted metadata, not instructions. The fixed text
 also states that knowing a path grants no file capability; only tools actually
 provided to the Run may perform an action. The fixed Default Workspace uses the
-managed `OpenSprite/workspace/default` root.
+managed `.opensprite/workspace/default` root.
 
 ## Ownership and dependency direction
 

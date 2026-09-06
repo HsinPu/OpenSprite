@@ -41,9 +41,11 @@ from .policy import (
     InvalidWorkspaceRoot,
     UnsafeWorkspaceRoot,
     WorkspaceRootPolicy,
+    WorkspaceRootStatus,
     has_unsafe_name_controls,
 )
 from .store import WorkspaceStore, WorkspaceStoreError
+from .relocation import WorkspaceRelocator, WorkspaceRelocationError, require_plain_directory
 
 
 _LOGGER = logging.getLogger("opensprite.workspaces")
@@ -171,8 +173,9 @@ class WorkspaceCatalogService:
         self,
         store: WorkspaceStore,
         root_policy: WorkspaceRootPolicy,
-        managed_root: Path | None = None,
+        managed_root: Path,
         *,
+        relocator: WorkspaceRelocator | None = None,
         usage_reader: WorkspaceUsageReader | None = None,
         mutation_gate: WorkspaceMutationGate | None = None,
         clock: Callable[[], datetime] | None = None,
@@ -180,11 +183,9 @@ class WorkspaceCatalogService:
     ) -> None:
         self._store = store
         self._root_policy = root_policy
-        self._managed_root = (
-            managed_root
-            if managed_root is not None
-            else root_policy.user_home / "OpenSprite" / "workspace"
-        ).resolve(strict=False)
+        self._managed_root = managed_root.absolute()
+        self._relocator = relocator
+        self._relocation_failed = False
         self._usage = usage_reader or EmptyWorkspaceUsageReader()
         self.mutation_gate = mutation_gate or WorkspaceMutationGate()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -193,9 +194,41 @@ class WorkspaceCatalogService:
     async def startup(self) -> None:
         async with self.mutation_gate.hold():
             state = self._state()
+            relocating = self._relocator is not None and (
+                state.source_version == 2
+                or (state.revision == 0 and self._relocator.source.joinpath("default").exists())
+            )
+            if relocating:
+                try:
+                    for identifier in (DEFAULT_WORKSPACE_ID, *(item.id for item in state.workspaces)):
+                        self._require_not_busy(identifier)
+                    relocation_task = asyncio.create_task(asyncio.to_thread(
+                        self._relocator.relocate,
+                        (DEFAULT_WORKSPACE_DIRECTORY, *(item.directory_name for item in state.workspaces)),
+                    ))
+                    try:
+                        await asyncio.shield(relocation_task)
+                    except asyncio.CancelledError:
+                        await asyncio.gather(relocation_task, return_exceptions=True)
+                        raise
+                    now = self._now()
+                    migrated = replace(
+                        state, source_version=3, revision=state.revision + 1,
+                        default_revision=state.default_revision + 1, default_updated_at=now,
+                        workspaces=tuple(replace(item, revision=item.revision + 1, updated_at=now) for item in state.workspaces),
+                    )
+                    self._relocation_failed = False
+                    self._write(migrated)
+                    return
+                except (WorkspaceRelocationError, WorkspaceError):
+                    self._relocation_failed = True
+                    _LOGGER.warning("Workspace relocation failed; source directories retained")
+                    return
+            self._relocation_failed = False
             try:
                 self._ensure_directory(self._managed_root)
-                self._ensure_directory(self._managed_path(DEFAULT_WORKSPACE_DIRECTORY))
+                if state.revision == 0 or state.source_version == 1:
+                    self._ensure_directory(self._managed_path(DEFAULT_WORKSPACE_DIRECTORY))
             except WorkspaceError:
                 _LOGGER.warning("managed Workspace root is unavailable")
                 return
@@ -208,7 +241,7 @@ class WorkspaceCatalogService:
                         if not path.exists():
                             self._ensure_directory(path)
                             created.append(path)
-                    self._write(replace(state, source_version=2))
+                    self._write(replace(state, source_version=3))
                 except WorkspaceError:
                     for path in reversed(created):
                         try:
@@ -218,6 +251,8 @@ class WorkspaceCatalogService:
                     _LOGGER.warning("Workspace catalog v1 migration was deferred")
 
     async def list(self) -> WorkspaceCatalog:
+        if self._relocation_failed:
+            await self.startup()
         return self._catalog(self._state())
 
     async def get(self, workspace_id: str) -> WorkspaceSummary:
@@ -248,7 +283,7 @@ class WorkspaceCatalogService:
                     revision=state.revision + 1,
                     active_workspace_id=identifier,
                     workspaces=(*state.workspaces, record),
-                    source_version=2,
+                    source_version=3,
                 )
                 self._write(next_state)
             except WorkspaceError:
@@ -272,7 +307,7 @@ class WorkspaceCatalogService:
             path = self._managed_path(normalized_directory)
             if not path.exists() or not path.is_dir() or path.is_symlink():
                 raise WorkspaceError(WorkspaceFailure.NOT_FOUND)
-            status = self._root_policy.inspect_saved_root(str(path))
+            status = self._managed_status(path)
             if status.availability is not WorkspaceAvailability.AVAILABLE:
                 raise WorkspaceError(WorkspaceFailure.UNSAFE_ROOT)
             now = self._now()
@@ -283,7 +318,7 @@ class WorkspaceCatalogService:
                 revision=state.revision + 1,
                 active_workspace_id=identifier,
                 workspaces=(*state.workspaces, record),
-                source_version=2,
+                source_version=3,
             )
             self._write(next_state)
             return self._catalog(next_state)
@@ -305,6 +340,7 @@ class WorkspaceCatalogService:
                     and not path.is_symlink()
                     and path.name.casefold() not in registered
                     and self._safe_directory(path.name)
+                    and self._managed_status(path).availability is WorkspaceAvailability.AVAILABLE
                 ),
                 key=lambda item: (item.name.casefold(), item.name),
             )
@@ -364,7 +400,7 @@ class WorkspaceCatalogService:
                     else state.active_workspace_id
                 ),
                 workspaces=tuple(item for item in state.workspaces if item.id != workspace_id),
-                source_version=2,
+                source_version=3,
             )
             self._write(next_state)
 
@@ -382,7 +418,7 @@ class WorkspaceCatalogService:
                 state,
                 revision=state.revision + 1,
                 active_workspace_id=workspace_id,
-                source_version=2,
+                source_version=3,
             )
             self._write(next_state)
             return self._catalog(next_state)
@@ -515,7 +551,7 @@ class WorkspaceCatalogService:
     def _default_summary(self, state: WorkspaceCatalogState) -> WorkspaceSummary:
         epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
         root = self._managed_path(DEFAULT_WORKSPACE_DIRECTORY)
-        status = self._root_policy.inspect_saved_root(str(root))
+        status = self._managed_status(root)
         return WorkspaceSummary(
             DEFAULT_WORKSPACE_ID,
             WorkspaceKind.DEFAULT,
@@ -533,7 +569,7 @@ class WorkspaceCatalogService:
 
     def _summary(self, item: WorkspaceRecord) -> WorkspaceSummary:
         root = self._managed_path(item.directory_name)
-        status = self._root_policy.inspect_saved_root(str(root))
+        status = self._managed_status(root)
         return WorkspaceSummary(
             item.id,
             WorkspaceKind.MANAGED,
@@ -600,7 +636,7 @@ class WorkspaceCatalogService:
                 default_revision=state.default_revision + 1,
                 default_mounts=mounts,
                 default_updated_at=now,
-                source_version=2,
+                source_version=3,
             )
         current = self._find(state, workspace_id)
         updated = replace(
@@ -620,7 +656,7 @@ class WorkspaceCatalogService:
             workspaces=tuple(
                 updated if item.id == updated.id else item for item in state.workspaces
             ),
-            source_version=2,
+            source_version=3,
         )
 
     def _summary_for_state(
@@ -695,21 +731,28 @@ class WorkspaceCatalogService:
             state = self._store.get()
         except WorkspaceStoreError:
             raise WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE) from None
-        if state.source_version == 2:
+        if state.source_version >= 2:
             self._validate_persisted_overlaps(state)
         return state
 
     def _write(self, state: WorkspaceCatalogState) -> None:
+        if self._relocation_failed:
+            raise WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE)
         try:
             self._store.set(state)
         except WorkspaceStoreError:
             raise WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE) from None
 
     def _managed_path(self, directory_name: str) -> Path:
-        path = (self._managed_root / directory_name).resolve(strict=False)
+        path = self._managed_root / directory_name
         if path.parent != self._managed_root:
             raise WorkspaceError(WorkspaceFailure.INVALID_DIRECTORY_NAME)
         return path
+
+    def _managed_status(self, path: Path) -> WorkspaceRootStatus:
+        if self._relocation_failed:
+            return WorkspaceRootStatus(WorkspaceAvailability.UNAVAILABLE, WorkspaceUnavailableReason.MIGRATION_FAILED)
+        return self._root_policy.inspect_managed_root(path, self._managed_root)
 
     def _disable_legacy_managed_overlaps(
         self, state: WorkspaceCatalogState
@@ -754,10 +797,13 @@ class WorkspaceCatalogService:
     @staticmethod
     def _ensure_directory(path: Path) -> None:
         try:
+            for node in (path, *path.parents):
+                if node.exists() or node.is_symlink():
+                    require_plain_directory(node)
             path.mkdir(parents=True, exist_ok=True)
             if not path.is_dir() or path.is_symlink():
                 raise OSError
-        except OSError:
+        except (OSError, WorkspaceRelocationError):
             raise WorkspaceError(WorkspaceFailure.WORKSPACE_STORE_UNAVAILABLE) from None
 
     @staticmethod

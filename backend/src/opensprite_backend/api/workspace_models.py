@@ -83,7 +83,7 @@ class WorkspaceMountResponse(WorkspaceContractModel):
     enabled: bool
     availability: Literal["available", "unavailable", "not_applicable"]
     unavailableReason: Literal[
-        "missing", "not_directory", "access_denied", "unsafe", "overlap"
+        "missing", "not_directory", "access_denied", "unsafe", "overlap", "migration_failed"
     ] | None
 
 
@@ -95,7 +95,7 @@ class WorkspaceResponse(WorkspaceContractModel):
     rootPath: str
     availability: Literal["available", "unavailable"]
     unavailableReason: Literal[
-        "missing", "not_directory", "access_denied", "unsafe", "overlap"
+        "missing", "not_directory", "access_denied", "unsafe", "overlap", "migration_failed"
     ] | None
     mounts: list[WorkspaceMountResponse] = Field(max_length=20)
     revision: int = Field(ge=1)

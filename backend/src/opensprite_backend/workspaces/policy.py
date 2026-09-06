@@ -69,6 +69,28 @@ class WorkspaceRootPolicy:
     def user_home(self) -> Path:
         return self._user_home
 
+    def inspect_managed_root(self, path: Path, container: Path) -> WorkspaceRootStatus:
+        """Allow only a direct managed child, never the surrounding data root."""
+        try:
+            if path.parent != container:
+                raise UnsafeWorkspaceRoot
+            for node in (container, *container.parents, path):
+                if node.is_symlink() or self._is_junction(node) or self._is_reparse_point(node):
+                    raise UnsafeWorkspaceRoot
+            if not path.is_dir():
+                return WorkspaceRootStatus(WorkspaceAvailability.UNAVAILABLE, WorkspaceUnavailableReason.MISSING)
+            if path.resolve(strict=True).parent != container.resolve(strict=True):
+                raise UnsafeWorkspaceRoot
+            if not os.access(path, os.R_OK | os.X_OK):
+                raise PermissionError
+            return WorkspaceRootStatus(WorkspaceAvailability.AVAILABLE, None)
+        except FileNotFoundError:
+            return WorkspaceRootStatus(WorkspaceAvailability.UNAVAILABLE, WorkspaceUnavailableReason.MISSING)
+        except PermissionError:
+            return WorkspaceRootStatus(WorkspaceAvailability.UNAVAILABLE, WorkspaceUnavailableReason.ACCESS_DENIED)
+        except (OSError, RuntimeError, UnsafeWorkspaceRoot):
+            return WorkspaceRootStatus(WorkspaceAvailability.UNAVAILABLE, WorkspaceUnavailableReason.UNSAFE)
+
     def validate_new_root(self, value: str) -> str:
         path = self._parse_absolute(value)
         try:

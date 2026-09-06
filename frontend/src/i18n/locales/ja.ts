@@ -55,6 +55,7 @@ export const jaMessages = {
   "workspaces.confirmMountPermission": "読み書き権限を付与します。今後ファイル操作に対応したツールがこのディレクトリを変更できるようになります。",
   "workspaces.removeMountConfirm": "このマウントを削除しますか？外部ディレクトリと内容は保持されます。",
   "workspaces.unavailableReason.overlap": "パスが別のワークスペースと重複しています",
+  "workspaces.unavailableReason.migration_failed": "ワークスペースの移行は未完了です。元のファイルは保持されています。移行先の競合、権限、空き容量を確認して再読み込みしてください。",
   "workspaces.error.invalidDirectoryName": "名前をクロスプラットフォームのワークスペースディレクトリとして使用できません。",
   "workspaces.error.managedRootExists": "同名の管理ディレクトリがあります。「既存ディレクトリを追加」を使用してください。",
   "workspaces.error.mountLimit": "1つのワークスペースに追加できる外部マウントは20個までです。",

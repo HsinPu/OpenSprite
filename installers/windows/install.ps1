@@ -113,7 +113,7 @@ function Remove-DirectoryWithRetry([string]$Path, [string]$Parent, [int]$Attempt
     return $false
 }
 
-function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 20) {
+function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 300) {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
         try {

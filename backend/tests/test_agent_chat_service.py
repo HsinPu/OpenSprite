@@ -160,6 +160,7 @@ def service(
             user_home=tmp_path / "home",
             install_root=tmp_path / "installed-app",
         ),
+        managed_root=paths.managed_workspaces_dir,
         usage_reader=repository,
         mutation_gate=gate,
     )

@@ -76,6 +76,7 @@ from .workspaces import (
     WorkspaceOperations,
     WorkspaceRootPolicy,
 )
+from .workspaces.relocation import WorkspaceRelocator
 
 
 class LocalProviderRuntime(Protocol):
@@ -135,9 +136,9 @@ class _SystemRuntime:
         provider_starter = getattr(self._provider_runtime, "astart", None)
         if provider_starter is not None:
             await provider_starter()
+        await self.agent_chat.startup()
         await self.workspaces.startup()
         await self.mcp_connections.startup()
-        await self.agent_chat.startup()
         await self._schedule_coordinator.start()
 
     async def aclose(self) -> None:
@@ -181,6 +182,7 @@ def create_system_runtime(
             install_root=Path(__file__).resolve().parents[3],
         ),
         paths.managed_workspaces_dir,
+        relocator=WorkspaceRelocator(paths.legacy_managed_workspaces_dir, paths.managed_workspaces_dir, paths.workspace_relocation_file),
         usage_reader=repository,
         mutation_gate=workspace_mutation_gate,
     )

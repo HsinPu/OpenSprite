@@ -55,6 +55,7 @@ export const enMessages = {
   "workspaces.confirmMountPermission": "You are granting read and write access. Future file-capable tools may modify this directory.",
   "workspaces.removeMountConfirm": "Remove this mount? The external directory and its contents are preserved.",
   "workspaces.unavailableReason.overlap": "Path overlaps another Workspace",
+  "workspaces.unavailableReason.migration_failed": "Workspace relocation is incomplete; original files are retained. Check destination conflicts, permissions or disk space, then reload to retry.",
   "workspaces.error.invalidDirectoryName": "The name cannot be used as a cross-platform Workspace directory.",
   "workspaces.error.managedRootExists": "A managed directory with this name exists. Use Add existing directory.",
   "workspaces.error.mountLimit": "A Workspace can have at most 20 external mounts.",

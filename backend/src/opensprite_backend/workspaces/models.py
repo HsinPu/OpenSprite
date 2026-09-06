@@ -30,6 +30,7 @@ class WorkspaceUnavailableReason(StrEnum):
     ACCESS_DENIED = "access_denied"
     UNSAFE = "unsafe"
     OVERLAP = "overlap"
+    MIGRATION_FAILED = "migration_failed"
 
 
 class WorkspaceMountAccess(StrEnum):
@@ -66,7 +67,7 @@ class WorkspaceCatalogState:
     default_revision: int = 1
     default_mounts: tuple[WorkspaceMountRecord, ...] = ()
     default_updated_at: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    source_version: int = 2
+    source_version: int = 3
 
 
 @dataclass(frozen=True, slots=True)

@@ -30,10 +30,14 @@ the user explicitly requests verified user-data deletion.
 │  ├─ general.json
 │  ├─ conversation.json
 │  ├─ workspaces.json
+│  ├─ workspace-relocation.json  # verified migration journal, when needed
 │  ├─ tools.json
 │  ├─ mcp.json
 │  ├─ tool-receipt.key
 │  └─ credential.key
+├─ workspace/
+│  ├─ default/
+│  └─ <directoryName>/
 ├─ data/
 │  └─ opensprite.db
 ├─ state/
@@ -55,9 +59,10 @@ the user explicitly requests verified user-data deletion.
 ```
 
 `AppPaths` is the sole backend owner of this mapping. Constructing the mapping,
-importing the backend, starting the system app, and reading absent state do not
-create the root or any child directory. A persistence owner creates only the
-parent directory needed for an actual write.
+importing the backend and reading absent state do not create directories.
+System startup provisions the managed workspace container and default root for
+new installations. Other persistence owners create only the parent needed for
+an actual write. Workspace relocation staging uses `cache/workspace-relocation`.
 
 `auth.json`, `config/access.json`, `config/access-policy.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
 `config/conversation.json`, `config/workspaces.json`, `config/tools.json`, `config/mcp.json`,

@@ -54,7 +54,7 @@ def make_service(
     data_root = tmp_path / ".opensprite"
     install_root = tmp_path / "installed-app"
     user_home = tmp_path / "home"
-    managed_root = tmp_path / "OpenSprite" / "workspace"
+    managed_root = data_root / "workspace"
     external_root = tmp_path / "projects" / "alpha"
     install_root.mkdir()
     user_home.mkdir()
@@ -92,7 +92,7 @@ def test_startup_creates_fixed_default_workspace_without_catalog_file(tmp_path: 
     assert catalog.workspaces[0].root_path == str((managed_root / "default").resolve())
     assert catalog.workspaces[0].availability is WorkspaceAvailability.AVAILABLE
     assert (managed_root / "default").is_dir()
-    assert not data_root.exists()
+    assert not (data_root / "config" / "workspaces.json").exists()
 
 
 def test_default_root_creation_failure_keeps_text_workspace_available(
@@ -125,7 +125,7 @@ def test_create_uses_name_as_managed_directory_and_sets_active(tmp_path: Path) -
     payload = json.loads(
         (data_root / "config" / "workspaces.json").read_text(encoding="utf-8")
     )
-    assert payload["version"] == 2
+    assert payload["version"] == 3
     assert payload["workspaces"][0]["directoryName"] == "Test"
     assert "rootPath" not in payload["workspaces"][0]
 
@@ -277,7 +277,7 @@ def test_v1_migration_creates_managed_root_and_preserves_external_root_as_mount(
     assert legacy.mounts[0].root_path == str(external_root.resolve())
     assert legacy.mounts[0].access_mode is WorkspaceMountAccess.READ_WRITE
     assert legacy.mounts[0].enabled is True
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 3
     assert external_root.is_dir()
 
 
@@ -318,7 +318,7 @@ def test_v1_migration_renames_values_reserved_by_the_default_workspace(
     assert migrated.directory_name.casefold() != "default"
     assert (managed_root / migrated.directory_name).is_dir()
     assert migrated.mounts[0].root_path == str(external_root.resolve())
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 3
 
 
 @pytest.mark.parametrize(
@@ -373,7 +373,7 @@ def test_v1_migration_preserves_joiners_and_sanitizes_newly_unsafe_names(
         assert migrated.directory_name.startswith("workspace-")
     assert (managed_root / migrated.directory_name).is_dir()
     assert migrated.mounts[0].root_path == str(external_root.resolve())
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 3
 
 
 def test_workspace_store_validates_v2_before_replacing_existing_catalog(
@@ -567,7 +567,7 @@ def test_mount_crud_defaults_read_only_and_blocks_overlap(tmp_path: Path) -> Non
             enabled=True,
             expected_revision=1,
         ))
-    assert managed_overlap.value.failure is WorkspaceFailure.OVERLAPPING_ROOT
+    assert managed_overlap.value.failure is WorkspaceFailure.UNSAFE_ROOT
 
     updated = run(service.update_mount(
         WORKSPACE_ID,
@@ -788,7 +788,7 @@ def test_workspace_api_obeys_same_origin_protection(tmp_path: Path) -> None:
 def test_app_paths_owns_managed_and_sensitive_workspace_locations(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     assert paths.workspace_settings_file == paths.home / "config" / "workspaces.json"
-    assert paths.managed_workspaces_dir == tmp_path / "OpenSprite" / "workspace"
+    assert paths.managed_workspaces_dir == paths.home / "workspace"
 
 
 def test_system_runtime_exposes_available_default_workspace(tmp_path: Path) -> None:

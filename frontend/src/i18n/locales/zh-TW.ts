@@ -56,6 +56,7 @@ export const zhTWMessages = {
   "workspaces.confirmMountPermission": "你正在將掛載提升為可讀寫；未來具備檔案能力的工具可以修改此目錄。",
   "workspaces.removeMountConfirm": "移除這個掛載？外部目錄及內容不會刪除。",
   "workspaces.unavailableReason.overlap": "路徑與其他工作區重疊",
+  "workspaces.unavailableReason.migration_failed": "工作區搬遷未完成，舊檔案已保留。請檢查目的地衝突、權限或磁碟空間後重新整理以重試。",
   "workspaces.error.invalidDirectoryName": "名稱無法作為跨平台工作區目錄。",
   "workspaces.error.managedRootExists": "同名主目錄已存在，請使用「加入既有目錄」。",
   "workspaces.error.mountLimit": "每個工作區最多可掛載 20 個外部目錄。",
