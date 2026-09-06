@@ -438,4 +438,8 @@ def create_app(
     app.include_router(chat_router)
     app.include_router(schedule_router)
     app.include_router(workspace_router)
+    from .api.skill_routes import router as skills_router, skill_error_handler
+    from .skills.models import SkillError
+    app.include_router(skills_router)
+    app.add_exception_handler(SkillError, skill_error_handler)
     return app

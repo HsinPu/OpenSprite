@@ -77,6 +77,7 @@ from .workspaces import (
     WorkspaceRootPolicy,
 )
 from .workspaces.relocation import WorkspaceRelocator
+from .skills.service import SkillsService
 
 
 class LocalProviderRuntime(Protocol):
@@ -118,6 +119,7 @@ class _SystemRuntime:
         agent_chat: AgentChatService,
         schedules: ScheduleService,
         schedule_coordinator: ScheduleCoordinator,
+        skills: SkillsService,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -128,6 +130,7 @@ class _SystemRuntime:
         self.mcp_connections = mcp_connections
         self.tool_approvals = tool_approvals
         self.workspaces = workspaces
+        self.skills = skills
         self.agent_chat = agent_chat
         self.schedules = schedules
         self._schedule_coordinator = schedule_coordinator
@@ -242,6 +245,7 @@ def create_system_runtime(
         agent_chat,
         schedules,
         schedule_coordinator,
+        SkillsService(paths, workspaces),
     )
 
 
@@ -330,6 +334,7 @@ def create_system_app(
                 "workspaces",
                 UnavailableWorkspaces(),
             )
+            app.state.skills = getattr(runtime, "skills", None)
             yield
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
