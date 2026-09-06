@@ -65,6 +65,22 @@ class AppPaths:
         return self.config_dir / "workspaces.json"
 
     @property
+    def skills_dir(self) -> Path:
+        return self.home / "skills"
+
+    @property
+    def skills_settings_file(self) -> Path:
+        return self.config_dir / "skills.json"
+
+    @property
+    def skills_transaction_file(self) -> Path:
+        return self.config_dir / "skills-transaction.json"
+
+    @property
+    def skills_archive_dir(self) -> Path:
+        return self.home / "archive" / "skills"
+
+    @property
     def managed_workspaces_dir(self) -> Path:
         """Managed project roots inside the single product-data boundary."""
 
