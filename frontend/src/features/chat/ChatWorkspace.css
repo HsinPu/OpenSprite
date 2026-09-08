@@ -392,6 +392,10 @@
 .chat-workspace__capability-list li { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 12px; min-height: 56px; padding: 0 14px; border: 1px solid var(--chat-border); border-radius: 11px; }
 .chat-workspace__capability-icon { font-size: 1.6rem; line-height: 1; }
 .chat-workspace__capability-list li > i { width: 10px; height: 10px; }
+.chat-workspace__capability-list .chat-workspace__skill-card { grid-template-columns: 24px minmax(0, 1fr) auto; padding-block: 12px; }
+.chat-workspace__skill-content { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.chat-workspace__skill-content small { color: var(--chat-muted); font-size: 0.78rem; line-height: 1.5; }
+.chat-workspace__capability-list .chat-workspace__skill-card--error > i { background: #d4380d; }
 .chat-workspace__empty-tools { margin: 0; padding: 13px 14px; border: 0; border-radius: 11px; background: var(--chat-bg); color: var(--chat-muted); font-size: 0.86rem; line-height: 1.5; }
 .chat-workspace__execution-info { margin: 4px 22px 0; padding: 16px 0 20px; border-top: 1px solid var(--chat-border); }
 .chat-workspace__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }

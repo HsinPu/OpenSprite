@@ -151,6 +151,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/skills", "get", "listSkills"),
         ("/api/skills", "post", "createSkill"),
         ("/api/skills/scan", "post", "scanSkills"),
+        ("/api/skills/batch", "post", "batchSkills"),
         ("/api/skills/import-zip", "post", "importSkillZip"),
         ("/api/skills/{skill_id}", "get", "getSkill"),
         ("/api/skills/{skill_id}", "put", "updateSkill"),
@@ -375,7 +376,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.17.0",
+        "version": "0.18.1",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

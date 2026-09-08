@@ -44,6 +44,22 @@ class Create(Scan):
     content: str = Field(max_length=65536)
 
 
+class Batch(Scan):
+    action: Literal["enable", "disable", "archive"]
+
+
+class BatchIssue(StrictModel):
+    id: str
+    reason: Literal["unchanged", "missing", "invalid_format", "content_too_large", "unsafe_path", "workspace_unavailable", "duplicate_name"]
+
+
+class BatchResponse(StrictModel):
+    revision: int = Field(ge=0)
+    completed: int = Field(ge=0)
+    skipped: list[BatchIssue]
+    failed: list[BatchIssue]
+
+
 class Update(Revision):
     content: str = Field(max_length=65536)
 
@@ -187,6 +203,20 @@ async def import_skill_zip(request: Request):
     except asyncio.CancelledError:
         # Retain the Workspace gate until the filesystem transaction has stopped.
         await task
+        raise
+
+
+@router.post("/batch", operation_id="batchSkills", response_model=BatchResponse, openapi_extra=request_schema(Batch))
+async def batch_skills(request: Request):
+    value = await body(request, Batch)
+    if value.workspaceId is not None:
+        value.workspaceId = identifier(value.workspaceId)
+    task = asyncio.create_task(asyncio.to_thread(service(request).batch, scope=value.scope,
+        workspace_id=value.workspaceId, action=value.action, expected=value.expectedRevision))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await task  # Keep Workspace gate held until the recoverable mutation has stopped.
         raise
 
 

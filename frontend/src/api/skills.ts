@@ -14,6 +14,8 @@ export type Skill = {
   contentHash: string | null; state: string; effective: boolean; reason: string; content?: string | null;
 };
 export type SkillList = { revision: number; enabled: boolean; skills: Skill[] };
+export type SkillBatchAction = "enable" | "disable" | "archive";
+export type SkillBatchResult = { revision: number; completed: number; skipped: { id: string; reason: string }[]; failed: { id: string; reason: string }[] };
 export class SkillApiError extends Error {}
 const identifier = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const errorCodes = new Set([
@@ -102,6 +104,25 @@ export async function getSkill(id: string): Promise<{ revision: number; skill: S
   keys(value, ["revision", "skill"]);
   if (!Number.isInteger(value.revision) || Number(value.revision) < 0) throw new SkillApiError("malformed_response");
   return { revision: Number(value.revision), skill: skill(value.skill) };
+}
+
+export async function batchSkills(scope: SkillScope, workspaceId: string | null, action: SkillBatchAction, expectedRevision: number): Promise<SkillBatchResult> {
+  const response = await apiFetch("/api/skills/batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope, workspaceId, action, expectedRevision }) });
+  const raw: unknown = await response.json();
+  if (!response.ok) throw new SkillApiError(parseError(raw, false));
+  const result = record(raw);
+  keys(result, ["revision", "completed", "skipped", "failed"]);
+  if (!Number.isSafeInteger(result.revision) || Number(result.revision) < 0 || !Number.isSafeInteger(result.completed) || Number(result.completed) < 0) throw new SkillApiError("malformed_response");
+  const ids = new Set<string>();
+  for (const name of ["skipped", "failed"] as const) {
+    if (!Array.isArray(result[name])) throw new SkillApiError("malformed_response");
+    for (const value of result[name]) {
+      const issue = record(value); keys(issue, ["id", "reason"]);
+      if (typeof issue.id !== "string" || !identifier.test(issue.id) || ids.has(issue.id) || typeof issue.reason !== "string" || !["unchanged", "missing", "invalid_format", "content_too_large", "unsafe_path", "workspace_unavailable", "duplicate_name"].includes(issue.reason)) throw new SkillApiError("malformed_response");
+      ids.add(issue.id);
+    }
+  }
+  return result as SkillBatchResult;
 }
 
 export async function importSkillZip(scope: SkillScope, workspaceId: string | null, directoryName: string,

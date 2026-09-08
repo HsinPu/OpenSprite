@@ -1,8 +1,8 @@
 import { Alert, Button, Drawer, Dropdown, Empty, Grid, Input, Modal, Popconfirm, Select, Switch, Tabs, Tag, Tooltip, Upload } from "antd";
-import { DeleteOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import "./skills.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listSkills, skillRequest, importSkillZip, skillStateLabels, type Skill, type SkillList, type SkillScope } from "../../api/skills";
+import { listSkills, skillRequest, importSkillZip, batchSkills, skillStateLabels, type Skill, type SkillList, type SkillScope, type SkillBatchAction, type SkillBatchResult } from "../../api/skills";
 import { FolderValidationError } from "./skillFolderImport";
 import { inspectSkillZip, type ZipCandidate } from "./skillZipImport";
 import type { WorkspaceController } from "../workspaces/useWorkspaces";
@@ -21,6 +21,12 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState(false);
+  const [batch, setBatch] = useState<{ action: SkillBatchAction; revision: number; count: number; scope: SkillScope; workspaceId: string | null; label: string } | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchResult, setBatchResult] = useState<SkillBatchResult | null>(null);
+  const batchInFlight = useRef(false);
+  const batchOpener = useRef<HTMLButtonElement | null>(null);
   const [content, setContent] = useState("");
   const [importedName, setImportedName] = useState("");
   const [folder, setFolder] = useState<ZipCandidate | null>(null);
@@ -29,18 +35,19 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
   const [editRevision, setEditRevision] = useState(0);
   const generation = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => { onOverlayChange?.(editor); return () => onOverlayChange?.(false); }, [editor, onOverlayChange]);
+  useEffect(() => { onOverlayChange?.(editor || batch !== null); return () => onOverlayChange?.(false); }, [editor, batch, onOverlayChange]);
+  useEffect(() => { setBatchResult(null); }, [scope, workspaceId]);
   useEffect(() => {
-    if (!editor) return;
+    if (!editor && !batch) return;
     const dismissEditor = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!busy) { setEditor(false); opener.current?.focus(); }
+      if (!busy) { if (batch) { setBatch(null); batchOpener.current?.focus(); } else { setEditor(false); opener.current?.focus(); } }
     };
     document.addEventListener("keydown", dismissEditor, true);
     return () => document.removeEventListener("keydown", dismissEditor, true);
-  }, [editor, busy]);
+  }, [editor, batch, busy]);
   const reload = useCallback(async (): Promise<boolean> => {
     const current = ++generation.current;
     setLoading(true);
@@ -74,6 +81,24 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
     setEditRevision(data?.revision ?? 0); setEditor(true);
   };
   const close = () => { if (!busy) { setEditor(false); opener.current?.focus(); } };
+  const openBatch = (action: SkillBatchAction) => {
+    if (busy || loading || !data?.skills.length) return;
+    const workspace = workspaces.catalog?.workspaces.find(item => item.id === workspaceId);
+    setConfirmation(""); setBatchError(null); setBatchResult(null);
+    setBatch({ action, revision: data.revision, count: data.skills.length, scope, workspaceId: scope === "workspace" ? workspaceId : null,
+      label: scope === "global" ? t("skills.global") : workspace?.kind === "default" ? t("workspaces.default") : workspace?.name ?? workspaceId });
+  };
+  const submitBatch = async () => {
+    if (!batch || batchInFlight.current || (batch.action === "archive" && confirmation !== t("skills.batchWord"))) return;
+    batchInFlight.current = true; setBusy(true); setBatchError(null);
+    try {
+      const result = await batchSkills(batch.scope, batch.workspaceId, batch.action, batch.revision);
+      setBatchResult(result); setBatch(null);
+      await reload();
+      batchOpener.current?.focus();
+    } catch (reason) { setBatchError(reason instanceof Error ? reason.message : "network_error"); }
+    finally { batchInFlight.current = false; setBusy(false); }
+  };
   const unavailable = scope === "workspace" && workspaces.catalog?.workspaces.find(item => item.id === workspaceId)?.availability !== "available";
   const form = <div style={{ display: "grid", gap: 12 }}>
     <p>{t("skills.saveHint")}</p>
@@ -135,6 +160,7 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
     {scope === "workspace" ? <Select getPopupContainer={() => container ?? document.body} aria-label={t("skills.workspace")} value={workspaceId} style={{ width: "100%" }} disabled={busy} onChange={value => { generation.current++; setData(null); setGlobals([]); setError(null); setWorkspaceId(value); }} options={workspaces.catalog?.workspaces.map(item => ({ value: item.id, label: item.kind === "default" ? t("workspaces.default") : item.name }))} /> : null}
     {error ? <Alert type="error" title={t("skills.error", { code: error })} action={<Button loading={loading} disabled={busy} onClick={() => void reload()}>{t("common.retry")}</Button>} /> : null}
     <p>{t("skills.capabilityHint")}</p>
+    {batchResult ? <Alert role="status" type={batchResult.failed.length || batchResult.skipped.length ? "warning" : "success"} title={t("skills.batchResult", { completed: batchResult.completed, skipped: batchResult.skipped.length, failed: batchResult.failed.length })} description={batchResult.skipped.length || batchResult.failed.length ? <ul>{[...batchResult.skipped, ...batchResult.failed].map(issue => <li key={issue.id}>{data?.skills.find(item => item.id === issue.id)?.name ?? issue.id}: {issue.reason === "unchanged" ? t("skills.batchUnchanged") : t(skillStateLabels[issue.reason as keyof typeof skillStateLabels] ?? "skills.unavailable")}</li>)}</ul> : undefined} /> : null}
     <div className="skills-toolbar">
       <h3>{t(scope === "global" ? "skills.global" : "skills.workspace")} Skills <span>· {data?.skills.length ?? "—"}</span></h3>
       <div className="skills-toolbar-actions">
@@ -156,6 +182,11 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
       </Upload>
       </div>}><Button icon={<UploadOutlined />} disabled={busy || loading || !data || unavailable}>{t("skills.importMenu")} ▾</Button></Dropdown>
       <Button type="primary" icon={<PlusOutlined />} disabled={busy || loading || !data || unavailable} onClick={event => void open(event.currentTarget)}>{t("skills.create")}</Button>
+      <Dropdown getPopupContainer={() => container ?? document.body} trigger={["click"]} menu={{ items: [
+        { key: "enable", label: t("skills.batchEnable") }, { key: "disable", label: t("skills.batchDisable") }, { type: "divider" }, { key: "archive", label: t("skills.batchArchive"), danger: true },
+      ], onClick: ({ key }) => { if (key === "enable" || key === "disable" || key === "archive") openBatch(key); } }}>
+        <Button ref={batchOpener} aria-label={t("skills.batchMenu")} title={t("skills.batchMenu")} icon={<MoreOutlined />} disabled={busy || loading || !data?.skills.length} />
+      </Dropdown>
       </div>
     </div>
     {!loading && data?.skills.length === 0 ? <Empty description={t("skills.empty")} /> : null}
@@ -170,5 +201,12 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
     {scope === "workspace" ? <><h3>{t("skills.inherited")}</h3><p>{t("skills.inheritanceHint")}</p></> : null}
     {globals.map(item => <article key={item.id} className="skills-row"><div className="skills-row-info"><h3 title={item.name}>{item.name}</h3><Tag role="status">{t(skillStateLabels[item.reason as keyof typeof skillStateLabels] ?? "skills.unavailable")}</Tag></div></article>)}
     {screens.md ? <Modal open={editor} title={t(folder ? "skills.importFolder" : "skills.content")} onCancel={close} afterClose={() => opener.current?.focus()} footer={null} getContainer={container ?? undefined} destroyOnHidden>{folder ? folderForm : form}</Modal> : <Drawer open={editor} title={t(folder ? "skills.importFolder" : "skills.content")} onClose={close} afterOpenChange={open => { if (!open) opener.current?.focus(); }} size="100%" getContainer={container ?? undefined} destroyOnHidden>{folder ? folderForm : form}</Drawer>}
+    <Modal open={batch !== null} title={t(batch?.action === "archive" ? "skills.batchArchive" : batch?.action === "enable" ? "skills.batchEnable" : "skills.batchDisable")} getContainer={container ?? undefined} onCancel={() => { if (!busy) setBatch(null); }} afterClose={() => batchOpener.current?.focus()} closable={!busy} mask={{ closable: !busy }} keyboard={!busy} confirmLoading={busy} okText={t("skills.batchConfirm")} cancelText={t("common.cancel")} okButtonProps={{ danger: batch?.action === "archive", disabled: busy || (batch?.action === "archive" && confirmation !== t("skills.batchWord")) }} cancelButtonProps={{ disabled: busy }} onOk={() => void submitBatch()} destroyOnHidden>
+      <p>{t("skills.batchScope", { scope: batch?.label ?? "", count: batch?.count ?? 0 })}</p>
+      <p>{t(batch?.action === "archive" ? "skills.batchArchiveHint" : batch?.action === "enable" ? "skills.batchEnableHint" : "skills.batchDisableHint")}</p>
+      {batch?.scope === "workspace" ? <p>{t(batch.action === "archive" ? "skills.removeInheritance" : "skills.batchWorkspaceHint")}</p> : null}
+      {batch?.action === "archive" ? <label>{t("skills.batchType", { word: t("skills.batchWord") })}<Input aria-label={t("skills.batchType", { word: t("skills.batchWord") })} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" /></label> : null}
+      {batchError ? <Alert type="error" title={t("skills.error", { code: batchError })} description={t("skills.batchErrorHint")} /> : null}
+    </Modal>
   </section>;
 }

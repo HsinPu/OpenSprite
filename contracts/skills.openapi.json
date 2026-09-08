@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite Skills API",
-    "version": "0.17.0",
+    "version": "0.18.1",
     "description": "Strict local Skills management with automatic global inheritance and same-name workspace precedence. Workspace registrations shadow global Skills even when disabled or invalid. Mutations require catalog expectedRevision."
   },
   "paths": {
@@ -1975,6 +1975,79 @@
           }
         }
       }
+    },
+    "/api/skills/batch": {
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Batch Skills",
+        "operationId": "batchSkills",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "title": "Expectedrevision"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "global",
+                      "workspace"
+                    ],
+                    "title": "Scope"
+                  },
+                  "workspaceId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Workspaceid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "enable",
+                      "disable",
+                      "archive"
+                    ],
+                    "title": "Action"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "expectedRevision",
+                  "scope",
+                  "action"
+                ],
+                "title": "Batch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2224,6 +2297,71 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "BatchIssue": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unchanged",
+              "missing",
+              "invalid_format",
+              "content_too_large",
+              "unsafe_path",
+              "workspace_unavailable",
+              "duplicate_name"
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "title": "BatchIssue"
+      },
+      "BatchResponse": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Revision"
+          },
+          "completed": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Completed"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/BatchIssue"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/BatchIssue"
+            },
+            "type": "array",
+            "title": "Failed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "completed",
+          "skipped",
+          "failed"
+        ],
+        "title": "BatchResponse"
       }
     }
   }

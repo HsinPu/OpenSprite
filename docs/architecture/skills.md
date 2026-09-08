@@ -10,7 +10,7 @@ read: no references, scripts, remote resources or external mounts.
 
 Strict version 3 catalog UUIDs are stable; catalog revision is the optimistic
 concurrency token for every mutation. Item revision is audit metadata. Each scope
-allows 100 entries. Safe YAML requires name and description, permits additional metadata, rejects aliases and duplicate fields, and
+has no fixed Skill-count cap. Safe YAML requires name and description, permits additional metadata, rejects aliases and duplicate fields, and
 invalid UTF-8, bounded to 64 KiB. NFC names are case-insensitively unique within
 a scope. Cross-scope names keep distinct IDs but workspace registrations shadow globals.
 
@@ -126,3 +126,13 @@ From backend, `uv run python ../scripts/verify_skills_live.py` runs positive,
 near-match and negative probes using an isolated database/current provider.
 The 2026-09-06 attempt received Provider HTTP 401 for all three cases. Valid
 credentials and a rerun are required before claiming real-model success.
+# Bulk operations
+
+`POST /api/skills/batch` uses the Workspace gate then Skills lock and catalog
+expectedRevision. Enable and disable persist one catalog replacement. Archive
+uses a strict version-3 journal with one scope and canonical archive UUIDs;
+recovery completes all recorded renames before removing registrations. Partial
+preflight failures remain registered and are reported. Runtime I/O interruption
+leaves the journal for roll-forward recovery and returns a storage error.
+The master switch and inherited globals are not modified. Existing Run snapshots
+remain immutable. UI confirmation freezes scope, count and revision.

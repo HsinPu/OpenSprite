@@ -88,7 +88,7 @@ class SkillsService:
 
     def _validate(self, raw) -> SkillCatalog:
         catalog = (LegacySkillCatalog if isinstance(raw, dict) and raw.get("version") in (1, 2) else SkillCatalog).model_validate(raw)
-        ids, names, directories, counts = set(), set(), set(), {}
+        ids, names, directories = set(), set(), set()
         for item in catalog.skills:
             if not 1 <= len(item.name) <= 80 or item.name != unicodedata.normalize("NFC", item.name).strip():
                 raise ValueError
@@ -103,8 +103,7 @@ class SkillsService:
             group = (item.scope, item.workspaceId)
             name = (*group, item.name.casefold())
             directory = (*group, item.directoryName.casefold())
-            counts[group] = counts.get(group, 0) + 1
-            if item.id in ids or name in names or directory in directories or counts[group] > 100:
+            if item.id in ids or name in names or directory in directories:
                 raise ValueError
             if item.confirmedHash is not None and (len(item.confirmedHash) != 64 or any(c not in "0123456789abcdef" for c in item.confirmedHash)):
                 raise ValueError
@@ -118,6 +117,10 @@ class SkillsService:
         if not journal.exists():
             return
         tx = self._read_json(journal)
+        if type(tx) is dict and tx.get("version") == 3:
+            from .batch import recover_batch
+            recover_batch(self, tx)
+            return
         if type(tx) is dict and tx.get("version") == 2:
             from .folder_import import recover_package
             recover_package(self, tx)
@@ -226,6 +229,10 @@ class SkillsService:
             cat = self._catalog()
             return {"enabled": cat.enabled, "revision": cat.revision}
 
+    def batch(self, *, scope, workspace_id, action, expected):
+        from .batch import apply_batch
+        return apply_batch(self, scope=scope, workspace_id=workspace_id, action=action, expected=expected)
+
     def list(self, scope, workspace_id=None):
         with self.lock:
             if scope not in {"global", "workspace"} or (scope == "workspace" and workspace_id is None):
@@ -250,8 +257,6 @@ class SkillsService:
             peers = [i for i in cat.skills if i.scope == scope and i.workspaceId == workspace_id and i.id != identifier]
             if any(i.name.casefold() == name.casefold() for i in peers):
                 raise SkillError("duplicate_name")
-            if len(peers) >= 100:
-                raise SkillError("limit_reached")
             try:
                 directory = current.directoryName if current else WorkspaceRootPolicy.directory_name(name)
             except ValueError:
@@ -273,8 +278,6 @@ class SkillsService:
             peers = [item for item in cat.skills if item.scope == scope and item.workspaceId == workspace_id]
             if any(item.name.casefold() == package.name.casefold() for item in peers):
                 raise SkillError("duplicate_name")
-            if len(peers) >= 100:
-                raise SkillError("limit_reached")
             item = SkillRecord(id=str(uuid4()), scope=scope, workspaceId=workspace_id,
                                directoryName=package.directory_name, name=package.name,
                                description=package.description, revision=1, enabled=True)
@@ -342,8 +345,6 @@ class SkillsService:
                         continue
                     if any(i.directoryName.casefold() == child.name.casefold() for i in peers):
                         continue
-                    if len(peers) >= 100:
-                        raise SkillError("limit_reached")
                     try:
                         directory = WorkspaceRootPolicy.directory_name(child.name)
                         item = SkillRecord(id=str(uuid4()), scope=scope, workspaceId=workspace_id, directoryName=directory, name=directory, description="", revision=1)

@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SkillsSettings } from "../src/features/settings/SkillsSettings";
 import { createTranslator } from "../src/i18n/catalog";
-import { getSkill, listSkills, skillRequest, importSkillZip } from "../src/api/skills";
+import { getSkill, listSkills, skillRequest, importSkillZip, batchSkills } from "../src/api/skills";
 
-vi.mock("../src/api/skills", async importOriginal => ({ ...await importOriginal<typeof import("../src/api/skills")>(), getSkill: vi.fn(), listSkills: vi.fn(), skillRequest: vi.fn(), importSkillZip: vi.fn() }));
+vi.mock("../src/api/skills", async importOriginal => ({ ...await importOriginal<typeof import("../src/api/skills")>(), getSkill: vi.fn(), listSkills: vi.fn(), skillRequest: vi.fn(), importSkillZip: vi.fn(), batchSkills: vi.fn() }));
 const content = "---\nname: review\ndescription: Review\n---\nCheck it.";
 const skill = { id: "11111111-1111-4111-8111-111111111111", scope: "global" as const, workspaceId: null,
   name: "review", description: "Review", directoryName: "review", revision: 1, enabled: false,
@@ -19,6 +19,65 @@ beforeEach(() => {
   vi.mocked(getSkill).mockReset().mockResolvedValue({ revision: 1, skill });
   vi.mocked(skillRequest).mockReset().mockResolvedValue({ revision: 2, enabled: true });
   vi.mocked(importSkillZip).mockReset();
+  vi.mocked(batchSkills).mockReset().mockResolvedValue({ revision: 2, completed: 1, skipped: [], failed: [] });
+});
+
+async function openBatchMenu(action: string) {
+  const button = await screen.findByRole("button", { name: "批次操作" });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+  fireEvent.click(await screen.findByRole("menuitem", { name: action }));
+}
+
+it("confirms a scope-bounded batch enable and displays its outcome", async () => {
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await openBatchMenu("全部啟用");
+  expect(screen.getByText("範圍：全域，共 1 個 Skills。")).toBeTruthy();
+  expect(batchSkills).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "確認操作" }));
+  await waitFor(() => expect(batchSkills).toHaveBeenCalledWith("global", null, "enable", 1));
+  expect(await screen.findByText("完成 1 個，略過 0 個，失敗 0 個。")).toBeTruthy();
+});
+
+it("requires typed confirmation for archive and cancellation does not mutate", async () => {
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await openBatchMenu("移除全部");
+  const confirm = screen.getByRole("button", { name: "確認操作" }) as HTMLButtonElement;
+  expect(confirm.disabled).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: "請輸入「移除」確認" }), { target: { value: "移除" } });
+  expect(confirm.disabled).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
+  expect(batchSkills).not.toHaveBeenCalled();
+});
+
+it("uses the current workspace and prevents duplicate batch submission", async () => {
+  let finish: (() => void) | undefined;
+  vi.mocked(batchSkills).mockImplementation(() => new Promise(resolve => { finish = () => resolve({ revision: 2, completed: 1, skipped: [], failed: [] }); }));
+  render(<SkillsSettings workspaces={{ catalog: workspaceCatalog }} container={null} />);
+  fireEvent.click(screen.getByRole("tab", { name: "工作區" }));
+  await openBatchMenu("全部停用");
+  const confirm = screen.getByRole("button", { name: "確認操作" });
+  fireEvent.click(confirm); fireEvent.click(confirm);
+  expect(batchSkills).toHaveBeenCalledTimes(1);
+  expect(batchSkills).toHaveBeenCalledWith("workspace", alphaWorkspace.id, "disable", 1);
+  finish?.();
+  await screen.findByText("完成 1 個，略過 0 個，失敗 0 個。");
+});
+
+it("keeps batch conflicts visible and disables empty-list actions", async () => {
+  vi.mocked(batchSkills).mockRejectedValue(new Error("revision_conflict"));
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await openBatchMenu("全部啟用");
+  fireEvent.click(screen.getByRole("button", { name: "確認操作" }));
+  expect(await screen.findByText(/revision_conflict/)).toBeTruthy();
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+
+it("disables batch controls for empty scopes", async () => {
+  vi.mocked(listSkills).mockResolvedValue({ revision: 0, enabled: true, skills: [] });
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await screen.findByText("尚無 Skills");
+  expect((screen.getByRole("button", { name: "批次操作" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("shows automatic inheritance read-only and warns about disabled workspace shadowing", async () => {

@@ -58,6 +58,20 @@ const modelEvent: RunEvent = {
 };
 
 describe("execution context disclosure", () => {
+  it("places Skills after tools with the shared empty card", () => {
+    render(<ExecutionContext modelName="Auto Router" run={run} events={[]} timeZone="system" defaultExpanded />);
+    const headings = screen.getAllByRole("heading", { level: 3 }).map(node => node.textContent);
+    expect(headings.slice(0, 4)).toEqual(["模型", "工具", "Skills", "執行資訊"]);
+    expect(screen.getByText("本次執行未使用 Skills。").className).toBe("chat-workspace__empty-tools");
+  });
+
+  it("uses shared cards for loaded Skills without exposing content", () => {
+    const loaded: RunEvent = { ...event, sequence: 2, type: "skill.loaded", data: { name: "review", source: "model" } };
+    render(<ExecutionContext modelName="Auto Router" run={run} events={[loaded]} timeZone="system" defaultExpanded />);
+    expect(screen.getByText("review").closest("li")?.className).toBe("chat-workspace__skill-card");
+    expect(screen.getByText("review").closest("ul")?.className).toBe("chat-workspace__capability-list");
+  });
+
   it("shows the snapshotted Workspace availability", () => {
     render(<ExecutionContext modelName="Auto Router" run={run} events={[event]} timeZone="system" defaultExpanded />);
 

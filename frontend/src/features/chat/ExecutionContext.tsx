@@ -193,10 +193,6 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
       </> : null}
 
       <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isDrawerMode && !isExpanded}>
-        <section className="chat-workspace__context-section" aria-label={t("settings.category.skills")}>
-          <h3>{t("settings.category.skills")}</h3>
-          {events.some(event => event.type === "skill.loaded" || event.type === "skill.load_failed") ? <ul>{events.filter(event => event.type === "skill.loaded" || event.type === "skill.load_failed").map(event => <li key={event.sequence}>{skillName(event, t)} · {t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}{event.type === "skill.load_failed" ? ` · ${t("skills.error", { code: String(event.data.errorCode) })}` : ""}</li>)}</ul> : <p>{t("skills.noneLoaded")}</p>}
-        </section>
         {historical ? <div className="chat-workspace__history-toolbar"><span>{t("execution.historical")}</span><button type="button" onClick={onReturnToLatest}>{t("execution.backToLatest")}</button></div> : null}
         {historical && loading ? <div className="chat-workspace__context-message" role="status">{t("execution.loadingHistory")}</div> : historical && error ? <div className="chat-workspace__context-message chat-workspace__context-message--error" role="alert"><p>{error}</p>{onRetry ? <button type="button" onClick={onRetry}>{t("common.retry")}</button> : null}</div> : run ? (
           <>
@@ -220,6 +216,21 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
             </section>
 
             {!historical && run.status === "running" ? <ToolApprovalCard events={events} /> : null}
+
+            <section className="chat-workspace__context-section" aria-labelledby={`${contextId}-skills-title`}>
+              <h3 id={`${contextId}-skills-title`}>{t("settings.category.skills")}</h3>
+              {events.some(event => event.type === "skill.loaded" || event.type === "skill.load_failed") ? (
+                <ul className="chat-workspace__capability-list">
+                  {events.filter(event => event.type === "skill.loaded" || event.type === "skill.load_failed").map(event => (
+                    <li key={event.sequence} className={event.type === "skill.load_failed" ? "chat-workspace__skill-card chat-workspace__skill-card--error" : "chat-workspace__skill-card"}>
+                      <span className="chat-workspace__capability-icon" aria-hidden="true">◇</span>
+                      <span className="chat-workspace__skill-content"><span>{skillName(event, t)}</span><small>{event.type === "skill.load_failed" ? t("skills.error", { code: String(event.data.errorCode) }) : t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}</small></span>
+                      <i aria-label={t(event.type === "skill.load_failed" ? "execution.status.failed" : "execution.executed")} />
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="chat-workspace__empty-tools">{t("skills.noneLoaded")}</p>}
+            </section>
 
             <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={`${contextId}-info-title`}>
               <h3 id={`${contextId}-info-title`}>{t("execution.info")}</h3>

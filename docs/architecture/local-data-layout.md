@@ -25,6 +25,9 @@ Skills (0.13.0) add lazy-created `skills/<directory>/SKILL.md` globally and
 `config/skills.json` v3 owns activation; Workspace names automatically shadow globals.
 The v1/v2 migration removes manual Workspace overrides. Legacy confirmed
 hashes are inert compatibility metadata, not approval gates. Temporary
+Batch archive transactions use journal v3, recording the original catalog and
+per-Skill archive UUIDs for roll-forward recovery; no permanent deletion.
+
 `config/skills-transaction.json` owns recoverable writes. Archive deletion moves
 the Skill directory to `archive/skills/<UUID>`, within the same user-data root.
 

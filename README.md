@@ -2,7 +2,9 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.17.0`。
+目前產品版本為 `0.18.1`。
+
+Skills 工具列的「批次操作」選單提供全部啟用、全部停用與移除全部，僅作用於目前全域或所選工作區的專用 Skills，不修改繼承的全域項目或總開關。啟用時略過無效項目；移除需輸入確認文字，檔案只移至封存位置。工作區全部停用仍遮蔽同名全域版本，移除登記後才恢復繼承。
 
 ### 匯入 Skill ZIP
 
