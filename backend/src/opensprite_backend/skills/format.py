@@ -30,12 +30,13 @@ def parse(content: str) -> tuple[str, str, str, str]:
         data = content.encode("utf-8")
         if len(data) > 65536:
             raise SkillError("content_too_large")
-        lines = content.splitlines()
+        # Accept the UTF-8 signature without altering stored bytes or their hash.
+        lines = content.removeprefix("\ufeff").splitlines()
         if not lines or lines[0] != "---":
             raise SkillError("invalid_format")
         end = lines.index("---", 1)
         header = yaml.load("\n".join(lines[1:end]), Loader=HeaderLoader)
-        if type(header) is not dict or set(header) != {"name", "description"}:
+        if type(header) is not dict or not {"name", "description"}.issubset(header):
             raise SkillError("invalid_format")
         name, description = header["name"], header["description"]
         if type(name) is not str or type(description) is not str:
@@ -43,7 +44,7 @@ def parse(content: str) -> tuple[str, str, str, str]:
         name = unicodedata.normalize("NFC", name).strip()
         description = description.strip()
         body = "\n".join(lines[end + 1:]).strip()
-        if not 1 <= len(name) <= 80 or not 1 <= len(description) <= 500 or not body:
+        if not 1 <= len(name) <= 80 or not description or not body:
             raise SkillError("invalid_format")
         if any(unicodedata.category(c) in {"Cc", "Cs"} for c in name):
             raise SkillError("invalid_format")

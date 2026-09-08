@@ -355,7 +355,7 @@ wheels = [
 
 [[package]]
 name = "opensprite-backend"
-version = "0.13.0"
+version = "0.17.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -364,6 +364,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "mcp" },
+    { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "tzdata" },
     { name = "uvicorn" },
@@ -382,6 +383,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.116.1" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "mcp", specifier = ">=2,<3" },
+    { name = "python-multipart", specifier = "==0.0.32" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "tzdata", specifier = "==2025.2" },
     { name = "uvicorn", specifier = "==0.35.0" },

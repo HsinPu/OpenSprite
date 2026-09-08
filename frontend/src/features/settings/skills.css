@@ -1,0 +1,28 @@
+.skills-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.skills-heading h2 { margin: 0; }
+.skills-master { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.skills-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-block: 24px 16px; }
+.skills-toolbar h3 { margin: 0; font-size: 16px; }
+.skills-toolbar h3 span { color: #858585; font-weight: 400; }
+.skills-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.skills-settings > .ant-empty { padding-block: 32px; }
+.skills-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; border-bottom: 1px solid #ddd; }
+.skills-row-info { min-width: 0; flex: 1; }
+.skills-row-info h3 { margin: 0; font-size: 16px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skills-row-info .ant-tag { margin-top: 6px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.skills-row-hint { margin: 6px 0 0; font-size: 13px; color: #737373; overflow-wrap: anywhere; }
+.skills-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.skills-remove.ant-btn { color: #737373; }
+.skills-remove.ant-btn:not(:disabled):hover { color: #d9363e; background: #fff1f0; }
+.skills-import-menu { display: grid; gap: 4px; padding: 8px; border-radius: 10px; background: white; box-shadow: 0 6px 24px #0002; }
+@media (max-width: 600px) {
+  .skills-master { width: 100%; justify-content: space-between; }
+  .skills-toolbar-actions { width: 100%; }
+  .skills-toolbar-actions > .ant-btn-primary { margin-inline-start: auto; }
+}

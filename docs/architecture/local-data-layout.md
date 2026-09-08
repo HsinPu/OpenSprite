@@ -22,9 +22,16 @@ the user explicitly requests verified user-data deletion.
 
 Skills (0.13.0) add lazy-created `skills/<directory>/SKILL.md` globally and
 `workspace/<workspace-directory>/skills/<directory>/SKILL.md` per Workspace.
-`config/skills.json` owns activation and approved hashes; temporary
+`config/skills.json` v3 owns activation; Workspace names automatically shadow globals.
+The v1/v2 migration removes manual Workspace overrides. Legacy confirmed
+hashes are inert compatibility metadata, not approval gates. Temporary
 `config/skills-transaction.json` owns recoverable writes. Archive deletion moves
 the Skill directory to `archive/skills/<UUID>`, within the same user-data root.
+
+Folder imports (0.14.0) also preserve supporting files beneath that Skill root.
+Temporary `.skill-import-<UUID>` sibling directories belong to the durable v2
+Skills transaction journal and are recovered before catalog reads. HTTP upload
+bytes remain bounded in memory; no attachment data is written outside this root.
 
 ```text
 .opensprite/
@@ -201,3 +208,10 @@ separate retention policy is approved and delivered.
 
 This rebuild is new-install-only. It does not scan, migrate, import, or fall back
 to any earlier application-data location.
+
+Failed, unpublished Skill folder imports are preserved under
+`archive/skills/failed-import-<skill-id>-<attempt-id>/`: `payload/` contains the
+partial uploaded tree and `transaction.json` contains its recovery record.
+These archives are not scanned or loaded as Skills and have no automatic
+deletion policy. Published targets retain normal recovery rather than being
+silently moved or overwritten.

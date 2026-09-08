@@ -151,11 +151,11 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/skills", "get", "listSkills"),
         ("/api/skills", "post", "createSkill"),
         ("/api/skills/scan", "post", "scanSkills"),
+        ("/api/skills/import-zip", "post", "importSkillZip"),
         ("/api/skills/{skill_id}", "get", "getSkill"),
         ("/api/skills/{skill_id}", "put", "updateSkill"),
         ("/api/skills/{skill_id}", "delete", "deleteSkill"),
         ("/api/skills/{skill_id}/enabled", "put", "setSkillEnabled"),
-        ("/api/skills/{skill_id}/workspace-override", "put", "setSkillWorkspaceOverride"),
         ("/healthz", "get", "getHealth"),
         ("/api/app-info", "get", "getAppInfo"),
         ("/api/auth/status", "get", "getAuthStatus"),
@@ -375,7 +375,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.13.0",
+        "version": "0.17.0",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

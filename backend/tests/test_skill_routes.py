@@ -16,8 +16,8 @@ def test_create_approve_read_and_archive(tmp_path):
         response = client.post("/api/skills", json={"scope": "global", "content": CONTENT, "expectedRevision": 0})
         assert response.status_code == 200
         item = response.json()["skill"]
-        assert not item["effective"]
-        assert client.put(f'/api/skills/{item["id"]}/enabled', json={"enabled": True, "confirmedHash": item["contentHash"], "expectedRevision": 1}).status_code == 200
+        assert item["effective"]
+        assert client.put(f'/api/skills/{item["id"]}/enabled', json={"enabled": True, "expectedRevision": 1}).status_code == 200
         assert client.get("/api/skills?scope=global").json()["skills"][0]["effective"]
         assert client.delete(f'/api/skills/{item["id"]}?expectedRevision=2').status_code == 200
         assert client.get("/api/skills?scope=global").json()["skills"] == []
@@ -37,7 +37,20 @@ def test_revision_and_changed_content(tmp_path):
     with client_for(tmp_path) as client:
         assert client.put("/api/skills/settings", json={"enabled": False, "expectedRevision": 5}).status_code == 409
         item = client.post("/api/skills", json={"scope": "global", "content": CONTENT, "expectedRevision": 0}).json()["skill"]
-        assert client.put(f'/api/skills/{item["id"]}/enabled', json={"enabled": True, "confirmedHash": "0" * 64, "expectedRevision": 1}).status_code == 409
+        assert client.put(f'/api/skills/{item["id"]}/enabled', json={"enabled": True, "confirmedHash": "0" * 64, "expectedRevision": 1}).status_code == 400
+
+
+def test_override_route_removed_and_shadowing_contract(tmp_path):
+    from test_skills import WORKSPACE_ID
+    with client_for(tmp_path) as client:
+        global_item = client.post("/api/skills", json={"scope": "global", "content": CONTENT, "expectedRevision": 0}).json()["skill"]
+        local = client.post("/api/skills", json={"scope": "workspace", "workspaceId": WORKSPACE_ID, "content": CONTENT, "expectedRevision": 1}).json()["skill"]
+        result = client.get(f"/api/skills?scope=global&workspaceId={WORKSPACE_ID}")
+        assert result.status_code == 200
+        view = result.json()["skills"][0]
+        assert view["shadowedBySkillId"] == local["id"] and view["reason"] == "shadowed_by_workspace"
+        assert "disabledWorkspaces" not in view
+        assert client.put(f'/api/skills/{global_item["id"]}/workspace-override', json={"workspaceId": WORKSPACE_ID, "disabled": True, "expectedRevision": 2}).status_code == 404
 
 
 def test_skills_routes_require_authentication(tmp_path):

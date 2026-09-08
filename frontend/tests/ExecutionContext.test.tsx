@@ -238,6 +238,20 @@ describe("execution context disclosure", () => {
     expect(document.body.textContent).not.toContain(canonicalName);
   });
 
+  it("uses a localized fallback for a Skill failure without metadata", () => {
+    const failure: RunEvent = {
+      ...event,
+      sequence: 2,
+      type: "skill.load_failed",
+      data: { skillId: null, scope: null, name: null, revision: null, contentHash: null, source: "model", errorCode: "invalid_request" },
+    };
+
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[failure]} timeZone="system" defaultExpanded />);
+
+    expect(document.body.textContent).not.toContain("null");
+    expect(screen.getByText(/未知 Skill/)).toBeTruthy();
+  });
+
   it("renders a Drawer mode without a second collapse control", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);
 

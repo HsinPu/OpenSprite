@@ -49,12 +49,7 @@ class Update(Revision):
 
 
 class Enabled(Settings):
-    confirmedHash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-
-
-class Override(Revision):
-    workspaceId: str
-    disabled: bool
+    pass
 
 
 class SettingsResponse(StrictModel):
@@ -64,7 +59,8 @@ class SettingsResponse(StrictModel):
 
 class SkillView(SkillRecord):
     contentHash: str | None
-    state: Literal["ready", "pending", "disabled", "missing", "invalid_format", "content_too_large", "unsafe_path", "workspace_unavailable"]
+    state: Literal["ready", "disabled", "missing", "invalid_format", "content_too_large", "unsafe_path", "workspace_unavailable", "duplicate_name"]
+    shadowedBySkillId: str | None
     effective: bool
     reason: str
     content: str | None = None
@@ -121,9 +117,11 @@ async def skill_error_handler(request: Request, error: SkillError):
     status = 503 if code == "store_unavailable" else 404 if code == "not_found" else 409 if code in {
         "revision_conflict", "content_changed", "duplicate_name", "skill_limit_reached", "workspace_unavailable"
     } else 400
+    details = {"path": error.path} if getattr(error, "path", None) is not None else {}
     return JSONResponse(status_code=status, content={"error": {
         "code": code, "message": "Skill operation could not be completed.",
         "retryable": status in (409, 503),
+        **details,
     }})
 
 
@@ -141,7 +139,7 @@ async def put_settings(request: Request):
 
 @router.get("", operation_id="listSkills", response_model=SkillListResponse, response_model_exclude_unset=True, openapi_extra={"parameters": [
     {"name": "scope", "in": "query", "required": True, "schema": {"type": "string", "enum": ["global", "workspace"]}},
-    {"name": "workspaceId", "in": "query", "required": False, "description": "Required for workspace scope; global scope uses this to calculate workspace overrides.", "schema": {"type": "string", "format": "uuid"}},
+    {"name": "workspaceId", "in": "query", "required": False, "description": "Required for workspace scope; global scope uses this to calculate same-name workspace precedence.", "schema": {"type": "string", "format": "uuid"}},
 ]})
 async def list_skills(request: Request):
     params = query(request, {"scope", "workspaceId"})
@@ -171,6 +169,25 @@ async def scan_skills(request: Request):
     if value.workspaceId is not None:
         value.workspaceId = identifier(value.workspaceId)
     return await asyncio.to_thread(service(request).scan, value.scope, value.workspaceId, value.expectedRevision)
+
+
+@router.post("/import-zip", operation_id="importSkillZip", response_model=SkillDetailResponse,
+             openapi_extra={"requestBody": {"required": True, "content": {"multipart/form-data": {"schema": {
+                 "type": "object", "required": ["manifest", "archive"], "properties": {"manifest": {"type": "string", "description": "Strict JSON: scope, workspaceId, directoryName, expectedRevision."}, "archive": {"type": "string", "format": "binary"}},
+                 "additionalProperties": False}}}}})
+async def import_skill_zip(request: Request):
+    from .skill_zip_upload import read_zip_upload
+    value, files = await read_zip_upload(request)
+    if value.workspaceId is not None:
+        value.workspaceId = identifier(value.workspaceId)
+    task = asyncio.create_task(asyncio.to_thread(service(request).import_folder, scope=value.scope, workspace_id=value.workspaceId,
+                                                directory_name=value.directoryName, files=files, expected=value.expectedRevision))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # Retain the Workspace gate until the filesystem transaction has stopped.
+        await task
+        raise
 
 
 @router.get("/{skill_id}", operation_id="getSkill", response_model=SkillDetailResponse)
@@ -205,12 +222,4 @@ async def enable_skill(skill_id: str, request: Request):
     value = await body(request, Enabled)
     return await asyncio.to_thread(service(request).configure, expected=value.expectedRevision,
                                    identifier=identifier(skill_id), enabled=value.enabled,
-                                   confirmed_hash=value.confirmedHash)
-
-
-@router.put("/{skill_id}/workspace-override", operation_id="setSkillWorkspaceOverride", response_model=SettingsResponse, openapi_extra=request_schema(Override))
-async def override_skill(skill_id: str, request: Request):
-    value = await body(request, Override)
-    return await asyncio.to_thread(service(request).configure, expected=value.expectedRevision,
-                                   identifier=identifier(skill_id), workspace_id=identifier(value.workspaceId),
-                                   disabled=value.disabled)
+                                   )

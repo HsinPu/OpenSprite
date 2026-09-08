@@ -13,7 +13,7 @@ from opensprite_backend.atomic_file import atomic_write
 from opensprite_backend.workspaces import WorkspaceAvailability, WorkspaceRootPolicy
 from opensprite_backend.workspaces.relocation import require_plain_directory, ensure_plain_directory, WorkspaceRelocationError
 from .format import parse
-from .models import SkillCatalog, SkillRecord, SkillError, SkillContent, SkillExecutionSnapshot
+from .models import SkillCatalog, SkillRecord, LegacySkillCatalog, LegacySkillRecord, SkillError, SkillContent, SkillExecutionSnapshot
 
 
 def unique(pairs):
@@ -46,7 +46,7 @@ class SkillsService:
 
     def _path(self, item: SkillRecord) -> Path:
         try:
-            segment = WorkspaceRootPolicy.directory_name(item.directoryName)
+            segment = WorkspaceRootPolicy.persisted_directory_name(item.directoryName)
         except ValueError:
             raise SkillError("unsafe_path") from None
         return self._base(item.scope, item.workspaceId) / segment / "SKILL.md"
@@ -87,10 +87,10 @@ class SkillsService:
         return json.loads(data, object_pairs_hook=unique)
 
     def _validate(self, raw) -> SkillCatalog:
-        catalog = SkillCatalog.model_validate(raw)
+        catalog = (LegacySkillCatalog if isinstance(raw, dict) and raw.get("version") in (1, 2) else SkillCatalog).model_validate(raw)
         ids, names, directories, counts = set(), set(), set(), {}
         for item in catalog.skills:
-            if not 1 <= len(item.name) <= 80 or item.name != unicodedata.normalize("NFC", item.name).strip() or len(item.description) > 500:
+            if not 1 <= len(item.name) <= 80 or item.name != unicodedata.normalize("NFC", item.name).strip():
                 raise ValueError
             if any(unicodedata.category(c) in {"Cc", "Cs"} for c in item.name):
                 raise ValueError
@@ -99,7 +99,7 @@ class SkillsService:
                 UUID(item.workspaceId)
             elif item.workspaceId is not None:
                 raise ValueError
-            WorkspaceRootPolicy.directory_name(item.directoryName)
+            WorkspaceRootPolicy.persisted_directory_name(item.directoryName)
             group = (item.scope, item.workspaceId)
             name = (*group, item.name.casefold())
             directory = (*group, item.directoryName.casefold())
@@ -108,7 +108,7 @@ class SkillsService:
                 raise ValueError
             if item.confirmedHash is not None and (len(item.confirmedHash) != 64 or any(c not in "0123456789abcdef" for c in item.confirmedHash)):
                 raise ValueError
-            for identifier in item.disabledWorkspaces:
+            for identifier in getattr(item, "disabledWorkspaces", []):
                 UUID(identifier)
             ids.add(item.id); names.add(name); directories.add(directory)
         return catalog
@@ -118,10 +118,14 @@ class SkillsService:
         if not journal.exists():
             return
         tx = self._read_json(journal)
+        if type(tx) is dict and tx.get("version") == 2:
+            from .folder_import import recover_package
+            recover_package(self, tx)
+            return
         if type(tx) is not dict or set(tx) != {"version", "catalog", "record", "content", "archive"} or tx["version"] != 1:
             raise SkillError("store_unavailable")
         catalog = self._validate(tx["catalog"])
-        item = SkillRecord.model_validate(tx["record"])
+        item = (LegacySkillRecord if catalog.version < 3 else SkillRecord).model_validate(tx["record"])
         path = self._path(item)
         self._safe_file(path, missing=True)
         if tx["archive"] is not None:
@@ -147,7 +151,12 @@ class SkillsService:
             self._recover()
             if not self.paths.skills_settings_file.exists():
                 return SkillCatalog()
-            return self._validate(self._read_json(self.paths.skills_settings_file))
+            catalog = self._validate(self._read_json(self.paths.skills_settings_file))
+            if catalog.version < 3:
+                catalog = SkillCatalog(revision=catalog.revision + 1, enabled=catalog.enabled,
+                    skills=[SkillRecord.model_validate(item.model_dump(exclude={"disabledWorkspaces"})) for item in catalog.skills])
+                self._write(catalog)
+            return catalog
         except Exception:
             raise SkillError("store_unavailable") from None
 
@@ -171,19 +180,43 @@ class SkillsService:
             raise SkillError("not_found")
         return item
 
-    def _view(self, catalog, item, workspace_id=None, *, content=False):
+    def _read_view(self, item):
         raw, digest, state = None, None, "disabled"
         name, description = item.name, item.description
         try:
             raw = self._read_file(item)
-            name, description, _, digest = parse(raw)
-            state = "ready" if item.enabled and digest == item.confirmedHash else "pending" if digest != item.confirmedHash else "disabled"
+            name, description, body, digest = parse(raw)
+            state = "ready" if item.enabled else "disabled"
         except SkillError as error:
             state = error.code
-        reason = state
-        if state == "ready":
-            reason = "master_disabled" if not catalog.enabled else "workspace_disabled" if workspace_id in item.disabledWorkspaces else "ready"
-        result = {**item.model_dump(), "name": name, "description": description, "contentHash": digest, "state": state, "effective": reason == "ready", "reason": reason}
+        result = {**item.model_dump(), "name": name, "description": description, "contentHash": digest, "state": state, "effective": False, "reason": state, "shadowedBySkillId": None}
+        instruction = SkillContent(item.id, item.scope, name, description, item.revision, digest, body) if digest is not None else None
+        return result, raw, instruction
+
+    def _resolve(self, catalog, workspace_id=None):
+        """Resolve each file once for both presentation and immutable Run contents."""
+        entries = {item.id: self._read_view(item) for item in catalog.skills
+                   if item.scope == "global" or item.workspaceId == workspace_id}
+        groups = {}
+        for identifier, (view, _, _) in entries.items():
+            key = (view["scope"], unicodedata.normalize("NFC", view["name"]).casefold())
+            groups.setdefault(key, []).append(identifier)
+        for identifier, (view, _, _) in entries.items():
+            key = unicodedata.normalize("NFC", view["name"]).casefold()
+            if len(groups[(view["scope"], key)]) > 1:
+                view["state"] = view["reason"] = "duplicate_name"
+            if view["scope"] == "global" and ("workspace", key) in groups:
+                matches = groups[("workspace", key)]
+                view["reason"] = "shadowed_by_workspace"
+                view["shadowedBySkillId"] = matches[0] if len(matches) == 1 else None
+            elif view["reason"] == "ready" and not catalog.enabled:
+                view["reason"] = "master_disabled"
+            view["effective"] = view["reason"] == "ready"
+        return entries
+
+    def _view(self, catalog, item, workspace_id=None, *, content=False, resolved=None):
+        view, raw, _ = (resolved if resolved is not None else self._resolve(catalog, workspace_id or item.workspaceId))[item.id]
+        result = dict(view)
         if content:
             result["content"] = raw
         return result
@@ -199,7 +232,8 @@ class SkillsService:
                 raise SkillError("invalid_request")
             cat = self._catalog()
             items = [i for i in cat.skills if i.scope == scope and (scope == "global" or i.workspaceId == workspace_id)]
-            return {"revision": cat.revision, "enabled": cat.enabled, "skills": [self._view(cat, i, workspace_id) for i in items]}
+            resolved = self._resolve(cat, workspace_id)
+            return {"revision": cat.revision, "enabled": cat.enabled, "skills": [self._view(cat, i, workspace_id, resolved=resolved) for i in items]}
 
     def get(self, identifier):
         with self.lock:
@@ -222,12 +256,43 @@ class SkillsService:
                 directory = current.directoryName if current else WorkspaceRootPolicy.directory_name(name)
             except ValueError:
                 raise SkillError("unsafe_path") from None
-            item = SkillRecord(id=identifier or str(uuid4()), scope=scope, workspaceId=workspace_id, directoryName=directory, name=name, description=description, revision=current.revision + 1 if current else 1, disabledWorkspaces=current.disabledWorkspaces if current else [])
+            item = SkillRecord(id=identifier or str(uuid4()), scope=scope, workspaceId=workspace_id, directoryName=directory, name=name, description=description, revision=current.revision + 1 if current else 1, enabled=current.enabled if current else True)
             path = self._path(item); self._safe_file(path, missing=True)
             if not current and path.parent.exists():
                 raise SkillError("directory_exists")
             cat.skills = [i for i in cat.skills if i.id != item.id] + [item]; cat.revision += 1
             self._transaction(cat, item, content=content)
+            return self.get(item.id)
+
+    def import_folder(self, *, scope, workspace_id, directory_name, files, expected):
+        from .folder_import import validate_package, journal_bytes
+        package = validate_package(directory_name, files)
+        with self.lock:
+            cat = self._catalog()
+            self._expected(cat, expected)
+            peers = [item for item in cat.skills if item.scope == scope and item.workspaceId == workspace_id]
+            if any(item.name.casefold() == package.name.casefold() for item in peers):
+                raise SkillError("duplicate_name")
+            if len(peers) >= 100:
+                raise SkillError("limit_reached")
+            item = SkillRecord(id=str(uuid4()), scope=scope, workspaceId=workspace_id,
+                               directoryName=package.directory_name, name=package.name,
+                               description=package.description, revision=1, enabled=True)
+            target = self._path(item).parent
+            self._safe_file(target / "SKILL.md", missing=True)
+            if target.parent.exists() and any(child.name.casefold() == target.name.casefold() for child in target.parent.iterdir()):
+                raise SkillError("directory_exists")
+            if any(peer.directoryName.casefold() == item.directoryName.casefold() for peer in peers):
+                raise SkillError("directory_exists")
+            cat.skills.append(item)
+            cat.revision += 1
+            try:
+                self._validate(cat.model_dump())
+                self._safe_file(self.paths.skills_transaction_file, missing=True)
+                atomic_write(self.paths.skills_transaction_file, journal_bytes(cat, item, package))
+                self._recover()
+            except Exception:
+                raise SkillError("store_unavailable") from None
             return self.get(item.id)
 
     def _transaction(self, catalog, item, *, content=None, archive=None):
@@ -239,30 +304,19 @@ class SkillsService:
         except Exception:
             raise SkillError("store_unavailable") from None
 
-    def configure(self, *, expected, enabled=None, identifier=None, confirmed_hash=None, workspace_id=None, disabled=None):
+    def configure(self, *, expected, enabled=None, identifier=None):
         with self.lock:
             cat = self._catalog(); self._expected(cat, expected)
             if identifier is None:
                 cat.enabled = enabled
             else:
                 item = self._find(cat, identifier)
-                if disabled is not None:
-                    if item.scope != "global":
-                        raise SkillError("invalid_request")
-                    try:
-                        self.workspaces.execution_context(workspace_id)
-                    except Exception:
-                        raise SkillError("workspace_unavailable") from None
-                    item.disabledWorkspaces = sorted(set(item.disabledWorkspaces) | {workspace_id}) if disabled else [i for i in item.disabledWorkspaces if i != workspace_id]
-                else:
-                    if enabled:
-                        name, description, _, digest = parse(self._read_file(item))
-                        if digest != confirmed_hash:
-                            raise SkillError("content_changed")
-                        if any(i.id != item.id and i.scope == item.scope and i.workspaceId == item.workspaceId and i.name.casefold() == name.casefold() for i in cat.skills):
-                            raise SkillError("duplicate_name")
-                        item.name, item.description, item.confirmedHash = name, description, digest
-                    item.enabled = enabled
+                if enabled:
+                    name, description, _, digest = parse(self._read_file(item))
+                    if any(i.id != item.id and i.scope == item.scope and i.workspaceId == item.workspaceId and i.name.casefold() == name.casefold() for i in cat.skills):
+                        raise SkillError("duplicate_name")
+                    item.name, item.description = name, description
+                item.enabled = enabled
                 item.revision += 1
             cat.revision += 1; self._write(cat)
             return {"enabled": cat.enabled, "revision": cat.revision}
@@ -296,6 +350,7 @@ class SkillsService:
                         require_plain_directory(child)
                         try:
                             name, description, _, _ = parse(self._read_file(item))
+                            item.enabled = True
                         except SkillError as error:
                             if error.code not in {"invalid_format", "content_too_large"} or len(directory) > 80:
                                 raise
@@ -321,15 +376,8 @@ class SkillsService:
                 return SkillExecutionSnapshot()
             contents = []
             if cat.enabled:
-                for item in cat.skills:
-                    if not item.enabled or workspace_id in item.disabledWorkspaces or (item.scope == "workspace" and item.workspaceId != workspace_id):
-                        continue
-                    try:
-                        name, description, body, digest = parse(self._read_file(item))
-                        if digest == item.confirmedHash:
-                            contents.append(SkillContent(item.id, item.scope, name, description, item.revision, digest, body))
-                    except SkillError:
-                        continue
+                contents = [instruction for view, _, instruction in self._resolve(cat, workspace_id).values()
+                            if view["effective"] and instruction is not None]
             result = SkillExecutionSnapshot(tuple(contents), tuple(selected))
             if len(selected) > 5 or len(set(selected)) != len(selected):
                 raise SkillError("invalid_request")
@@ -341,6 +389,4 @@ class SkillsService:
         with self.lock:
             cat = self._catalog()
             cat.skills = [i for i in cat.skills if i.workspaceId != workspace_id]
-            for item in cat.skills:
-                item.disabledWorkspaces = [i for i in item.disabledWorkspaces if i != workspace_id]
             cat.revision += 1; self._write(cat)

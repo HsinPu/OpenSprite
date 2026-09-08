@@ -36,6 +36,10 @@ function toolLabel(name: string, t: Translator): string {
   return name === "calculator" ? t("tool.calculator") : name;
 }
 
+function skillName(event: RunEvent, t: Translator): string {
+  return typeof event.data.name === "string" && event.data.name ? event.data.name : t("skills.unknown");
+}
+
 function durationText(run: RunSnapshot | null): string {
   if (!run?.startedAt) return "—";
   const end = run.finishedAt ? new Date(run.finishedAt).getTime() : Date.now();
@@ -51,7 +55,7 @@ function eventLabel(event: RunEvent, t: Translator, displayNames: ReadonlyMap<st
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
-    case "skill.loaded": return `${String(event.data.name)} · ${t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}`;
+    case "skill.loaded": return `${skillName(event, t)} · ${t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}`;
     case "skill.load_failed": return t("skills.error", { code: String(event.data.errorCode) });
     case "tool.approval_requested": return t("execution.event.approvalRequested", { tool: String(event.data.toolDisplayName ?? "") }).trim();
     case "tool.approval_decided": return t(event.data.decision === "allow_once" ? "execution.event.approvalAllowed" : event.data.decision === "expired" ? "execution.event.approvalExpired" : "execution.event.approvalDenied");
@@ -191,7 +195,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
       <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isDrawerMode && !isExpanded}>
         <section className="chat-workspace__context-section" aria-label={t("settings.category.skills")}>
           <h3>{t("settings.category.skills")}</h3>
-          {events.some(event => event.type === "skill.loaded" || event.type === "skill.load_failed") ? <ul>{events.filter(event => event.type === "skill.loaded" || event.type === "skill.load_failed").map(event => <li key={event.sequence}>{String(event.data.name)} · {t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}{event.type === "skill.load_failed" ? ` · ${t("skills.error", { code: String(event.data.errorCode) })}` : ""}</li>)}</ul> : <p>{t("skills.noneLoaded")}</p>}
+          {events.some(event => event.type === "skill.loaded" || event.type === "skill.load_failed") ? <ul>{events.filter(event => event.type === "skill.loaded" || event.type === "skill.load_failed").map(event => <li key={event.sequence}>{skillName(event, t)} · {t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}{event.type === "skill.load_failed" ? ` · ${t("skills.error", { code: String(event.data.errorCode) })}` : ""}</li>)}</ul> : <p>{t("skills.noneLoaded")}</p>}
         </section>
         {historical ? <div className="chat-workspace__history-toolbar"><span>{t("execution.historical")}</span><button type="button" onClick={onReturnToLatest}>{t("execution.backToLatest")}</button></div> : null}
         {historical && loading ? <div className="chat-workspace__context-message" role="status">{t("execution.loadingHistory")}</div> : historical && error ? <div className="chat-workspace__context-message chat-workspace__context-message--error" role="alert"><p>{error}</p>{onRetry ? <button type="button" onClick={onRetry}>{t("common.retry")}</button> : null}</div> : run ? (

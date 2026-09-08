@@ -24,14 +24,24 @@ class SkillRecord(StrictModel):
     revision: int = Field(ge=1)
     enabled: bool = False
     confirmedHash: str | None = None
-    disabledWorkspaces: list[str] = Field(default_factory=list)
 
 
 class SkillCatalog(StrictModel):
-    version: Literal[1] = 1
+    version: Literal[3] = 3
     revision: int = Field(default=0, ge=0)
     enabled: bool = True
     skills: list[SkillRecord] = Field(default_factory=list)
+
+
+class LegacySkillRecord(SkillRecord):
+    disabledWorkspaces: list[str] = Field(default_factory=list)
+
+
+class LegacySkillCatalog(StrictModel):
+    version: Literal[1, 2]
+    revision: int = Field(default=0, ge=0)
+    enabled: bool = True
+    skills: list[LegacySkillRecord] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)

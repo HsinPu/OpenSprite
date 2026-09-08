@@ -8,33 +8,93 @@ recoverable `config/skills-transaction.json` journal and `archive/skills` under
 Workspace service, never a browser-supplied path. Only first-level SKILL.md is
 read: no references, scripts, remote resources or external mounts.
 
-Strict version 1 catalog UUIDs are stable; catalog revision is the optimistic
+Strict version 3 catalog UUIDs are stable; catalog revision is the optimistic
 concurrency token for every mutation. Item revision is audit metadata. Each scope
-allows 100 entries. Safe YAML rejects aliases, duplicate/unknown fields and
+allows 100 entries. Safe YAML requires name and description, permits additional metadata, rejects aliases and duplicate fields, and
 invalid UTF-8, bounded to 64 KiB. NFC names are case-insensitively unique within
-a scope. Cross-scope names remain distinct IDs without shadowing.
+a scope. Cross-scope names keep distinct IDs but workspace registrations shadow globals.
 
 Effective means master enabled, record enabled, correct Workspace scope, no
-global override disabling it, safe/readable file and exact approved SHA-256.
-New/edited/scanned content never implicitly enables. External edits are pending.
+same-name workspace registration shadowing it, and a safe/readable valid file.
+One resolver reads each relevant file once for list responses and Run snapshots.
+Names use NFC plus casefold. Invalid files retain their catalog name for shadowing;
+valid external names are used immediately. Same-scope name collisions disable all
+colliding candidates. Disabled, invalid or missing workspace Skills never fall back
+to globals; deleting the registration restores inheritance for future Runs.
+Responses expose shadowed_by_workspace and nullable shadowedBySkillId; ambiguous
+workspace collisions have no single shadowing ID. Global lists without workspaceId
+show global availability, while workspaceId gives contextual inheritance status.
+Newly saved/imported Skills are enabled. Editing via API preserves the existing
+toggle; newly scanned valid files are enabled, while invalid files remain disabled.
+Rescanning never resets an existing registration's toggle. Valid external edits apply on the
+next Run without confirmation. Hashes identify snapshots, not approval gates.
+Catalog v1/v2 is atomically migrated to v3, preserving explicit enabled states and
+removing disabledWorkspaces. Previously blocked globals become inherited. Legacy
+models are accepted only when reading old catalogs or unfinished journals; v3 and
+the HTTP response reject the removed field. The workspace-override route is removed.
+Legacy confirmedHash remains readable as inert metadata, never an access check.
+The enabled HTTP request accepts only enabled and expectedRevision.
 Corrupt catalogs fail closed for Skills while ordinary unselected chat remains
 available. Invalid manual selections reject Run acceptance.
 
 ## Recovery and deletion
+
+Version 0.15.0 replaces folder selection with ZIP import at
+`POST /api/skills/import-zip`; the folder HTTP endpoint is removed.
+Multipart contains exactly a strict JSON manifest (scope, workspaceId,
+directoryName, expectedRevision) and one archive. The ZIP is capped at 12 MiB,
+metadata at 1 MiB, with 64 KiB request framing allowance. Uploads remain in
+bounded memory, not OS temporary files. Browser preview is local and uses
+bounded streaming decompression; confirmation sends the original ZIP.
+The backend independently validates paths, entry types, CRCs and quotas,
+accepting only stored/deflated, unencrypted archives and one optional wrapper.
+No extract-all operation or source filename determines a filesystem target.
+
+Package payload is at most 10 MiB, entrypoint 64 KiB, path depth 8 and each
+segment 80 characters. NFC spelling and casefold collisions fail closed;
+dependency/VCS directories and nested SKILL.md are rejected. ZIP link entries
+are rejected. Destination ancestors and files reject
+links/reparse points; only regular bytes are written, never executed.
+
+Transaction journal v2 contains bounded base64 file bytes plus the Skill
+record and next catalog. Recovery writes a `.skill-import-<UUID>` sibling stage,
+verifies the complete tree, renames to an absent target, then replaces catalog.
+After a crash, an already-renamed target must exactly match journal contents;
+recovery never overwrites it. Journal v1 remains supported for existing edits
+and archive operations. Windows package disk operations use extended-length
+paths without changing catalog paths or skipping link/reparse checks.
+Before publication, write failures move the stage into
+`archive/skills/failed-import-<UUID>-<UUID>/payload` and move the journal beside
+it as `transaction.json`. No files are deleted, the catalog remains unchanged,
+and a later request can retry without blocking existing Skills. Once the target
+has been published, its journal remains recoverable; a mismatching target or
+inaccessible archive/catalog still fails closed rather than discarding evidence.
+Catalog revision serializes retries: duplicate submissions are rejected with
+revision conflict rather than creating another Skill. Cancellation during disk
+commit keeps the Workspace mutation gate until the worker finishes.
+
+Directory import preserves the selected root name independently of the YAML
+display name. Supporting bytes are retained, but snapshot loading and content
+hashes remain SKILL.md-only. They confer no additional execution capability.
+UTF-8 BOM is accepted at the start of SKILL.md during parsing; original bytes
+and their SHA-256 remain unchanged. Duplicate manifest keys return a non-retryable
+400 invalid_request, never a persisted-catalog 503 error.
 
 File/catalog mutations persist a journal first. Recovery rolls forward a
 validated file write or archive rename before catalog replacement; failure keeps
 recovery state. Archive deletion tolerates already-missing directories. No user
 directory is permanently deleted. Workspace removal revokes registration first;
 if the later Workspace catalog write fails, retained files need rescan and
-reconfirmation. This prefers revocation over retaining enabled instructions.
+explicit enabling. This prefers revocation over retaining enabled instructions.
 
 ## Run and Context
 
 Lock order is Workspace mutation gate then Skills RLock. Chat and schedules
 capture a frozen SkillExecutionSnapshot and pass it through RunManager to
 AgentLoop. Bodies reside in memory but initially only ID/name/description/scope
-enter Context. Manual skillIds preload at most five and affect idempotency.
+enter Context. The browser composer uses automatic selection only. The optional
+API skillIds field still preloads at most five and affects idempotency for API
+compatibility; historical manually selected Skill events remain readable.
 
 Internal load_skill is separate from business-tool policy and accepts only a
 snapshot ID. Full instructions enter one JSON system-prompt projection; the tool

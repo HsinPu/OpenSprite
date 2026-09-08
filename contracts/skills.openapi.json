@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite Skills API",
-    "version": "0.13.0",
-    "description": "Strict local Skills management. Authentication follows trusted_local/password_required policy. All mutations use catalog expectedRevision. Unknown and duplicate JSON/query fields are rejected. New content is disabled until its hash is explicitly approved."
+    "version": "0.17.0",
+    "description": "Strict local Skills management with automatic global inheritance and same-name workspace precedence. Workspace registrations shadow global Skills even when disabled or invalid. Mutations require catalog expectedRevision."
   },
   "paths": {
     "/api/skills/settings": {
@@ -541,7 +541,7 @@
             "name": "workspaceId",
             "in": "query",
             "required": false,
-            "description": "Required for workspace scope; global scope uses this to calculate workspace overrides.",
+            "description": "Required for workspace scope; global scope uses this to calculate same-name workspace precedence.",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -1758,18 +1758,6 @@
                   "enabled": {
                     "title": "Enabled",
                     "type": "boolean"
-                  },
-                  "confirmedHash": {
-                    "anyOf": [
-                      {
-                        "pattern": "^[0-9a-f]{64}$",
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "title": "Confirmedhash"
                   }
                 },
                 "required": [
@@ -1784,31 +1772,43 @@
         }
       }
     },
-    "/api/skills/{skill_id}/workspace-override": {
-      "put": {
-        "tags": [
-          "skills"
-        ],
-        "summary": "Override Skill",
-        "operationId": "setSkillWorkspaceOverride",
-        "parameters": [
-          {
-            "name": "skill_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Skill Id"
+    "/api/skills/import-zip": {
+      "post": {
+        "summary": "Import one Skill ZIP, enabled",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "manifest",
+                  "archive"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "manifest": {
+                    "type": "string",
+                    "description": "Strict JSON: scope, workspaceId (nullable), directoryName, expectedRevision. All fields required; unknown and duplicate fields rejected. Metadata maximum 1 MiB."
+                  },
+                  "archive": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ZIP maximum 12 MiB; stored or deflated, unencrypted. One root SKILL.md or one wrapper directory. Maximum 200 files, depth 8, total expanded 10 MiB, SKILL.md 64 KiB, other file 5 MiB. Paths and CRC validated before atomic publication. Imported Skills are enabled after successful validation."
+                  }
+                }
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
+        "operationId": "importSkillZip",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SettingsResponse"
+                  "$ref": "#/components/schemas/SkillDetailResponse"
                 }
               }
             }
@@ -1841,6 +1841,10 @@
                         },
                         "retryable": {
                           "type": "boolean"
+                        },
+                        "path": {
+                          "type": "string",
+                          "description": "Optional validated relative package path; never an absolute path."
                         }
                       }
                     }
@@ -1877,6 +1881,10 @@
                         },
                         "retryable": {
                           "type": "boolean"
+                        },
+                        "path": {
+                          "type": "string",
+                          "description": "Optional validated relative package path; never an absolute path."
                         }
                       }
                     }
@@ -1913,20 +1921,14 @@
                         },
                         "retryable": {
                           "type": "boolean"
+                        },
+                        "path": {
+                          "type": "string",
+                          "description": "Optional validated relative package path; never an absolute path."
                         }
                       }
                     }
                   }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1959,43 +1961,15 @@
                         },
                         "retryable": {
                           "type": "boolean"
+                        },
+                        "path": {
+                          "type": "string",
+                          "description": "Optional validated relative package path; never an absolute path."
                         }
                       }
                     }
                   }
                 }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "expectedRevision": {
-                    "minimum": 0,
-                    "title": "Expectedrevision",
-                    "type": "integer"
-                  },
-                  "workspaceId": {
-                    "title": "Workspaceid",
-                    "type": "string"
-                  },
-                  "disabled": {
-                    "title": "Disabled",
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "expectedRevision",
-                  "workspaceId",
-                  "disabled"
-                ],
-                "title": "Override",
-                "type": "object"
               }
             }
           }
@@ -2111,13 +2085,6 @@
             ],
             "title": "Confirmedhash"
           },
-          "disabledWorkspaces": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Disabledworkspaces"
-          },
           "contentHash": {
             "anyOf": [
               {
@@ -2133,13 +2100,13 @@
             "type": "string",
             "enum": [
               "ready",
-              "pending",
               "disabled",
               "missing",
               "invalid_format",
               "content_too_large",
               "unsafe_path",
-              "workspace_unavailable"
+              "workspace_unavailable",
+              "duplicate_name"
             ],
             "title": "State"
           },
@@ -2161,6 +2128,18 @@
               }
             ],
             "title": "Content"
+          },
+          "shadowedBySkillId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadowedbyskillid"
           }
         },
         "additionalProperties": false,
@@ -2176,7 +2155,8 @@
           "contentHash",
           "state",
           "effective",
-          "reason"
+          "reason",
+          "shadowedBySkillId"
         ],
         "title": "SkillView"
       },

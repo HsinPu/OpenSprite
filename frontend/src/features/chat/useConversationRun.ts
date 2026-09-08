@@ -310,7 +310,7 @@ export function useConversationRun({
     };
   }, [closeStream, commitRun, conversationId, t, watchRun]);
 
-  const send = useCallback(async (content: string, skillIds: string[] = []): Promise<boolean> => {
+  const send = useCallback(async (content: string): Promise<boolean> => {
     const message = content.trim();
     if (!message || (activeRunRef.current && activeStatuses.has(activeRunRef.current.status))) return false;
     const generation = generationRef.current;
@@ -339,7 +339,6 @@ export function useConversationRun({
         workspaceId,
         clientRequestId,
         message,
-        ...(skillIds.length ? { skillIds } : {}),
       });
       wasAccepted = true;
       if (generationRef.current !== generation) return true;
