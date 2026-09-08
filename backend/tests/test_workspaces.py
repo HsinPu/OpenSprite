@@ -179,6 +179,17 @@ def test_create_accepts_safe_unicode_joiners(tmp_path: Path, name: str) -> None:
     assert (managed_root / name).is_dir()
 
 
+def test_directory_name_respects_portable_utf8_byte_limit() -> None:
+    accepted = "\U0001f600" * 63
+    rejected = "\U0001f600" * 64
+
+    assert WorkspaceRootPolicy.directory_name(accepted) == accepted
+    with pytest.raises(ValueError):
+        WorkspaceRootPolicy.directory_name(rejected)
+    with pytest.raises(ValueError):
+        WorkspaceRootPolicy.directory_name("\ud800")
+
+
 def test_root_policy_rejects_parents_that_contain_protected_roots(
     tmp_path: Path,
 ) -> None:
@@ -415,6 +426,48 @@ def test_workspace_store_validates_v2_before_replacing_existing_catalog(
         store.set(invalid)
 
     assert path.read_bytes() == original
+
+
+def test_workspace_store_preserves_pre_portability_directory_names(
+    tmp_path: Path,
+) -> None:
+    _, data_root, _, _ = make_service(tmp_path)
+    path = data_root / "config" / "workspaces.json"
+    path.parent.mkdir(parents=True)
+    directory_name = "\U0001f600" * 64
+    path.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "revision": 1,
+                "activeWorkspaceId": WORKSPACE_ID,
+                "defaultWorkspace": {
+                    "revision": 1,
+                    "mounts": [],
+                    "updatedAt": NOW.isoformat(),
+                },
+                "workspaces": [
+                    {
+                        "id": WORKSPACE_ID,
+                        "name": directory_name,
+                        "directoryName": directory_name,
+                        "mounts": [],
+                        "revision": 1,
+                        "createdAt": NOW.isoformat(),
+                        "updatedAt": NOW.isoformat(),
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    store = JsonWorkspaceStore(path)
+
+    state = store.get()
+    store.set(state)
+
+    assert store.get().workspaces[0].directory_name == directory_name
 
 
 def test_v1_nested_roots_migrate_as_disabled_mounts(tmp_path: Path) -> None:

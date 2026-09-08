@@ -433,7 +433,7 @@ class JsonWorkspaceStore:
     @staticmethod
     def _safe_directory(value: str) -> str | None:
         try:
-            return WorkspaceRootPolicy.directory_name(value)
+            return WorkspaceRootPolicy.persisted_directory_name(value)
         except InvalidWorkspaceDirectoryName:
             return None
 

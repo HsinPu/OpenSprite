@@ -11,6 +11,9 @@ import unicodedata
 from .models import WorkspaceAvailability, WorkspaceUnavailableReason
 
 
+MAX_PORTABLE_SEGMENT_UTF8_BYTES = 255
+
+
 _SAFE_NAME_FORMAT_CHARACTERS = frozenset({"\u200c", "\u200d"})
 
 
@@ -170,6 +173,21 @@ class WorkspaceRootPolicy:
 
     @staticmethod
     def directory_name(value: str) -> str:
+        return WorkspaceRootPolicy._directory_name(
+            value,
+            require_portable_utf8=True,
+        )
+
+    @staticmethod
+    def persisted_directory_name(value: str) -> str:
+        """Validate catalog data accepted before the portable byte limit existed."""
+        return WorkspaceRootPolicy._directory_name(
+            value,
+            require_portable_utf8=False,
+        )
+
+    @staticmethod
+    def _directory_name(value: str, *, require_portable_utf8: bool) -> str:
         if type(value) is not str:
             raise InvalidWorkspaceDirectoryName
         normalized = unicodedata.normalize("NFC", value)
@@ -188,6 +206,11 @@ class WorkspaceRootPolicy:
             or normalized.endswith((" ", "."))
             or any(character in invalid for character in normalized)
             or has_unsafe_name_controls(normalized)
+            or (
+                require_portable_utf8
+                and len(normalized.encode("utf-8"))
+                > MAX_PORTABLE_SEGMENT_UTF8_BYTES
+            )
             or stem in reserved
         ):
             raise InvalidWorkspaceDirectoryName
