@@ -95,7 +95,12 @@ export function useConversationRun({
   requestIdFactory = defaultRequestId,
   eventStreamFactory = openRunEventStream,
 }: UseConversationRunOptions) {
-  const { t } = useI18n();
+  const { t: translate } = useI18n();
+  const updatedCallbackRef = useRef(onConversationUpdated);
+  updatedCallbackRef.current = onConversationUpdated;
+  const translatorRef = useRef(translate);
+  translatorRef.current = translate;
+  const t = useCallback((...args: Parameters<typeof translate>) => translatorRef.current(...args), []);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [activeRun, setActiveRun] = useState<RunSnapshot | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -104,6 +109,15 @@ export function useConversationRun({
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [nextBeforeSequence, setNextBeforeSequence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const recoveryBusyRef = useRef(false);
+  const recoveryAttemptsRef = useRef(0);
+  const [recoveryEpoch, setRecoveryEpoch] = useState(0);
+  const terminalHydrationPendingRef = useRef(false);
+  const acceptedRunRef = useRef<{ runId: string; conversationId: string } | null>(null);
+  const sendingRef = useRef(false);
+  const pendingRequestRef = useRef<{ conversationId: string | null; workspaceId: string; message: string; clientRequestId: string } | null>(null);
   const generationRef = useRef(0);
   const streamRef = useRef<RunEventStream | null>(null);
   const activeRunRef = useRef<RunSnapshot | null>(null);
@@ -196,6 +210,7 @@ export function useConversationRun({
   const refreshTerminal = useCallback(async (runId: string, eventConversationId: string, generation: number) => {
     if (finishingRunsRef.current.has(runId)) return;
     finishingRunsRef.current.add(runId);
+    terminalHydrationPendingRef.current = true;
     try {
       const [run, page] = await Promise.all([
         getRun(runId),
@@ -206,15 +221,16 @@ export function useConversationRun({
       setMessages(persistedMessages(page.messages));
       setNextBeforeSequence(page.nextBeforeSequence);
       setStreamedText((current) => run.partialText || current);
+      terminalHydrationPendingRef.current = false;
       setError(run.error ? agentChatErrorText(new AgentChatApiError(run.error.code), t) : null);
-      onConversationUpdated();
+      updatedCallbackRef.current();
       closeStream();
     } catch (nextError) {
       if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
     } finally {
       finishingRunsRef.current.delete(runId);
     }
-  }, [closeStream, commitRun, onConversationUpdated, t]);
+  }, [closeStream, commitRun, t]);
 
   const watchRun = useCallback((runId: string, generation: number, initialText = "", delivery: ResponseDelivery = responseDeliveryRef.current) => {
     closeStream();
@@ -263,11 +279,60 @@ export function useConversationRun({
     }
   }, [closeStream, eventStreamFactory, flushScheduledRender, refreshTerminal, scheduleRender, t, updateRun]);
 
+  const reloadAcceptedRun = useCallback(async () => {
+    if (recoveryBusyRef.current || sendingRef.current || pendingRequestRef.current) return;
+    const targetConversation = acceptedRunRef.current?.conversationId ?? resolvedConversationRef.current;
+    if (!targetConversation) return;
+    const targetRun = acceptedRunRef.current?.runId ?? activeRunRef.current?.id;
+    const generation = generationRef.current;
+    recoveryBusyRef.current = true;
+    setIsRecovering(true);
+    try {
+      const page = await listConversationMessages(targetConversation);
+      const runId = targetRun ?? page.messages.at(-1)?.runId;
+      const recovered = runId ? await getRun(runId) : null;
+      if (generationRef.current !== generation) return;
+      setMessages(persistedMessages(page.messages));
+      setNextBeforeSequence(page.nextBeforeSequence);
+      commitRun(recovered);
+      terminalHydrationPendingRef.current = false;
+      setError(recovered?.error ? agentChatErrorText(new AgentChatApiError(recovered.error.code), t) : null);
+      if (recovered && activeStatuses.has(recovered.status)) watchRun(recovered.id, generation, recovered.partialText, responseDeliveryRef.current);
+      else closeStream();
+    } catch (nextError) {
+      if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
+    } finally {
+      if (generationRef.current === generation) {
+        recoveryBusyRef.current = false;
+        setIsRecovering(false);
+        setRecoveryEpoch((current) => current + 1);
+      }
+    }
+  }, [closeStream, commitRun, t, watchRun]);
+
+  useEffect(() => {
+    if (!error || isRecovering || isSending || recoveryAttemptsRef.current >= 3 || !acceptedRunRef.current) return;
+    if (!terminalHydrationPendingRef.current && activeRunRef.current?.id === acceptedRunRef.current.runId && !activeStatuses.has(activeRunRef.current.status)) return;
+    const timer = window.setTimeout(() => {
+      recoveryAttemptsRef.current += 1;
+      void reloadAcceptedRun();
+    }, 1000 * (2 ** recoveryAttemptsRef.current));
+    return () => window.clearTimeout(timer);
+  }, [error, isRecovering, isSending, reloadAcceptedRun, recoveryEpoch]);
+
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     closeStream();
     resolvedConversationRef.current = conversationId;
+    if (acceptedRunRef.current?.conversationId !== conversationId) acceptedRunRef.current = null;
+    recoveryBusyRef.current = false;
+    recoveryAttemptsRef.current = 0;
+    terminalHydrationPendingRef.current = false;
+    setIsRecovering(false);
+    sendingRef.current = false;
+    setIsSending(false);
+    pendingRequestRef.current = null;
     finishingRunsRef.current.clear();
     seenEventSequencesRef.current = new Set();
     setEvents([]);
@@ -295,6 +360,7 @@ export function useConversationRun({
         const run = await getRun(latest.runId);
         if (generationRef.current !== generation) return;
         commitRun(run);
+        acceptedRunRef.current = { runId: run.id, conversationId: run.conversationId };
         setStreamedText(responseDeliveryRef.current === "stream" ? run.partialText : "");
         watchRun(run.id, generation, run.partialText, responseDeliveryRef.current);
       })
@@ -311,20 +377,28 @@ export function useConversationRun({
   }, [closeStream, commitRun, conversationId, t, watchRun]);
 
   const send = useCallback(async (content: string): Promise<boolean> => {
-    const message = content.trim();
-    if (!message || (activeRunRef.current && activeStatuses.has(activeRunRef.current.status))) return false;
+    const submittedMessage = content.trim();
+    const previous = pendingRequestRef.current;
+    const message = previous?.message ?? submittedMessage;
+    if (!message || sendingRef.current || recoveryBusyRef.current
+      || (acceptedRunRef.current && acceptedRunRef.current.runId !== activeRunRef.current?.id)
+      || (activeRunRef.current && activeStatuses.has(activeRunRef.current.status))) return false;
     const generation = generationRef.current;
     let clientRequestId: string;
     try {
-      clientRequestId = requestIdFactory();
+      clientRequestId = previous?.clientRequestId ?? requestIdFactory();
     } catch (nextError) {
       setError(agentChatErrorText(nextError, t));
       return false;
     }
+    sendingRef.current = true;
+    setIsSending(true);
+    const request = previous ?? { conversationId: resolvedConversationRef.current, workspaceId, clientRequestId, message };
+    pendingRequestRef.current = request;
     setError(null);
     setEvents([]);
     setStreamedText("");
-    setMessages((current) => [...current, {
+    setMessages((current) => [...current.filter((item) => item.id !== clientRequestId), {
       id: clientRequestId,
       role: "user",
       content: message,
@@ -334,35 +408,51 @@ export function useConversationRun({
     }]);
     let wasAccepted = false;
     try {
-      const accepted = await startRun({
-        conversationId: resolvedConversationRef.current,
-        workspaceId,
-        clientRequestId,
-        message,
-      });
+      const accepted = await startRun(request);
       wasAccepted = true;
-      if (generationRef.current !== generation) return true;
+      if (generationRef.current !== generation) return submittedMessage === message;
+      pendingRequestRef.current = null;
+      acceptedRunRef.current = { runId: accepted.runId, conversationId: accepted.conversationId };
+      recoveryAttemptsRef.current = 0;
       resolvedConversationRef.current = accepted.conversationId;
       onConversationAccepted(accepted.conversationId, message);
       const [page, run] = await Promise.all([
         listConversationMessages(accepted.conversationId),
         getRun(accepted.runId),
       ]);
-      if (generationRef.current !== generation) return false;
+      if (generationRef.current !== generation) return submittedMessage === message;
       setMessages(persistedMessages(page.messages));
       setNextBeforeSequence(page.nextBeforeSequence);
       commitRun(run);
       setStreamedText(responseDeliveryRef.current === "stream" ? run.partialText : "");
       watchRun(run.id, generation, run.partialText, responseDeliveryRef.current);
-      return true;
+      return submittedMessage === message;
     } catch (nextError) {
       if (generationRef.current === generation) {
-        setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));
+        if (!wasAccepted && !previous && nextError instanceof AgentChatApiError
+          && ["invalid_request", "workspace_not_found", "run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"].includes(nextError.code)) {
+          pendingRequestRef.current = null;
+        }
+        if (!wasAccepted) setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));
         setError(agentChatErrorText(nextError, t));
       }
-      return wasAccepted;
+      return wasAccepted && submittedMessage === message;
+    } finally {
+      if (generationRef.current === generation) {
+        sendingRef.current = false;
+        setIsSending(false);
+      }
     }
   }, [commitRun, onConversationAccepted, requestIdFactory, t, watchRun, workspaceId]);
+
+  const recoverConnection = useCallback(async (): Promise<void> => {
+    if (sendingRef.current || recoveryBusyRef.current) return;
+    if (pendingRequestRef.current) {
+      await send("");
+      return;
+    }
+    await reloadAcceptedRun();
+  }, [send, reloadAcceptedRun]);
 
   const cancel = useCallback(async (): Promise<void> => {
     const run = activeRunRef.current;
@@ -434,6 +524,11 @@ export function useConversationRun({
     hasOlderMessages: nextBeforeSequence !== null,
     error,
     isRunning,
+    isSending: isSending || Boolean(acceptedRunRef.current && acceptedRunRef.current.runId !== activeRun?.id),
+    isRecovering,
+    hasPendingSubmission: Boolean(pendingRequestRef.current),
+    canRecover: Boolean(pendingRequestRef.current || acceptedRunRef.current || resolvedConversationRef.current),
+    recoverConnection,
     send,
     cancel,
     loadOlderMessages,

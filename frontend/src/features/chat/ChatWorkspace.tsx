@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
 import { createPortal } from "react-dom";
@@ -23,6 +23,8 @@ import "./ChatWorkspace.css";
 
 
 type ChatWorkspaceProps = {
+  draftValue?: string;
+  onDraftChange?: (value: string | ((previous: string) => string)) => void;
   conversationId: string | null;
   workspaceId?: string;
   workspaceName?: string;
@@ -37,7 +39,6 @@ type ChatWorkspaceProps = {
   autoScroll: boolean;
   executionPanelDefaultExpanded: boolean;
   mobileHeaderActionTarget?: HTMLElement | null;
-  onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
   title?: string;
@@ -71,6 +72,8 @@ const MemoizedMarkdownMessage = memo(MarkdownMessage);
 
 
 export function ChatWorkspace({
+  draftValue,
+  onDraftChange,
   conversationId,
   workspaceId = DEFAULT_WORKSPACE_ID,
   workspaceName,
@@ -85,13 +88,14 @@ export function ChatWorkspace({
   autoScroll,
   executionPanelDefaultExpanded,
   mobileHeaderActionTarget = null,
-  onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
   title,
 }: ChatWorkspaceProps) {
   const { locale, t } = useI18n();
-  const [draft, setDraft] = useState("");
+  const [localDraft, setLocalDraft] = useState("");
+  const draft = draftValue ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
   const [executionPanelExpanded, setExecutionPanelExpanded] = useState(executionPanelDefaultExpanded);
   const [mobileExecutionOpen, setMobileExecutionOpen] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
@@ -108,8 +112,6 @@ export function ChatWorkspace({
     responseDelivery,
   });
   const inspection = useRunInspection({ conversationId });
-  const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : "";
-  const currentSelectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
   const selectedModelChoice = modelSelection === null
     ? undefined
     : modelChoices.find((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
@@ -129,11 +131,6 @@ export function ChatWorkspace({
   const fallbackContextLimit = displayedModelChoice?.contextWindowTokens !== undefined
     ? contextBudgetLimit(historical ? "auto" : (modelSelection?.contextBudget ?? "auto"), displayedModelChoice.contextWindowTokens)
     : null;
-  const choicesByProvider = useMemo(() => ["openai", "anthropic", "openrouter"].map((providerId) => ({
-    providerId,
-    label: providerId === "openai" ? "OpenAI" : providerId === "anthropic" ? "Anthropic" : "OpenRouter",
-    choices: modelChoices.filter((choice) => choice.selection.providerId === providerId),
-  })).filter((group) => group.choices.length > 0), [modelChoices]);
   const liveText = chat.streamedText || chat.activeRun?.partialText || "";
   const hasDurableAssistant = chat.activeRun?.assistantMessageId !== null
     && chat.activeRun?.assistantMessageId !== undefined
@@ -144,7 +141,7 @@ export function ChatWorkspace({
       && Boolean(liveText)
       && !hasDurableAssistant);
   const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
-  const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
+  const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading && !chat.isSending && !chat.isRecovering);
   const assistantRunIds = new Set(chat.messages.filter((message) => message.role === "assistant" && message.runId !== null).map((message) => message.runId));
   const outputLimitedMessageId = chat.activeRun?.completionReason === "output_limit"
     ? chat.activeRun.assistantMessageId
@@ -154,7 +151,7 @@ export function ChatWorkspace({
     : null;
   const isCompactingContext = displayedEvents.at(-1)?.type === "context.compaction.started";
   const pendingApprovalId = pendingToolApprovalId(chat.events);
-  const displayedModelName = historical && displayedRun
+  const displayedModelName = displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
   const scrolling = useConversationAutoScroll({
@@ -171,10 +168,23 @@ export function ChatWorkspace({
   }, [executionPanelDefaultExpanded, historical]);
 
   useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 1200) setMobileExecutionOpen(false);
+      const input = composerInputRef.current;
+      if (input) {
+        input.style.height = "0px";
+        input.style.height = `${Math.min(Math.max(input.scrollHeight, 36), 144)}px`;
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
     if (pendingApprovalId === null) return;
     inspection.returnToLatest();
     setExecutionPanelExpanded(true);
-    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches) {
+    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1200px)").matches) {
       setMobileExecutionOpen(true);
     }
   }, [inspection.returnToLatest, pendingApprovalId]);
@@ -182,7 +192,7 @@ export function ChatWorkspace({
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;
     const openMobileExecutionIfNeeded = () => {
-      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches) {
+      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1200px)").matches) {
         setMobileExecutionOpen(true);
       }
     };
@@ -205,10 +215,12 @@ export function ChatWorkspace({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const content = draft.trim();
-    if (!content || chat.isRunning || !modelSelection) return;
+    if (!content || chat.isRunning || !canSend) return;
     scrolling.followLatest();
-    setDraft("");
-    void chat.send(content);
+    const submittedDraft = draft;
+    void chat.send(content).then((accepted) => {
+      if (accepted) setDraft((current) => current === submittedDraft ? "" : current);
+    });
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -239,11 +251,23 @@ export function ChatWorkspace({
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
           <h1>{title ?? t("app.newConversationTitle")}</h1>
+          <Button
+            className={`chat-workspace__compact-execution-trigger${mobileHeaderActionTarget ? " chat-workspace__compact-execution-trigger--with-mobile-header" : ""}`}
+            aria-label={t("chat.openExecution")}
+            aria-controls={mobileExecutionPanelId}
+            aria-expanded={mobileExecutionOpen}
+            onClick={(event) => {
+              if (event.currentTarget instanceof HTMLButtonElement) mobileExecutionTriggerRef.current = event.currentTarget;
+              setMobileExecutionOpen(true);
+            }}
+            icon={<LeftOutlined />}
+          />
         </header>
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
           <div className="chat-workspace__conversation-rail">
-            {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
+            {chat.hasPendingSubmission ? <div role="status">{t("chat.confirmingSubmission")}</div> : null}
+            {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error} {chat.canRecover ? <Button loading={chat.isRecovering || chat.isSending} onClick={() => void chat.recoverConnection()}>{t("common.retry")}</Button> : null}</div> : null}
             {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
             {chat.hasOlderMessages ? (
               <button
@@ -333,29 +357,6 @@ export function ChatWorkspace({
             </div>
             <div className="chat-workspace__composer-primary-actions">
               <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
-              <select
-                className="chat-workspace__model-select chat-workspace__model-select--composer"
-                disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}
-                title={modelChoices.length === 0 ? t("chat.modelNoChoicesTitle") : currentSelectionIsAvailable ? t("chat.modelSwitchTitle") : t("chat.modelUnavailableTitle")}
-                aria-label={modelChoices.length === 0 ? t("chat.modelNoChoicesLabel", { model: modelName }) : currentSelectionIsAvailable ? t("chat.modelSwitchLabel", { model: modelName }) : t("chat.modelUnavailableLabel", { model: modelName })}
-                value={currentSelectionValue}
-                onChange={(event) => {
-                  try {
-                    const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
-                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId, contextBudget: "auto", outputBudget: "auto" });
-                  } catch {
-                    // Values can only originate from the rendered strict choices.
-                  }
-                }}
-              >
-                {modelSelection === null ? <option value="">{t("model.none")}</option> : null}
-                {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
-                {choicesByProvider.map((group) => (
-                  <optgroup key={group.providerId} label={group.label}>
-                    {group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
               {chat.isRunning ? (
                 <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label={t("chat.stop")} title={t("chat.stop")} onClick={() => void chat.cancel()}><StopIcon /></button>
               ) : (

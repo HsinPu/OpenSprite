@@ -29,6 +29,22 @@ async function openBatchMenu(action: string) {
   fireEvent.click(await screen.findByRole("menuitem", { name: action }));
 }
 
+it("renders bounded pages while batch actions retain the complete scope", async () => {
+  vi.mocked(listSkills).mockResolvedValue({ revision: 1, enabled: true,
+    skills: Array.from({ length: 45 }, (_, index) => ({ ...skill, id: `${index}`, name: `skill-${index}` })) });
+  const { container } = render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await screen.findByText("skill-0");
+  expect(container.querySelectorAll(".skills-row")).toHaveLength(20);
+  expect(screen.queryByText("skill-20")).toBeNull();
+  fireEvent.click(screen.getByTitle("2"));
+  expect(screen.getByText("skill-20")).toBeTruthy();
+  expect(screen.queryByText("skill-0")).toBeNull();
+  fireEvent.click(screen.getByTitle("3"));
+  expect(container.querySelectorAll(".skills-row")).toHaveLength(5);
+  await openBatchMenu("全部啟用");
+  expect(screen.getByText("範圍：全域，共 45 個 Skills。")).toBeTruthy();
+});
+
 it("confirms a scope-bounded batch enable and displays its outcome", async () => {
   render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
   await openBatchMenu("全部啟用");

@@ -14,7 +14,7 @@ import { useGeneralSettings } from "../features/general-settings/useGeneralSetti
 import { useConversationSettings } from "../features/conversation-settings/useConversationSettings";
 import { useToolSettings } from "../features/tool-settings/useToolSettings";
 import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
-import { SettingsPage } from "../features/settings/SettingsPage";
+import { DeferredSettingsPage } from "../features/settings/DeferredSettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
 import { useAuthentication } from "../features/auth/AuthGate";
@@ -87,6 +87,14 @@ export function App() {
   const [deepLinkedConversation, setDeepLinkedConversation] = useState<ConversationSummary | null>(null);
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [chatRevision, setChatRevision] = useState(0);
+  const draftKey = `${activeWorkspaceId}:${conversationId ?? "new"}:${chatRevision}`;
+  const [draftState, setDraftState] = useState({ key: draftKey, value: "" });
+  const changeDraft = useCallback((value: string | ((previous: string) => string)) => {
+    setDraftState((current) => {
+      if (typeof value === "function" && current.key !== draftKey) return current;
+      return { key: draftKey, value: typeof value === "function" ? value(current.value) : value };
+    });
+  }, [draftKey]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavigation, setMobileNavigation] = useState(
     () => window.innerWidth <= 900,
@@ -323,10 +331,13 @@ export function App() {
   };
 
   const acceptConversation = useCallback((acceptedId: string, firstMessage: string) => {
+    setDraftState((current) => current.key === draftKey
+      ? { ...current, key: `${activeWorkspaceId}:${acceptedId}:${chatRevision}`, value: current.value.trim() === firstMessage ? "" : current.value }
+      : current);
     setConversationId(acceptedId);
     window.location.hash = `chat=${acceptedId}`;
     recordAcceptedConversation(acceptedId, firstMessage);
-  }, [recordAcceptedConversation]);
+  }, [recordAcceptedConversation, draftKey, activeWorkspaceId, chatRevision]);
 
   const conversationUpdated = useCallback(() => {
     void refreshConversations();
@@ -521,6 +532,8 @@ export function App() {
         inert={mobileNavigation && menuOpen}
       >
         <ChatWorkspace
+          draftValue={draftState.key === draftKey ? draftState.value : ""}
+          onDraftChange={changeDraft}
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
           workspaceId={activeConversation?.workspaceId ?? activeWorkspaceId}
@@ -537,7 +550,6 @@ export function App() {
           autoScroll={conversationSettings.settings.autoScroll}
           executionPanelDefaultExpanded={conversationSettings.settings.executionPanelDefaultExpanded}
           mobileHeaderActionTarget={mobileHeaderActionTarget}
-          onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
         />
@@ -576,7 +588,7 @@ export function App() {
           }
         }}
       >
-        <SettingsPage
+        <DeferredSettingsPage
           section={settingsSection}
           active={settingsOpen}
           onSectionChange={setSettingsSection}

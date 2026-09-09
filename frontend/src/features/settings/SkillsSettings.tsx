@@ -1,4 +1,4 @@
-import { Alert, Button, Drawer, Dropdown, Empty, Grid, Input, Modal, Popconfirm, Select, Switch, Tabs, Tag, Tooltip, Upload } from "antd";
+import { Alert, Button, Drawer, Dropdown, Empty, Grid, Input, Modal, Pagination, Popconfirm, Select, Switch, Tabs, Tag, Tooltip, Upload } from "antd";
 import { DeleteOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import "./skills.css";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -17,6 +17,10 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
   const [workspaceId, setWorkspaceId] = useState(workspaces.catalog?.activeWorkspaceId ?? "");
   const [data, setData] = useState<SkillList | null>(null);
   const [globals, setGlobals] = useState<Skill[]>([]);
+  const [page, setPage] = useState(1);
+  const [globalPage, setGlobalPage] = useState(1);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil((data?.skills.length ?? 0) / 20)));
+  const currentGlobalPage = Math.min(globalPage, Math.max(1, Math.ceil(globals.length / 20)));
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +40,7 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
   const generation = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => { onOverlayChange?.(editor || batch !== null); return () => onOverlayChange?.(false); }, [editor, batch, onOverlayChange]);
-  useEffect(() => { setBatchResult(null); }, [scope, workspaceId]);
+  useEffect(() => { setBatchResult(null); setPage(1); setGlobalPage(1); }, [scope, workspaceId]);
   useEffect(() => {
     if (!editor && !batch) return;
     const dismissEditor = (event: KeyboardEvent) => {
@@ -190,7 +194,7 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
       </div>
     </div>
     {!loading && data?.skills.length === 0 ? <Empty description={t("skills.empty")} /> : null}
-    {data?.skills.map(item => <article key={item.id} className="skills-row">
+    {data?.skills.slice((currentPage - 1) * 20, currentPage * 20).map(item => <article key={item.id} className="skills-row">
       <div className="skills-row-info"><h3 title={item.name}>{item.name}</h3>
         {item.state !== "ready" && item.state !== "disabled" ? <Tag role="status">{t(skillStateLabels[item.reason as keyof typeof skillStateLabels] ?? "skills.unavailable")}</Tag> : null}
         {scope === "workspace" && !item.effective ? <p className="skills-row-hint">{t("skills.noFallback")}</p> : null}
@@ -198,8 +202,10 @@ export function SkillsSettings({ workspaces, container, onOverlayChange }: { wor
       <div className="skills-row-actions"><Switch aria-label={t("skills.toggle", { name: item.name })} checked={item.enabled} disabled={busy || loading} onChange={enabled => void mutate(`/${item.id}/enabled`, "PUT", { enabled, expectedRevision: data.revision })} />
         <Popconfirm title={t("skills.archive")} description={scope === "workspace" ? t("skills.removeInheritance") : undefined} getPopupContainer={() => container ?? document.body} onConfirm={() => mutate(`/${item.id}?expectedRevision=${data.revision}`, "DELETE")}><Button className="skills-remove" type="text" title={`${t("common.remove")} Skill`} aria-label={`${t("common.remove")} ${item.name}`} icon={<DeleteOutlined aria-hidden="true" />} disabled={busy || loading} /></Popconfirm>
       </div></article>)}
+    <Pagination size="small" current={currentPage} pageSize={20} total={data?.skills.length ?? 0} onChange={setPage} hideOnSinglePage showSizeChanger={false} disabled={busy || loading} />
     {scope === "workspace" ? <><h3>{t("skills.inherited")}</h3><p>{t("skills.inheritanceHint")}</p></> : null}
-    {globals.map(item => <article key={item.id} className="skills-row"><div className="skills-row-info"><h3 title={item.name}>{item.name}</h3><Tag role="status">{t(skillStateLabels[item.reason as keyof typeof skillStateLabels] ?? "skills.unavailable")}</Tag></div></article>)}
+    {globals.slice((currentGlobalPage - 1) * 20, currentGlobalPage * 20).map(item => <article key={item.id} className="skills-row"><div className="skills-row-info"><h3 title={item.name}>{item.name}</h3><Tag role="status">{t(skillStateLabels[item.reason as keyof typeof skillStateLabels] ?? "skills.unavailable")}</Tag></div></article>)}
+    <Pagination size="small" current={currentGlobalPage} pageSize={20} total={globals.length} onChange={setGlobalPage} hideOnSinglePage showSizeChanger={false} disabled={busy || loading} />
     {screens.md ? <Modal open={editor} title={t(folder ? "skills.importFolder" : "skills.content")} onCancel={close} afterClose={() => opener.current?.focus()} footer={null} getContainer={container ?? undefined} destroyOnHidden>{folder ? folderForm : form}</Modal> : <Drawer open={editor} title={t(folder ? "skills.importFolder" : "skills.content")} onClose={close} afterOpenChange={open => { if (!open) opener.current?.focus(); }} size="100%" getContainer={container ?? undefined} destroyOnHidden>{folder ? folderForm : form}</Drawer>}
     <Modal open={batch !== null} title={t(batch?.action === "archive" ? "skills.batchArchive" : batch?.action === "enable" ? "skills.batchEnable" : "skills.batchDisable")} getContainer={container ?? undefined} onCancel={() => { if (!busy) setBatch(null); }} afterClose={() => batchOpener.current?.focus()} closable={!busy} mask={{ closable: !busy }} keyboard={!busy} confirmLoading={busy} okText={t("skills.batchConfirm")} cancelText={t("common.cancel")} okButtonProps={{ danger: batch?.action === "archive", disabled: busy || (batch?.action === "archive" && confirmation !== t("skills.batchWord")) }} cancelButtonProps={{ disabled: busy }} onOk={() => void submitBatch()} destroyOnHidden>
       <p>{t("skills.batchScope", { scope: batch?.label ?? "", count: batch?.count ?? 0 })}</p>

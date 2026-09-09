@@ -30,12 +30,39 @@ beforeEach(() => {
 });
 
 describe("mobile navigation accessibility", () => {
+  it("preserves edited draft across acceptance of a new conversation", async () => {
+    const id = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    let accept!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { accept = resolve; });
+    vi.stubGlobal("fetch", vi.fn((path: string, init?: RequestInit) => {
+      const json = (value: unknown) => Promise.resolve(new Response(JSON.stringify(value)));
+      if (path === "/api/runs" && init?.method === "POST") return pending;
+      if (path === "/api/workspaces") return workspaceResponse();
+      if (path === "/api/providers") return json(connectedOpenAi);
+      if (path === "/api/settings/ai") return json({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "balanced", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false });
+      if (path === "/api/settings/conversation") return json({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false });
+      if (path.startsWith("/api/conversations?")) return json({ conversations: [], nextCursor: null });
+      if (path.includes("/messages")) return json({ messages: [], nextBeforeSequence: null });
+      return new Promise<Response>(() => undefined);
+    }));
+    const { container } = render(<App />);
+    fireEvent.change(container.querySelector("textarea")!, { target: { value: "hello" } });
+    await waitFor(() => expect(container.querySelector<HTMLButtonElement>("button[type=submit]")?.disabled).toBe(false));
+    fireEvent.click(container.querySelector("button[type=submit]")!);
+    fireEvent.change(container.querySelector("textarea")!, { target: { value: "unsent edit" } });
+    await act(async () => accept(new Response(JSON.stringify({ conversationId: id, workspaceId: DEFAULT_WORKSPACE_ID, runId: "e7527bf5-81c9-4534-908c-a9a9bc501f26", status: "queued" }), { status: 202 })));
+    await waitFor(() => expect(window.location.hash).toBe(`#chat=${id}`));
+    expect(container.querySelector("textarea")?.value).toBe("unsent edit");
+    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
+    expect(container.querySelector("textarea")?.value).toBe("");
+  });
+
   it("places the execution action at the far right of the global mobile header", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const { container } = render(<App />);
     const header = container.querySelector(".mobile-header");
     const actions = container.querySelector(".mobile-header-actions");
-    const executionAction = await screen.findByRole("button", { name: "開啟本次執行" });
+    const executionAction = await within(actions as HTMLElement).findByRole("button", { name: "開啟本次執行" });
 
     expect(header?.lastElementChild).toBe(actions);
     expect(actions?.contains(executionAction)).toBe(true);
@@ -84,13 +111,13 @@ function deferred<T>() {
 }
 
 describe("settings dialog focus restoration", () => {
-  it("uses compact General height and full Models height", () => {
+  it("uses compact General height and full Models height", async () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     const dialog = container.querySelector("dialog")!;
     expect(dialog.classList.contains("settings-dialog--general")).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }, { timeout: 5000 }));
     expect(dialog.classList.contains("settings-dialog--models")).toBe(true);
   });
 
@@ -184,14 +211,16 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
-    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
+    expect(screen.queryByRole("combobox", { name: /目前模型/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
+    await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
     });
   });
 
-  it("ignores a late hydration result after a newer model save", async () => {
+  it("waits for hydration before allowing model selection in settings", async () => {
     const hydration = deferred<Response>();
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/settings/ai" && !init) return hydration.promise;
@@ -202,15 +231,14 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    const modelPicker = await screen.findByRole("combobox", { name: /尚未選擇模型/ });
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
+    expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(true);
     hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
 
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
-    });
+    await waitFor(() => expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(false));
+    expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
 
   it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
@@ -223,14 +251,13 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
-    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
-    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 Luna" })).toBeTruthy());
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
+    await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
+    fireEvent.mouseDown(screen.getByLabelText("模型"));
+    fireEvent.click(await screen.findByText("GPT-5.6 Luna"));
+    await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6 Luna"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }) });
   });
 
@@ -244,14 +271,15 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
-    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 Luna" })).toBeTruthy());
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
-    expect((await screen.findByRole("alert")).textContent).toContain("尚未連線");
-    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
+    await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
+    fireEvent.mouseDown(screen.getByLabelText("模型"));
+    fireEvent.click(await screen.findByText("GPT-5.6 Luna"));
+    expect((await screen.findAllByRole("alert")).some((alert) => alert.textContent?.includes("尚未連線"))).toBe(true);
+    expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6");
+    expect(screen.getByLabelText("模型").parentElement?.textContent).not.toContain("GPT-5.6 Luna");
   });
 
   it("hydrates and persists the response mode with the confirmed model", async () => {
@@ -265,7 +293,7 @@ describe("persisted AI settings", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const deep = await screen.findByRole("button", { name: "深入" });
     expect(deep.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).parentElement?.textContent).toContain("一次回答");
@@ -290,7 +318,7 @@ describe("persisted AI settings", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const balanced = await screen.findByRole("button", { name: "平衡" });
     await waitFor(() => expect(balanced.getAttribute("aria-pressed")).toBe("true"));
     fireEvent.click(screen.getByRole("button", { name: "深入" }));
@@ -398,14 +426,14 @@ describe("conversation navigation", () => {
     }));
   });
 
-  it("keeps schedules out of the main sidebar and opens them inside settings", () => {
+it("keeps schedules out of the main sidebar and opens them inside settings", async () => {
     const { container } = render(<App />);
     const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
 
     expect(within(sidebar).queryByRole("button", { name: "排程" })).toBeNull();
     fireEvent.click(within(sidebar).getByRole("button", { name: "設定" }));
     const dialog = container.querySelector<HTMLElement>(".settings-dialog")!;
-    fireEvent.click(within(dialog).getByRole("button", { name: "排程" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
 
     expect(within(dialog).getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
@@ -433,7 +461,7 @@ describe("conversation navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     const dialog = container.querySelector<HTMLDialogElement>(".settings-dialog")!;
-    fireEvent.click(within(dialog).getByRole("button", { name: "排程" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
     await screen.findByRole("heading", { name: "晨間整理" });
     fireEvent.click(screen.getByRole("button", { name: "開啟對話" }));
 

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -91,10 +91,13 @@ function LocaleSetter({ locale }: { locale: Locale }) {
 }
 
 function Harness({ activeConversationId, streamFactory, responseDelivery = "stream", onAccepted, onUpdated }: HarnessProps) {
+  const { setLocale, locale } = useI18n();
+  const localeDependentUpdate = useCallback(() => { void locale; }, [locale]);
+  const [sendResult, setSendResult] = useState<boolean | null>(null);
   const state = useConversationRun({
     conversationId: activeConversationId,
     onConversationAccepted: onAccepted ?? noop,
-    onConversationUpdated: onUpdated ?? noop,
+    onConversationUpdated: onUpdated ?? localeDependentUpdate,
     responseDelivery,
     requestIdFactory: () => requestId,
     eventStreamFactory: streamFactory,
@@ -106,9 +109,15 @@ function Harness({ activeConversationId, streamFactory, responseDelivery = "stre
       <div data-testid="streamed">{state.streamedText}</div>
       <div data-testid="status">{state.activeRun?.status ?? "none"}</div>
       <div data-testid="error">{state.error ?? ""}</div>
+      <div data-testid="sending">{String(state.isSending)}</div>
+      <div data-testid="can-recover">{String(state.canRecover)}</div>
       <div data-testid="has-older">{String(state.hasOlderMessages)}</div>
       <button type="button" onClick={() => void state.send("hello")}>send</button>
+      <button type="button" onClick={() => setLocale("en")}>change language</button>
+      <div data-testid="send-result">{String(sendResult)}</div>
+      <button type="button" onClick={() => void state.send("edited").then(setSendResult)}>send edited</button>
       <button type="button" onClick={() => void state.cancel()}>cancel</button>
+      <button type="button" onClick={() => void state.recoverConnection()}>recover</button>
       <button type="button" onClick={() => void state.loadOlderMessages()}>load older</button>
     </div>
   );
@@ -121,6 +130,150 @@ beforeEach(() => {
 
 
 describe("useConversationRun", () => {
+  it("stops terminal hydration recovery after three automatic attempts", async () => {
+    let offline = false;
+    let failedReads = 0;
+    let handlers: RunEventStreamHandlers | undefined;
+    const streamFactory = (_id: string, value: RunEventStreamHandlers) => { handlers = value; return { close: noop }; };
+    vi.stubGlobal("fetch", vi.fn((path: string) => {
+      if (offline) { failedReads += 1; return Promise.reject(new Error("offline")); }
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      return Promise.resolve(new Response(JSON.stringify(run("running"))));
+    }));
+    const view = render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    vi.useFakeTimers();
+    try {
+      offline = true;
+      await act(async () => handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId, completionReason: "stop" } }));
+      for (const delay of [1000, 2000, 4000]) await act(async () => { await vi.advanceTimersByTimeAsync(delay); });
+      expect(failedReads).toBe(5); // Two initial GETs, then one per failed recovery.
+      await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+      expect(failedReads).toBe(5);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("reconciles the original request after a lost response even when the draft changes", async () => {
+    const requests: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/runs" && init?.method === "POST") {
+        requests.push(JSON.parse(String(init.body)));
+        if (requests.length === 1) return Promise.reject(new Error("response lost"));
+        return Promise.resolve(new Response(JSON.stringify({ runId, conversationId, workspaceId: DEFAULT_WORKSPACE_ID, status: "queued" }), { status: 202 }));
+      }
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      return Promise.resolve(new Response(JSON.stringify(run("running"))));
+    }));
+    render(<I18nProvider><Harness activeConversationId={null} streamFactory={() => ({ close: noop })} /></I18nProvider>);
+    fireEvent.click(screen.getByText("send"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).not.toBe(""));
+    fireEvent.click(screen.getByText("change language"));
+    expect(screen.getByTestId("can-recover").textContent).toBe("true");
+    fireEvent.click(screen.getByText("recover"));
+    fireEvent.click(screen.getByText("recover"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[1]).toMatchObject({ message: "hello", clientRequestId: requestId });
+  });
+
+  it("allows edited content after a definitive initial rejection", async () => {
+    const requests: { message: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/runs" && init?.method === "POST") {
+        requests.push(JSON.parse(String(init.body)));
+        if (requests.length === 1) return Promise.resolve(new Response(JSON.stringify({ error: { code: "invalid_request", message: "invalid", retryable: false } }), { status: 400 }));
+        return Promise.resolve(new Response(JSON.stringify({ runId, conversationId, workspaceId: DEFAULT_WORKSPACE_ID, status: "queued" }), { status: 202 }));
+      }
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      return Promise.resolve(new Response(JSON.stringify(run("running"))));
+    }));
+    render(<Harness activeConversationId={null} streamFactory={() => ({ close: noop })} />);
+    fireEvent.click(screen.getByText("send"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).not.toBe(""));
+    fireEvent.click(screen.getByText("send edited"));
+    await waitFor(() => expect(screen.getByTestId("send-result").textContent).toBe("true"));
+    expect(requests.map(request => request.message)).toEqual(["hello", "edited"]);
+  });
+
+  it("automatically hydrates a terminal Run after a temporary read failure", async () => {
+    let offline = false;
+    let completed = false;
+    let handlers: RunEventStreamHandlers | undefined;
+    const streamFactory = vi.fn((_id: string, value: RunEventStreamHandlers) => {
+      handlers = value;
+      return { close: noop };
+    });
+    vi.stubGlobal("fetch", vi.fn((path: string) => {
+      if (offline) return Promise.reject(new Error("offline"));
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: completed ? [userMessage, assistantMessage] : [userMessage], nextBeforeSequence: null })));
+      return Promise.resolve(new Response(JSON.stringify(run(completed ? "completed" : "running"))));
+    }));
+    render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    offline = true;
+    completed = true;
+    act(() => handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId, completionReason: "stop" } }));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).not.toBe(""));
+    offline = false;
+    await waitFor(() => expect(screen.getByTestId("messages").textContent).toContain("assistant:完成"), { timeout: 3000 });
+    expect(screen.getByTestId("error").textContent).toBe("");
+    expect(streamFactory).toHaveBeenCalledOnce();
+  });
+
+  it("recovers an accepted Run after hydration failure without another POST", async () => {
+    let available = false;
+    let posts = 0;
+    const streamFactory = vi.fn(() => ({ close: noop }));
+    vi.stubGlobal("fetch", vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/runs" && init?.method === "POST") {
+        posts += 1;
+        return Promise.resolve(new Response(JSON.stringify({ runId, conversationId, workspaceId: "00000000-0000-4000-8000-000000000000", status: "queued" }), { status: 202 }));
+      }
+      if (!available) return Promise.reject(new Error("temporarily offline"));
+      if (path.startsWith(`/api/conversations/${conversationId}/messages`)) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify(run("running"))));
+      throw new Error(`unexpected ${path}`);
+    }));
+    render(<Harness activeConversationId={null} streamFactory={streamFactory}/>);
+    fireEvent.click(screen.getByText("send"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).not.toBe(""));
+    fireEvent.click(screen.getByText("send"));
+    expect(posts).toBe(1);
+    available = true;
+    fireEvent.click(screen.getByText("recover"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    expect(posts).toBe(1);
+    expect(streamFactory).toHaveBeenCalledOnce();
+  });
+
+  it("blocks concurrent POSTs and reuses the request identity after a failed response", async () => {
+    const pending = deferred<Response>();
+    const requests: string[] = [];
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/runs" && init?.method === "POST") {
+        requests.push(String(init.body));
+        return requests.length === 1 ? pending.promise : Promise.reject(new Error("offline"));
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness activeConversationId={null} streamFactory={() => ({ close: noop })}/>);
+    fireEvent.click(screen.getByText("send"));
+    fireEvent.click(screen.getByText("send"));
+    expect(requests).toHaveLength(1);
+    expect(screen.getByTestId("sending").textContent).toBe("true");
+    await act(async () => pending.reject(new Error("connection lost")));
+    expect(screen.getByTestId("sending").textContent).toBe("false");
+    fireEvent.click(screen.getByText("send"));
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1]).toBe(requests[0]);
+    expect(screen.getByTestId("messages").textContent).toBe("user:hello");
+  });
+
   it("loads persisted messages and the latest Run for a conversation", async () => {
     const fetchMock = vi.fn((path: string) => {
       if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage, assistantMessage], nextBeforeSequence: null })));

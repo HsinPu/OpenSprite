@@ -1,5 +1,20 @@
 # Agent chat architecture
 
+## Reliability and module boundaries (0.19.0)
+
+The composer blocks concurrent submission and retains an unaccepted draft.
+Retrying the same failed payload reuses its client request ID. Once accepted,
+hydration and stream recovery read the same Run rather than posting again.
+Automatic recovery is bounded; a manual read-retry action remains available.
+
+`conversations/sqlite_schema.py` owns DDL and ordered migrations; the repository
+retains connection lifetime, permissions, locking and runtime transactions.
+`agent/skill_phase.py` owns internal Skill discovery/loading Context updates and
+events without creating tasks. RunManager remains the sole Agent task owner.
+
+Settings loads on first open with loading/error/retry UI, then remains mounted
+across close/open. The settings module is a separate production bundle.
+
 ## Purpose
 
 Version 0.13.0 adds a frozen Skill snapshot alongside the Workspace snapshot.
