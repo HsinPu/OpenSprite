@@ -86,6 +86,7 @@ class AgentView(StrictModel):
 
 class AgentDetail(AgentView):
     content: str | None
+    developerInstructions: str | None
 
 
 class AgentList(StrictModel):

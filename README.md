@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.20.1`。
+目前產品版本為 `0.20.3`。
 
 聊天使用的模型統一於「設定 → AI 模型」選擇；修改後供新的執行使用，既有執行及排程保存的模型設定不會被改寫。聊天輸入框不再提供模型選單。
 

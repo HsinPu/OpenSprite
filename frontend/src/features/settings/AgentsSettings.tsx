@@ -111,15 +111,6 @@ function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function parseTomlValue(content: string, key: string): string {
-  const match = content.match(new RegExp(`^${key}\\s*=\\s*(?:"((?:\\\\.|[^"\\\\])*)"|'''([\\s\\S]*?)'''|"""([\\s\\S]*?)""")\\s*$`, "m"));
-  if (!match) return "";
-  if (match[1] !== undefined) {
-    try { return JSON.parse(`"${match[1]}"`) as string; } catch { return match[1]; }
-  }
-  return match[2] ?? match[3] ?? "";
-}
-
 function serialiseDraft(draft: Draft): string {
   const lines = [
     `name = ${tomlString(draft.name.trim())}`,
@@ -288,7 +279,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
         loading: false,
         name: detail.name,
         description: detail.description,
-        instructions: detail.content ? parseTomlValue(detail.content, "developer_instructions") : "",
+        instructions: detail.developerInstructions ?? "",
         rawContent: detail.content ?? "",
         providerId: detail.providerId ?? "",
         model: detail.model ?? "",
@@ -327,7 +318,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
     try {
       if (!file.name.toLowerCase().endsWith(".toml")) throw new AgentApiError("invalid_format");
       const raw = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
-      setDraft({ ...emptyDraft("import"), rawContent: raw, importedFile: file.name, name: parseTomlValue(raw, "name"), description: parseTomlValue(raw, "description"), instructions: parseTomlValue(raw, "developer_instructions") });
+      setDraft({ ...emptyDraft("import"), rawContent: raw, importedFile: file.name });
     } catch (reason) { setError(errorCode(reason)); }
     finally { setBusy(false); }
     return Upload.LIST_IGNORE;

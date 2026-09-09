@@ -4,6 +4,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import {
   batchAgents,
   createAgent,
+  getAgent,
+  updateAgent,
   getAgentSettings,
   listAgents,
   setAgentEnabled,
@@ -123,4 +125,15 @@ it("bounds the mobile Agent editor to its Drawer viewport", async () => {
   expect(drawer.closest(".agents-drawer")).toBeTruthy();
   expect(drawer.querySelector(".agents-editor")).toBeTruthy();
   expect(drawer.querySelector(".agents-editor .ant-input")).toBeTruthy();
+});
+
+it("edits server-parsed TOML instructions without changing their meaning", async () => {
+  const instructions = 'Return\nquoted "evidence"';
+  vi.mocked(getAgent).mockResolvedValue({ ...agent(), content: "developer_instructions = 'server parsed' # comment", developerInstructions: instructions });
+  vi.mocked(updateAgent).mockResolvedValue(agent({ revision: 2 }));
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  fireEvent.click(await screen.findByRole("button", { name: /編輯 review/ }));
+  expect(await screen.findByDisplayValue(instructions, { normalizer: (value) => value })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /儲\s*存/ }));
+  await waitFor(() => expect(updateAgent).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining(`developer_instructions = ${JSON.stringify(instructions)}`) })));
 });

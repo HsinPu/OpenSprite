@@ -32,7 +32,7 @@ const agent: CustomAgent = {
   model: null,
   contentHash: "a".repeat(64),
 };
-const detail = { ...agent, content: 'name = "code-review"\ndescription = "Review code"\ndeveloper_instructions = "Review it carefully"\n' };
+const detail = { ...agent, developerInstructions: "Review it carefully", content: 'name = "code-review"\ndescription = "Review code"\ndeveloper_instructions = "Review it carefully"\n' };
 
 afterEach(() => vi.unstubAllGlobals());
 

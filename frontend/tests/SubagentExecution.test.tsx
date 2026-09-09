@@ -13,6 +13,68 @@ vi.mock("../src/api/subagents", async (importOriginal) => ({
 
 const parentRunId = "11111111-1111-4111-8111-111111111111";
 const childId = "22222222-2222-4222-8222-222222222222";
+
+it("concatenates result pages without changing their original text", async () => {
+  const first = "a".repeat(4000);
+  vi.mocked(getSubagentResult).mockResolvedValueOnce({ childId, status: "completed", error: null, text: first, nextOffset: 4000 }).mockResolvedValueOnce({ childId, status: "completed", error: null, text: "tail", nextOffset: null });
+  render(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  fireEvent.click(await screen.findByRole("button", { name: /reviewer/ }));
+  await screen.findByText(first);
+  fireEvent.click(screen.getByRole("button", { name: /更多/ }));
+  await waitFor(() => expect(document.querySelector("pre")?.textContent).toBe(first + "tail"));
+});
+
+it("can retry a failed final refresh while retaining existing cards", async () => {
+  vi.mocked(listSubagents).mockResolvedValueOnce({ items: [summary({ status: "running" })] }).mockRejectedValueOnce(new Error("network_error")).mockResolvedValue({ items: [summary()] });
+  const view = render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  await screen.findByText("reviewer");
+  view.rerender(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  await screen.findByRole("alert");
+  expect(screen.getByText("reviewer")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "重試" }));
+  expect(await screen.findByText("已完成")).toBeTruthy();
+});
+
+it("fetches final child state when the parent finishes between polls", async () => {
+  vi.mocked(listSubagents).mockResolvedValueOnce({ items: [summary({ status: "running" })] }).mockResolvedValue({ items: [summary()] });
+  const view = render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  await screen.findByText("reviewer");
+  view.rerender(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  await waitFor(() => expect(listSubagents).toHaveBeenCalledTimes(2));
+});
+
+it("queues the final refresh behind an outstanding list request", async () => {
+  let resolveList!: (value: { items: SubagentSummary[] }) => void;
+  vi.mocked(listSubagents).mockImplementationOnce(() => new Promise((resolve) => { resolveList = resolve; })).mockResolvedValue({ items: [summary()] });
+  const view = render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  view.rerender(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  expect(listSubagents).toHaveBeenCalledTimes(1);
+  resolveList({ items: [summary({ status: "running" })] });
+  await waitFor(() => expect(listSubagents).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText("已完成")).toBeTruthy();
+});
+
+it("refreshes a late pending result even after the final summary arrived", async () => {
+  let resolveResult!: (value: Awaited<ReturnType<typeof getSubagentResult>>) => void;
+  vi.mocked(listSubagents).mockResolvedValueOnce({ items: [summary({ status: "running" })] }).mockResolvedValue({ items: [summary()] });
+  vi.mocked(getSubagentResult).mockImplementationOnce(() => new Promise((resolve) => { resolveResult = resolve; })).mockResolvedValue({ childId, status: "completed", error: null, text: "finished", nextOffset: null });
+  const view = render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  fireEvent.click(await screen.findByRole("button", { name: /reviewer/ }));
+  view.rerender(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  await screen.findByText("已完成");
+  resolveResult({ childId, status: "running", error: null, text: "", nextOffset: null });
+  expect(await screen.findByText("finished")).toBeTruthy();
+  expect(getSubagentResult).toHaveBeenCalledTimes(2);
+});
+
+it("refreshes an expanded pending result after the child completes", async () => {
+  vi.mocked(listSubagents).mockResolvedValueOnce({ items: [summary({ status: "running" })] }).mockResolvedValue({ items: [summary()] });
+  vi.mocked(getSubagentResult).mockResolvedValueOnce({ childId, status: "running", error: null, text: "", nextOffset: null }).mockResolvedValue({ childId, status: "completed", error: null, text: "final answer", nextOffset: null });
+  render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  fireEvent.click(await screen.findByRole("button", { name: /reviewer/ }));
+  await waitFor(() => expect(getSubagentResult).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByText("final answer")).toBeTruthy(), { timeout: 3500 });
+});
 const summary = (overrides: Partial<SubagentSummary> = {}): SubagentSummary => ({
   id: childId,
   parentRunId: parentRunId,

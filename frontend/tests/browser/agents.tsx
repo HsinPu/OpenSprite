@@ -287,7 +287,7 @@ async function fixtureFetch(input: RequestInfo | URL, init?: RequestInit): Promi
     if (!item) return errorResponse("not_found", 404);
     const key = scopeKey(item.scope, item.workspaceId);
     const expected = revisions.get(key) ?? 1;
-    if (method === "GET") return jsonResponse({ ...agentPayload(item), content: contents.get(id) ?? null });
+    if (method === "GET") return jsonResponse({ ...agentPayload(item), content: contents.get(id) ?? null, developerInstructions: contentValue(contents.get(id) ?? "", "developer_instructions") || null });
     if (method === "PUT" && idMatch[2] === "enabled") {
       if (body.expectedRevision !== expected || typeof body.enabled !== "boolean") return errorResponse("revision_conflict", 409);
       const updated = { ...item, enabled: body.enabled, reason: body.enabled ? "effective" as const : "disabled" as const, revision: item.revision + 1 };

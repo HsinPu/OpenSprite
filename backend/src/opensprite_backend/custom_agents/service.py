@@ -421,6 +421,13 @@ class CustomAgentsService:
                 result["content"] = None
         elif include_content:
             result["content"] = None
+        if include_content:
+            result["developerInstructions"] = None
+            if content is not None:
+                try:
+                    result["developerInstructions"] = parse_agent_definition(content).developer_instructions
+                except AgentDefinitionError:
+                    pass
         return result
 
     @staticmethod

@@ -56,6 +56,8 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
   const [results, setResults] = useState<Record<string, ResultState>>({});
   const generation = useRef(0);
   const listInFlight = useRef(false);
+  const finalRefreshPending = useRef(false);
+  const previousParent = useRef({ id: parentRunId, active: parentActive });
   const cancelInFlight = useRef(new Set<string>());
   const resultTokens = useRef(new Map<string, number>());
 
@@ -74,6 +76,10 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
       if (current === generation.current) {
         setLoading(false);
         listInFlight.current = false;
+        if (finalRefreshPending.current) {
+          finalRefreshPending.current = false;
+          void load();
+        }
       }
     }
   }, [parentRunId]);
@@ -93,8 +99,18 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
       // below discards that stale response, while clearing this gate prevents
       // it from blocking the new parent's initial load.
       listInFlight.current = false;
+      finalRefreshPending.current = false;
     };
   }, [load]);
+
+  useEffect(() => {
+    const previous = previousParent.current;
+    previousParent.current = { id: parentRunId, active: parentActive };
+    if (previous.id === parentRunId && previous.active && !parentActive) {
+      if (listInFlight.current) finalRefreshPending.current = true;
+      else void load();
+    }
+  }, [load, parentActive, parentRunId]);
 
   useEffect(() => {
     if (!parentActive || historical) return undefined;
@@ -115,13 +131,22 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
       if (current !== generation.current || resultTokens.current.get(childId) !== token) return;
       setResults((previous) => {
         const old = previous[childId];
-        return { ...previous, [childId]: { status: next.status, error: next.error, text: append && old?.text ? `${old.text}\n${next.text}` : next.text, nextOffset: next.nextOffset, loading: false } };
+        return { ...previous, [childId]: { status: next.status, error: next.error, text: append && old?.text ? old.text + next.text : next.text, nextOffset: next.nextOffset, loading: false } };
       });
     } catch (reason) {
       if (current !== generation.current || resultTokens.current.get(childId) !== token) return;
       setResults((previous) => ({ ...previous, [childId]: { ...(previous[childId] ?? { status: "running", error: null, text: "", nextOffset: null }), error: apiError(reason), loading: false } }));
     }
   }, [parentRunId]);
+
+  useEffect(() => {
+    if (!expandedId) return;
+    const item = items.find((candidate) => candidate.id === expandedId);
+    const result = results[expandedId];
+    if (item && result && !result.loading && !result.error && activeStatus(result.status) && !activeStatus(item.status)) {
+      void requestResult(item.id, 0, false);
+    }
+  }, [expandedId, items, results, requestResult]);
 
   const toggleExpanded = (item: SubagentSummary) => {
     if (expandedId === item.id) {
@@ -177,7 +202,7 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
         </article>;
       })}
     </div>}
-    {error && items.length > 0 ? <p className="subagent-execution__refresh-error" role="alert">{t("subagents.error", { code: error })}</p> : null}
+    {error && items.length > 0 ? <div className="subagent-execution__refresh-error" role="alert"><p>{t("subagents.error", { code: error })}</p><button type="button" disabled={loading} onClick={retry}>{t("common.retry")}</button></div> : null}
   </section>;
 }
 

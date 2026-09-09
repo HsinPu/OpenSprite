@@ -60,6 +60,18 @@ def test_create_get_list_and_remove_archive(tmp_path: Path) -> None:
     assert list(service.paths.agents_archive_dir.rglob("*.toml"))
 
 
+@pytest.mark.parametrize("literal,expected", [
+    ("'Return evidence' # comment", "Return evidence"),
+    ('"""Return\\nquoted \\"evidence\\""""', 'Return\nquoted "evidence"'),
+    ("'''Return evidence'''", "Return evidence"),
+])
+def test_detail_exposes_parsed_instructions(tmp_path: Path, literal: str, expected: str) -> None:
+    service, _, _ = build(tmp_path)
+    content = 'name = "review"\ndescription = "Review"\ndeveloper_instructions = ' + literal + '\n'
+    created = service.create("global", None, content, 0)
+    assert service.get(str(created["id"]))["developerInstructions"] == expected
+
+
 def test_workspace_same_name_shadows_global_and_remove_restores(tmp_path: Path) -> None:
     service, _, _ = build(tmp_path)
     global_item = service.create("global", None, CONTENT, 0)
@@ -156,4 +168,3 @@ def test_remove_workspace_only_removes_registration(tmp_path: Path) -> None:
     service.remove_workspace(WORKSPACE_ID)
     assert not service.list_agents("workspace", WORKSPACE_ID)["items"]
     assert path.exists()
-

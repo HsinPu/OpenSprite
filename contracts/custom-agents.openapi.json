@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite local backend",
     "description": "Loopback-only local desktop service foundation.",
-    "version": "0.20.1"
+    "version": "0.20.3"
   },
   "paths": {
     "/api/agents/settings": {
@@ -1190,6 +1190,13 @@
               }
             ],
             "title": "Content"
+          },
+          "developerInstructions": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "null" }
+            ],
+            "title": "Developerinstructions"
           }
         },
         "additionalProperties": false,
@@ -1208,7 +1215,8 @@
           "providerId",
           "model",
           "contentHash",
-          "content"
+          "content",
+          "developerInstructions"
         ],
         "title": "AgentDetail"
       },

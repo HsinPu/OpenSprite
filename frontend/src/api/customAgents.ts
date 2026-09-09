@@ -44,7 +44,7 @@ export type CustomAgent = {
   contentHash: string | null;
 };
 
-export type CustomAgentDetail = CustomAgent & { content: string | null };
+export type CustomAgentDetail = CustomAgent & { content: string | null; developerInstructions: string | null };
 export type AgentList = { revision: number; items: CustomAgent[]; nextCursor: string | null };
 export type AgentSettings = { enabled: boolean; revision: number };
 export type AgentSettingsInput = { enabled: boolean; expectedRevision: number };
@@ -197,12 +197,13 @@ function parseAgent(value: unknown): CustomAgent {
 }
 
 function parseAgentDetail(value: unknown): CustomAgentDetail {
-  if (!record(value) || !exact(value, ["id", "scope", "workspaceId", "fileName", "name", "description", "revision", "enabled", "reason", "shadowedByAgentId", "providerId", "model", "contentHash", "content"])) {
+  if (!record(value) || !exact(value, ["id", "scope", "workspaceId", "fileName", "name", "description", "revision", "enabled", "reason", "shadowedByAgentId", "providerId", "model", "contentHash", "content", "developerInstructions"])) {
     throw new AgentApiError("malformed_response");
   }
-  const { content: definition, ...summary } = value;
+  const { content: definition, developerInstructions, ...summary } = value;
   parseAgent(summary);
   if (definition !== null && !validText(definition, 0, 65536)) throw new AgentApiError("malformed_response");
+  if (developerInstructions !== null && !validText(developerInstructions, 1, 65536)) throw new AgentApiError("malformed_response");
   return value as CustomAgentDetail;
 }
 
