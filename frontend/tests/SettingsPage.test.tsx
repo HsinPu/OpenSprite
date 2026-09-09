@@ -334,6 +334,14 @@ describe("provider settings", () => {
     }
   });
 
+  it("renders only one Agents heading and description in the complete settings page", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    render(<GeneralSettingsPageHarness section="agents" />);
+    expect(screen.getAllByRole("heading", { name: "Agents" })).toHaveLength(1);
+    expect(screen.getAllByText("可由模型使用的文字型 Agent 定義；不會自動授予工具權限。")).toHaveLength(1);
+    expect(screen.getByRole("switch", { name: "允許使用 Agents" })).toBeTruthy();
+  });
+
   it("renders schedules as an implemented settings section", async () => {
     vi.stubGlobal("fetch", vi.fn((path: string) => {
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(disconnectedCatalog)));
