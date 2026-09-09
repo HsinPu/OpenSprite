@@ -340,10 +340,12 @@ class SkillsService:
             try:
                 require_plain_directory(base)
                 peers = [i for i in cat.skills if i.scope == scope and i.workspaceId == workspace_id]
+                known_directories = {i.directoryName.casefold() for i in peers}
+                known_names = {i.name.casefold() for i in peers}
                 for child in sorted(base.iterdir()):
                     if not child.is_dir() or not child.joinpath("SKILL.md").exists():
                         continue
-                    if any(i.directoryName.casefold() == child.name.casefold() for i in peers):
+                    if child.name.casefold() in known_directories:
                         continue
                     try:
                         directory = WorkspaceRootPolicy.directory_name(child.name)
@@ -356,12 +358,14 @@ class SkillsService:
                             if error.code not in {"invalid_format", "content_too_large"} or len(directory) > 80:
                                 raise
                             name, description = directory, ""
-                        if any(i.name.casefold() == name.casefold() for i in peers):
+                        if name.casefold() in known_names:
                             continue
                         item.name, item.description = name, description
                     except (SkillError, ValueError, WorkspaceRelocationError):
                         continue
-                    peers.append(item); cat.skills.append(item)
+                    known_directories.add(item.directoryName.casefold())
+                    known_names.add(item.name.casefold())
+                    cat.skills.append(item)
                 cat.revision += 1; self._write(cat)
                 return self.list(scope, workspace_id)
             except OSError:

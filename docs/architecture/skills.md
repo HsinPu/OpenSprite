@@ -91,12 +91,16 @@ explicit enabling. This prefers revocation over retaining enabled instructions.
 
 Lock order is Workspace mutation gate then Skills RLock. Chat and schedules
 capture a frozen SkillExecutionSnapshot and pass it through RunManager to
-AgentLoop. Bodies reside in memory but initially only ID/name/description/scope
-enter Context. The browser composer uses automatic selection only. The optional
+AgentLoop. Bodies reside in memory but initially only the available count and
+discovery instructions enter Context. `discover_skills` searches names/descriptions
+within that snapshot or browses with an empty query. Pages contain up to 20 entries
+and a next offset. Description previews are limited to 512 characters, explicitly
+marked when truncated; full descriptions remain searchable. The browser composer
+uses automatic selection only. The optional
 API skillIds field still preloads at most five and affects idempotency for API
 compatibility; historical manually selected Skill events remain readable.
 
-Internal load_skill is separate from business-tool policy and accepts only a
+Internal discovery/load_skill are separate from business-tool policy; loading accepts only a
 snapshot ID. Full instructions enter one JSON system-prompt projection; the tool
 result confirms loading without duplicating text. Duplicate loads are idempotent.
 A candidate exceeding five Skills or input budget is rejected without replacing
@@ -120,6 +124,11 @@ Ordinary logs/events omit bodies and paths. Full Prompt logging follows existing
 user policy and can contain actual sent instructions.
 
 ## Verification boundary
+
+Management lists render 20 rows per own/inherited page. Batch actions still cover
+the complete scope, not just the page. HTTP responses remain complete; this is a
+DOM optimization, not network pagination. Scan uses name/directory sets to avoid
+repeated linear membership checks. Discovery responses count toward Context budget.
 
 Deterministic tests prove projection, idempotency and limits, not model routing.
 From backend, `uv run python ../scripts/verify_skills_live.py` runs positive,

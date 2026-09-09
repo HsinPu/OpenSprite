@@ -16,6 +16,31 @@ def snapshot():
     return SkillExecutionSnapshot((SkillContent(str(uuid4()), "global", "Review", "Review code", 1, "a" * 64, "UNIQUE_FULL_INSTRUCTIONS"),))
 
 
+def test_discovery_shrinks_to_budget_without_skipping_items():
+    import json
+    from opensprite_backend.agent.skill_phase import handle_skill_call
+    from opensprite_backend.agent.context.counter import ConservativeTokenCounter
+    from opensprite_backend.inference.models import ModelMessage
+
+    async def scenario():
+        state = SkillRunState(SkillExecutionSnapshot(tuple(
+            SkillContent(str(uuid4()), "global", f"Skill {i}", "x" * 512, 1, "a" * 64, "body") for i in range(20))))
+        counter = ConservativeTokenCounter()
+        transcript = [ModelMessage(role="system", content="base")]
+        _, messages = await handle_skill_call(
+            call=ModelToolCall("discover", "discover_skills", {"query": "", "offset": 0}),
+            skill_state=state, base_system_prompt="base", system_prompt="base", transcript=transcript,
+            tool_definitions=(), input_budget_tokens=1000, counter=counter, repository=None, run_id="unused")
+        page = json.loads(messages[-1].content)
+        assert 0 < len(page["items"]) < 20
+        assert page["nextOffset"] == len(page["items"])
+        assert counter.request(tuple(messages), ()) <= 1000
+        following = state.discover({"query": "", "offset": page["nextOffset"]})
+        assert following["items"][0]["id"] == state.snapshot.available[len(page["items"])].id
+        assert not state.loaded
+    asyncio.run(scenario())
+
+
 def test_lazy_load_only_injects_after_selection(tmp_path):
     async def scenario():
         repository = store(tmp_path)
@@ -31,7 +56,7 @@ def test_lazy_load_only_injects_after_selection(tmp_path):
         assert result.status is RunStatus.COMPLETED
         assert "UNIQUE_FULL_INSTRUCTIONS" not in gateway.requests[0].messages[0].content
         assert "UNIQUE_FULL_INSTRUCTIONS" in gateway.requests[1].messages[0].content
-        assert [tool.name for tool in gateway.requests[0].tools] == ["load_skill"]
+        assert {tool.name for tool in gateway.requests[0].tools} == {"load_skill", "discover_skills"}
         assert sum(event.type is RunEventType.SKILL_LOADED for event in repository.list_run_events(run.id, after_sequence=0, limit=100)) == 1
     asyncio.run(scenario())
 
@@ -42,6 +67,41 @@ def test_manual_state_does_not_change_snapshot():
     state.loaded = state.candidate(skills.available[0].id)
     assert not SkillRunState(skills).loaded
     assert "UNIQUE_FULL_INSTRUCTIONS" in state.prompt("Base")
+
+
+def test_discovery_pages_all_items_without_eager_descriptions():
+    contents = tuple(SkillContent(str(uuid4()), "global", f"Skill {i}", "unique description " + "x" * 900,
+                                  1, "a" * 64, "body") for i in range(57))
+    state = SkillRunState(SkillExecutionSnapshot(contents))
+    assert "unique description" not in state.prompt("Base")
+    ids = []
+    offset = 0
+    while offset is not None:
+        page = state.discover({"query": "", "offset": offset})
+        assert len(page["items"]) <= 20
+        assert all(item["descriptionTruncated"] for item in page["items"])
+        ids.extend(item["id"] for item in page["items"])
+        offset = page["nextOffset"]
+    assert ids == [item.id for item in contents]
+    assert not state.loaded
+    assert state.discover({"query": "SKILL 56", "offset": 0})["items"][0]["id"] == contents[-1].id
+
+
+def test_agent_discovers_before_loading(tmp_path):
+    async def scenario():
+        repository = store(tmp_path)
+        run = accepted_run(repository)
+        skills = snapshot()
+        gateway = ScriptedGateway([
+            [ModelToolCall("search", "discover_skills", {"query": "review", "offset": 0}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelToolCall("load", "load_skill", {"skillId": skills.available[0].id}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelTextDelta("Done"), ModelCompleted(ModelFinishReason.FINAL)]])
+        loop = AgentLoop(repository=repository, gateway=gateway, tools=ToolRegistry([], policy=ReadOnlyToolPolicy()), capability_resolver=TestCapabilityResolver())
+        assert (await loop.execute(run.id, asyncio.Event(), skills=skills)).status is RunStatus.COMPLETED
+        assert "Review code" not in gateway.requests[0].messages[0].content
+        assert "Review code" in gateway.requests[1].messages[-1].content
+        assert "UNIQUE_FULL_INSTRUCTIONS" in gateway.requests[2].messages[0].content
+    asyncio.run(scenario())
 
 
 def test_manual_instructions_in_first_request_and_event(tmp_path):

@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
-from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool
+from opensprite_backend.skills.models import SkillExecutionSnapshot
+from .skill_phase import handle_skill_call
+from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool, DiscoverSkillsTool
 from datetime import UTC, datetime
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
@@ -270,8 +271,8 @@ class AgentLoop:
             if skill_state.snapshot.available:
                 capability = await self._await_with_cancellation(self._capability_resolver.resolve(run.provider_id, run.model_id), cancellation_event)
                 if capability.supports_tools:
-                    run_tools = run_tools.extended((LoadSkillTool(),))
-                    availability = ToolAvailabilitySnapshot(availability.enabled_names | {"load_skill"})
+                    run_tools = run_tools.extended((LoadSkillTool(), DiscoverSkillsTool()))
+                    availability = ToolAvailabilitySnapshot(availability.enabled_names | {"load_skill", "discover_skills"})
                 else:
                     system_prompt += "\nAutomatic Skill selection is unavailable for this model. Only manually selected Skills are loaded."
             prepared = await self._prepare_context(
@@ -481,28 +482,13 @@ class AgentLoop:
                     )
                 )
                 for call in tool_calls:
-                    if call.name == "load_skill":
-                        identifier = call.arguments.get("skillId") if isinstance(call.arguments, dict) else None
-                        try:
-                            if not isinstance(call.arguments, dict) or set(call.arguments) != {"skillId"} or not isinstance(identifier, str):
-                                raise SkillError("invalid_request")
-                            candidate = skill_state.candidate(identifier)
-                            candidate_prompt = skill_state.prompt(base_system_prompt, candidate)
-                            confirmation = ModelMessage(role="tool", content="Skill loaded for this run.", tool_call_id=call.call_id, tool_name=call.name)
-                            updated = [ModelMessage(role="system", content=candidate_prompt), *transcript[1:], confirmation]
-                            if self._counter.request(tuple(updated), tool_definitions) > prepared.budget.input_budget_tokens:
-                                raise SkillError("context_limit")
-                            if identifier not in skill_state.loaded:
-                                await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOADED,
-                                                        skill_state.event(identifier, "model"))
-                            skill_state.loaded = candidate
-                            system_prompt = candidate_prompt
-                            transcript = updated
-                        except SkillError as error:
-                            await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOAD_FAILED,
-                                                    skill_state.failure(identifier, error.code))
-                            transcript.append(ModelMessage(role="tool", content="Skill could not be loaded: " + error.code,
-                                                           tool_call_id=call.call_id, tool_name=call.name))
+                    if call.name in {"discover_skills", "load_skill"}:
+                        system_prompt, transcript = await handle_skill_call(
+                            call=call, skill_state=skill_state, base_system_prompt=base_system_prompt,
+                            system_prompt=system_prompt, transcript=transcript, tool_definitions=tool_definitions,
+                            input_budget_tokens=prepared.budget.input_budget_tokens, counter=self._counter,
+                            repository=self._repository, run_id=run_id,
+                        )
                         continue
                     tool_call_count += 1
                     if tool_call_count > self._max_tool_calls:
