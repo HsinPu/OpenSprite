@@ -155,6 +155,12 @@ class _AssistantDeltaBuffer:
         self._pending_chars = 0
 
 
+from opensprite_backend.custom_agents.models import AgentExecutionSnapshot, AgentError
+from opensprite_backend.custom_agents.delegation import DelegationCoordinator, ParentDelegation
+from opensprite_backend.custom_agents.delegation_tools import delegation_tools, DELEGATION_NAMES
+from opensprite_backend.custom_agents.discovery import discovery_prompt
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -171,6 +177,8 @@ class AgentLoop:
         max_compactions_per_run: int | None = None,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
         prompt_log_writer: PromptLogWriter | None = None,
+        allow_tool_approval: bool = True,
+        delegation: DelegationCoordinator | None = None,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
@@ -202,13 +210,38 @@ class AgentLoop:
         self._max_compactions_per_run = max_compactions_per_run
         self._max_assistant_chars = max_assistant_chars
         self._prompt_log_writer = prompt_log_writer
+        self._allow_tool_approval = allow_tool_approval
+        self._delegation = delegation
 
     async def execute(
+        self, run_id: str, cancellation_event: asyncio.Event,
+        workspace: WorkspaceExecutionContext | None = None,
+        skills: SkillExecutionSnapshot | None = None,
+        agents: AgentExecutionSnapshot | None = None,
+    ) -> RunSnapshot:
+        try:
+            return await self._execute(run_id, cancellation_event, workspace, skills, agents)
+        finally:
+            if self._delegation is not None:
+                cleanup = asyncio.create_task(self._delegation.release(run_id))
+                cleanup_cancelled = False
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        cleanup_cancelled = True
+                        continue
+                cleanup.result()
+                if cleanup_cancelled:
+                    raise asyncio.CancelledError
+
+    async def _execute(
         self,
         run_id: str,
         cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
         skills: SkillExecutionSnapshot | None = None,
+        agents: AgentExecutionSnapshot | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -265,6 +298,16 @@ class AgentLoop:
                 run_id=run_id,
                 workspace=workspace,
             )
+            if self._delegation is not None and agents is not None and agents.available:
+                capability = await self._await_with_cancellation(
+                    self._capability_resolver.resolve(run.provider_id, run.model_id), cancellation_event)
+                if capability.supports_tools:
+                    self._delegation.register(ParentDelegation(
+                        run, workspace, skills or SkillExecutionSnapshot(), agents,
+                        run_tools, availability, system_prompt))
+                    run_tools = run_tools.extended(delegation_tools())
+                    availability = ToolAvailabilitySnapshot(availability.enabled_names | DELEGATION_NAMES)
+                    system_prompt += discovery_prompt(agents)
             skill_state = SkillRunState(skills or SkillExecutionSnapshot())
             base_system_prompt = system_prompt
             system_prompt = skill_state.prompt(base_system_prompt)
@@ -460,6 +503,8 @@ class AgentLoop:
                                 prompt_log_sequence=prompt_log_sequence,
                                 delta_buffer=delta_buffer,
                             )
+                    if self._delegation is not None:
+                        await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
                     completed = await asyncio.to_thread(
                         self._repository.complete_run,
                         run_id,
@@ -482,6 +527,17 @@ class AgentLoop:
                     )
                 )
                 for call in tool_calls:
+                    if call.name in DELEGATION_NAMES and self._delegation is not None:
+                        try:
+                            delegated = await self._await_with_cancellation(
+                                self._delegation.invoke(run_id, call.call_id, call.name, call.arguments),
+                                cancellation_event)
+                        except AgentError as error:
+                            delegated = {"error": error.code}
+                        transcript.append(ModelMessage(
+                            role="tool", content=json.dumps(delegated, ensure_ascii=False),
+                            tool_call_id=call.call_id, tool_name=call.name))
+                        continue
                     if call.name in {"discover_skills", "load_skill"}:
                         system_prompt, transcript = await handle_skill_call(
                             call=call, skill_state=skill_state, base_system_prompt=base_system_prompt,
@@ -518,14 +574,19 @@ class AgentLoop:
                                 context,
                                 availability,
                                 record_tool_started,
-                                allow_approval=run.source != "schedule",
+                                allow_approval=self._allow_tool_approval and run.source != "schedule",
                             ),
                             cancellation_event,
                         )
                     except ToolInvocationError as error:
                         if error.code == "scheduled_tool_approval_required":
                             await delta_buffer.flush()
-                            return await self._fail(run_id, SCHEDULED_TOOL_APPROVAL_REQUIRED)
+                            return await self._fail(
+                                run_id,
+                                SCHEDULED_TOOL_APPROVAL_REQUIRED if self._allow_tool_approval
+                                else PublicRunError("subagent_tool_approval_required",
+                                                    "Subagents cannot request tool approval.", False),
+                            )
                         public_error = PublicRunError(
                             code="tool_failure",
                             message=error.message,
@@ -816,6 +877,8 @@ class AgentLoop:
         cancellation_event: asyncio.Event,
     ) -> RunSnapshot:
         self._raise_if_cancelled(cancellation_event)
+        if self._delegation is not None:
+            await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
         completed = await asyncio.to_thread(
             self._repository.complete_run,
             run_id,
@@ -1111,9 +1174,13 @@ class AgentLoop:
         run_id: str,
         error: PublicRunError,
     ) -> RunSnapshot:
+        if self._delegation is not None:
+            await self._delegation.settle(run_id, cancel=True)
         return await asyncio.to_thread(self._repository.fail_run, run_id, error)
 
     async def _cancel(self, run_id: str) -> RunSnapshot:
+        if self._delegation is not None:
+            await self._delegation.settle(run_id, cancel=True)
         requested = await asyncio.to_thread(self._repository.request_cancel, run_id)
         if requested.status is RunStatus.CANCELLED:
             return requested

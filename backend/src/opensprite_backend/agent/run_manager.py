@@ -23,6 +23,9 @@ from .events import INTERNAL_ERROR
 _LOGGER = logging.getLogger("opensprite.agent.run_manager")
 
 
+from opensprite_backend.custom_agents.models import AgentExecutionSnapshot
+
+
 class RunManager:
     def __init__(
         self,
@@ -41,6 +44,7 @@ class RunManager:
         run_id: str,
         workspace: WorkspaceExecutionContext,
         skills: SkillExecutionSnapshot | None = None,
+        agents: AgentExecutionSnapshot | None = None,
     ) -> bool:
         async with self._lock:
             if self._closed:
@@ -55,7 +59,7 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace, skills),
+                self._execute(run_id, cancellation, workspace, skills, agents),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
@@ -74,8 +78,11 @@ class RunManager:
         cancellation: asyncio.Event,
         workspace: WorkspaceExecutionContext,
         skills: SkillExecutionSnapshot | None = None,
+        agents: AgentExecutionSnapshot | None = None,
     ) -> RunSnapshot:
         try:
+            if agents is not None:
+                return await self._loop.execute(run_id, cancellation, workspace, skills, agents)
             if skills is None:
                 return await self._loop.execute(run_id, cancellation, workspace)
             return await self._loop.execute(run_id, cancellation, workspace, skills)

@@ -118,7 +118,7 @@ class ModelRequest:
             raise ValueError("invalid request model")
         if self.response_mode not in {"default", "fast", "balanced", "deep"}:
             raise ValueError("invalid request response mode")
-        if not self.messages or len(self.messages) > 256 or len(self.tools) > 64:
+        if not self.messages or len(self.messages) > 256:
             raise ValueError("invalid request bounds")
         if (
             not isinstance(self.max_output_tokens, int)

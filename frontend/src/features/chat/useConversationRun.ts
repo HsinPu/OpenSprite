@@ -430,7 +430,7 @@ export function useConversationRun({
     } catch (nextError) {
       if (generationRef.current === generation) {
         if (!wasAccepted && !previous && nextError instanceof AgentChatApiError
-          && ["invalid_request", "workspace_not_found", "run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"].includes(nextError.code)) {
+          && ["invalid_request", "idempotency_conflict", "workspace_not_found", "run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"].includes(nextError.code)) {
           pendingRequestRef.current = null;
         }
         if (!wasAccepted) setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));

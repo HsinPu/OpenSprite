@@ -9,6 +9,7 @@ import type { WorkspaceAvailability } from "../../api/workspaces";
 import { formatTime } from "../general-settings/dateTime";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
 import { ToolApprovalCard } from "./ToolApprovalCard";
+import { SubagentExecution } from "./SubagentExecution";
 
 
 function OpenSpriteMark() {
@@ -231,6 +232,8 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 </ul>
               ) : <p className="chat-workspace__empty-tools">{t("skills.noneLoaded")}</p>}
             </section>
+
+            <SubagentExecution parentRunId={run.id} parentActive={!historical && ["queued", "running", "cancelling"].includes(run.status)} historical={historical} />
 
             <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={`${contextId}-info-title`}>
               <h3 id={`${contextId}-info-title`}>{t("execution.info")}</h3>

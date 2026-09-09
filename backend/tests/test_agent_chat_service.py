@@ -259,6 +259,49 @@ async def test_start_is_idempotent_and_does_not_duplicate_execution(
     await chat.close()
 
 
+@pytest.mark.parametrize("changed", ["settings", "provider", "workspace"])
+@async_test
+async def test_replay_does_not_depend_on_current_configuration(tmp_path: Path, monkeypatch, changed: str) -> None:
+    chat, repository, manager, workspaces = service(tmp_path)
+    request = dict(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+                   client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
+    first = await chat.start_run(**request)
+    await manager.wait(first.run.id)
+    if changed == "settings":
+        await chat._ai_settings.put(AiSettings(model=None, responseMode=ResponseMode.DEFAULT))
+    elif changed == "provider":
+        chat._provider_connections.connected.clear()
+    else:
+        def unavailable(*args):
+            raise AssertionError("replay must not resolve a new workspace snapshot")
+        monkeypatch.setattr(workspaces, "execution_context", unavailable)
+    replay = await chat.start_run(**request)
+    assert replay.replayed and replay.run.id == first.run.id
+    for override in [{"message": "different"}, {"workspace_id": "11111111-1111-4111-8111-111111111111"}]:
+        with pytest.raises(AgentChatError) as conflict:
+            await chat.start_run(**{**request, **override})
+        assert conflict.value.code == ChatErrorCode.IDEMPOTENCY_CONFLICT
+    await chat.close()
+
+
+@async_test
+async def test_concurrent_replays_start_only_one_agent(tmp_path: Path, monkeypatch) -> None:
+    chat, repository, manager, _workspaces = service(tmp_path)
+    original = manager.start
+    started = []
+    async def recording_start(*args):
+        started.append(args[0])
+        await original(*args)
+    monkeypatch.setattr(manager, "start", recording_start)
+    request = dict(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+                   client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
+    results = await asyncio.gather(*(chat.start_run(**request) for _ in range(4)))
+    assert len({result.run.id for result in results}) == 1
+    assert len(started) == 1
+    await manager.wait(results[0].run.id)
+    await chat.close()
+
+
 @pytest.mark.parametrize(
     ("model", "connected", "code"),
     [
@@ -476,6 +519,12 @@ async def test_scheduled_start_uses_fixed_profile_and_disables_prompt_log(
     assert completed.output_continuation == "10"
     assert completed.log_full_prompts is False
     assert repository.get_run(completed.id) == completed
+    chat._provider_connections.connected.clear()
+    replay = await chat.start_scheduled_run(
+        conversation_id=None, occurrence_id=occurrence_id,
+        message="scheduled work", profile=profile,
+    )
+    assert replay.replayed and replay.run.id == completed.id
     await chat.close()
 
 

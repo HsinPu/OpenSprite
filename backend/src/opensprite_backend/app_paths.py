@@ -81,6 +81,26 @@ class AppPaths:
         return self.home / "archive" / "skills"
 
     @property
+    def agents_dir(self) -> Path:
+        return self.home / "agents"
+
+    @property
+    def agents_settings_file(self) -> Path:
+        return self.config_dir / "agents.json"
+
+    @property
+    def agents_transaction_file(self) -> Path:
+        return self.config_dir / "agents-transaction.json"
+
+    @property
+    def agents_archive_dir(self) -> Path:
+        return self.home / "archive" / "agents"
+
+    def workspace_agents_dir(self, managed_root: Path) -> Path:
+        """Map a root already validated by Workspace service; create nothing."""
+        return managed_root / "agents"
+
+    @property
     def managed_workspaces_dir(self) -> Path:
         """Managed project roots inside the single product-data boundary."""
 

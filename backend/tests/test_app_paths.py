@@ -41,6 +41,11 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.tool_receipts_dir == home / "logs" / "tool-receipts"
     assert paths.tool_receipt_key_file == home / "config" / "tool-receipt.key"
     assert paths.cache_dir == home / "cache"
+    assert paths.agents_dir == home / "agents"
+    assert paths.agents_settings_file == home / "config" / "agents.json"
+    assert paths.agents_transaction_file == home / "config" / "agents-transaction.json"
+    assert paths.agents_archive_dir == home / "archive" / "agents"
+    assert paths.workspace_agents_dir(home / "workspace" / "test") == home / "workspace" / "test" / "agents"
     assert not home.exists()
 
 

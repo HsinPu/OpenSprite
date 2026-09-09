@@ -346,6 +346,13 @@ def create_app(
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
+        if request.url.path == "/api/agents" or request.url.path.startswith("/api/agents/"):
+            # Response validation can embed the whole definition in its error.
+            # Never log an exception repr/trace from this content boundary.
+            _LOGGER.error("custom agent management request failed")
+            return JSONResponse(status_code=500, content={"error": {
+                "code": "internal_error", "message": "Agent operation could not be completed.", "retryable": False,
+            }})
         _LOGGER.exception("request failed path=%s", request.url.path, exc_info=exc)
         if request.url.path.startswith("/api/workspaces"):
             return workspace_error_response(WorkspaceFailure.INTERNAL_ERROR)
@@ -442,4 +449,10 @@ def create_app(
     from .skills.models import SkillError
     app.include_router(skills_router)
     app.add_exception_handler(SkillError, skill_error_handler)
+    from .api.custom_agent_routes import router as custom_agents_router, agent_error_handler
+    from .custom_agents.models import AgentError
+    app.include_router(custom_agents_router)
+    from .api.subagent_routes import router as subagent_router
+    app.include_router(subagent_router)
+    app.add_exception_handler(AgentError, agent_error_handler)
     return app

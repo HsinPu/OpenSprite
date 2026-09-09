@@ -83,6 +83,12 @@ class ConversationRepository(Protocol):
 
     def get_run(self, run_id: str) -> RunSnapshot | None: ...
 
+    def find_run_request(
+        self, *, conversation_id: str | None, workspace_id: str,
+        client_request_id: str, message: str, source: RunSource,
+        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+    ) -> StartRunResult | None: ...
+
     def start_run(
         self,
         *,

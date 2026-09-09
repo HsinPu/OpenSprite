@@ -1,10 +1,11 @@
 """SQLite schema creation and ordered migrations; caller owns the connection."""
 
 import sqlite3
+from opensprite_backend.custom_agents.child_schema import CHILD_SCHEMA_STATEMENTS, migrate_v14_to_v15
 from opensprite_backend.workspaces import EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH, DEFAULT_WORKSPACE_ID
 from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_NAME
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 SCHEMA_SQL = """
 BEGIN IMMEDIATE;
@@ -170,9 +171,7 @@ WHERE status IN ('queued', 'running', 'cancelling');
 CREATE INDEX schedules_by_workspace
 ON schedules(workspace_id, status, next_run_at, id);
 
-PRAGMA user_version = 14;
-COMMIT;
-"""
+""" + ";\n".join(CHILD_SCHEMA_STATEMENTS) + ";\nPRAGMA user_version = 15;\nCOMMIT;\n"
 
 _MIGRATE_V1_TO_V2_SQL = """
 BEGIN IMMEDIATE;
@@ -691,3 +690,6 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
     if version == 13:
         from .skill_event_migration import migrate
         migrate(connection)
+        version = 14
+    if version == 14:
+        migrate_v14_to_v15(connection)

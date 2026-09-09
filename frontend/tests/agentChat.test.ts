@@ -27,6 +27,16 @@ beforeEach(() => {
 
 
 describe("Agent chat HTTP contract", () => {
+  it("preserves an idempotency conflict as a non-network error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: { code: "idempotency_conflict", message: "Conflict", retryable: false },
+    }), { status: 409 })));
+    await expect(startRun({ conversationId: null, workspaceId: DEFAULT_WORKSPACE_ID,
+      clientRequestId: "ba66c043-6229-469c-84b1-36f617cfc328", message: "hello" }))
+      .rejects.toEqual(new AgentChatApiError("idempotency_conflict"));
+    expect(agentChatErrorText(new AgentChatApiError("idempotency_conflict"))).toContain("請求識別碼");
+  });
+
   it("maps Context failures to stable local guidance", () => {
     expect(agentChatErrorText(new AgentChatApiError("context_limit_exceeded"))).toContain("提高上限");
     expect(agentChatErrorText(new AgentChatApiError("context_preparation_failed"))).toContain("稍後再試");
@@ -195,7 +205,8 @@ describe("Agent chat HTTP contract", () => {
 
 
 describe("Agent chat SSE contract", () => {
-  it("subscribes to named events and strictly emits safe data", () => {
+  it.each([1, 64, 65, 128])("subscribes to named events with %i tools and strictly emits safe data", (count) => {
+    const toolNames = Array.from({ length: count }, (_, index) => `tool_${String(index).padStart(3, "0")}`);
     class FakeEventSource {
       static instance: FakeEventSource;
       listeners = new Map<string, (event: MessageEvent<string>) => void>();
@@ -238,7 +249,7 @@ describe("Agent chat SSE contract", () => {
         runId,
         conversationId,
         createdAt: "2026-08-21T08:30:01Z",
-        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames: ["calculator"] },
+        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames },
       }),
     }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
@@ -285,7 +296,7 @@ describe("Agent chat SSE contract", () => {
     expect(source.url).toBe(`/api/runs/${runId}/events`);
     expect(events).toHaveLength(6);
     expect(events[0]).toMatchObject({ type: "run.started", data: { workspaceAvailability: "not_applicable" } });
-    expect(events[1]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames: ["calculator"] } });
+    expect(events[1]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames } });
     expect(events[2]).toMatchObject({ type: "context.compaction.started", data: {} });
     expect(events[4]).toMatchObject({ type: "response.continuation.started", data: { attempt: 3, maxAttempts: 50 } });
     expect(events[5]).toMatchObject({

@@ -265,6 +265,16 @@ def test_real_system_runtime_exposes_chat_and_interrupts_orphaned_run(
         model_id="openrouter/auto",
         response_mode="default",
     ).run
+    from opensprite_backend.custom_agents.child_repository import ChildExecutionRepository
+
+    repository.mark_run_started(queued.id)
+    children = ChildExecutionRepository(paths.database_file)
+    child, _ = children.create(
+        parent_id=queued.id, call_id="orphaned-child", request_hash="a" * 64,
+        agent_id="00000000-0000-4000-8000-000000000001", name="reviewer",
+        revision=1, definition_hash="b" * 64, provider_id="openrouter",
+        model_id="openrouter/auto",
+    )
     app = create_system_app(app_paths=paths, enforce_authentication=False)
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
@@ -273,3 +283,6 @@ def test_real_system_runtime_exposes_chat_and_interrupts_orphaned_run(
     assert response.status_code == 200
     assert response.json()["status"] == "interrupted"
     assert response.json()["error"]["code"] == "internal_error"
+    recovered = children.get(queued.id, child.id)
+    assert recovered.status == "interrupted"
+    assert recovered.error_code == "backend_restarted"

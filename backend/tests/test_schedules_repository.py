@@ -83,12 +83,14 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
         connection.execute("ALTER TABLE runs DROP COLUMN occurrence_id")
         connection.execute("ALTER TABLE runs DROP COLUMN source")
         connection.execute("PRAGMA user_version=10")
+        connection.execute("DROP TABLE agent_execution_events")
+        connection.execute("DROP TABLE agent_executions")
     schedules = repository(tmp_path)
     created = schedules.create(draft(), next_run_at=datetime(2026, 3, 1, 1, 30, tzinfo=UTC))
     assert created.name == "Morning brief"
     assert conversations.get_run(accepted.run.id) is not None
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 14
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 15
 
 
 def test_schedule_workspace_change_moves_owned_conversation_atomically(

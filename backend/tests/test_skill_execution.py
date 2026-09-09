@@ -1,5 +1,6 @@
 """Real Agent context assembly with a deterministic gateway."""
 import asyncio
+import pytest
 from uuid import uuid4
 from opensprite_backend.skills.models import SkillContent, SkillExecutionSnapshot
 from opensprite_backend.skills.execution import SkillRunState
@@ -9,11 +10,43 @@ from opensprite_backend.inference.models import ModelToolCall, ModelCompleted, M
 from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from context_test_support import TestCapabilityResolver
-from test_agent_loop import store, accepted_run, ScriptedGateway
+from test_agent_loop import store, accepted_run, ScriptedGateway, LookupTool
+from opensprite_backend.tools.definition import ToolDefinition, ToolEffect
 
 
 def snapshot():
     return SkillExecutionSnapshot((SkillContent(str(uuid4()), "global", "Review", "Review code", 1, "a" * 64, "UNIQUE_FULL_INSTRUCTIONS"),))
+
+
+@pytest.mark.parametrize("count", [64, 65, 131])
+def test_large_tool_catalog_reaches_gateway_with_skills(tmp_path, count):
+    async def scenario():
+        repository = store(tmp_path)
+        run = accepted_run(repository)
+        skills = snapshot()
+        tools = [LookupTool(definition=ToolDefinition(
+            name=f"lookup_{i:03}", description="Look up a note.",
+            input_schema={"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+            effect=ToolEffect.READ_ONLY,
+        )) for i in range(count - 2)]
+        gateway = ScriptedGateway([
+            [ModelToolCall("load", "load_skill", {"skillId": skills.available[0].id}),
+             ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelToolCall("lookup", "lookup_000", {}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelTextDelta("Done"), ModelCompleted(ModelFinishReason.FINAL)],
+        ])
+        loop = AgentLoop(repository=repository, gateway=gateway,
+                         tools=ToolRegistry(tools, policy=ReadOnlyToolPolicy()),
+                         capability_resolver=TestCapabilityResolver())
+        result = await loop.execute(run.id, asyncio.Event(), skills=skills)
+        assert result.status is RunStatus.COMPLETED
+        assert len(gateway.requests) == 3
+        expected = sorted([tool.definition.name for tool in tools] + ["discover_skills", "load_skill"])
+        assert all([tool.name for tool in request.tools] == expected for request in gateway.requests)
+        assert tools[0].calls == [{}]
+        events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+        assert all(event.data["toolNames"] == expected for event in events if event.type is RunEventType.MODEL_STARTED)
+    asyncio.run(scenario())
 
 
 def test_discovery_shrinks_to_budget_without_skipping_items():

@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.19.2`。
+目前產品版本為 `0.20.0`。
 
 聊天使用的模型統一於「設定 → AI 模型」選擇；修改後供新的執行使用，既有執行及排程保存的模型設定不會被改寫。聊天輸入框不再提供模型選單。
 
@@ -23,6 +23,30 @@ Ant 視窗先在瀏覽器預覽名稱、說明、檔案與內容，按「確認�
 
 `references`、`scripts`、`assets` 可保存，但目前只有 `SKILL.md` 會載入 Context；
 不會執行附屬腳本，也不支援 GitHub 匯入。單一 `SKILL.md` 匯入仍保留；資料夾選取入口已移除。
+
+## Agents：全域與工作區子代理
+
+在「設定 → Agents」管理可委派的角色。全域定義放在 `.opensprite/agents/*.toml`，
+工作區定義放在 `.opensprite/workspace/<工作區目錄>/agents/*.toml`。支援新增、TOML 匯入、
+重新掃描、啟用／停用與封存移除；工作區同名版本優先，停用或無效時不回退全域版本。
+
+```toml
+name = "reviewer"
+description = "適合獨立檢查指定內容，回報問題與證據。"
+developer_instructions = "檢查被委派的範圍，區分確認問題與不確定處，不宣稱未執行的驗證。"
+```
+
+可選擇同時設定 `provider_id` 與 `model`；省略時繼承父任務的模型。這是 OpenSprite 的
+定義格式，不接受任意 Codex 設定、腳本或權限設定。
+
+模型先探索角色，再決定是否委派。子代理有獨立 Context，使用同一工作區快照與可用 Skills，
+不直接讀取父對話，也不能再建立子代理或要求人工工具核准。每輪最多建立 6 個，
+每個父任務同時最多 2 個，全域同時最多 4 個；10 分鐘期限包含排隊。
+父任務結束前會收妥子任務，服務重啟後未完成項目標示中斷，不自動重試。
+
+「本次執行」的 Subagents 區塊可查看狀態、分頁報告及取消子任務。子任務不會新增側邊欄對話。
+啟用角色不保證模型每次都會委派，仍取決於任務與模型能力。
+詳見 [Agents 架構](docs/architecture/custom-agents.md)。
 
 ## Skills：全域與工作區指引
 

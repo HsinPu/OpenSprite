@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 from pathlib import Path
 from threading import Lock
@@ -78,6 +79,10 @@ from .workspaces import (
 )
 from .workspaces.relocation import WorkspaceRelocator
 from .skills.service import SkillsService
+from .custom_agents.service import CustomAgentsService
+from .custom_agents.child_repository import ChildExecutionRepository
+from .custom_agents.child_executor import ChildAgentExecutor
+from .custom_agents.delegation import DelegationCoordinator
 
 
 class LocalProviderRuntime(Protocol):
@@ -120,6 +125,9 @@ class _SystemRuntime:
         schedules: ScheduleService,
         schedule_coordinator: ScheduleCoordinator,
         skills: SkillsService,
+        custom_agents: CustomAgentsService,
+        child_executions: ChildExecutionRepository,
+        delegation: DelegationCoordinator,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -131,6 +139,9 @@ class _SystemRuntime:
         self.tool_approvals = tool_approvals
         self.workspaces = workspaces
         self.skills = skills
+        self.custom_agents = custom_agents
+        self.child_executions = child_executions
+        self._delegation = delegation
         self.agent_chat = agent_chat
         self.schedules = schedules
         self._schedule_coordinator = schedule_coordinator
@@ -140,6 +151,7 @@ class _SystemRuntime:
         if provider_starter is not None:
             await provider_starter()
         await self.agent_chat.startup()
+        await asyncio.to_thread(self.child_executions.interrupt_incomplete)
         await self.workspaces.startup()
         await self.mcp_connections.startup()
         await self._schedule_coordinator.start()
@@ -152,9 +164,12 @@ class _SystemRuntime:
                 await self.agent_chat.close()
             finally:
                 try:
-                    await self.mcp_connections.close()
+                    await self._delegation.close()
                 finally:
-                    await self._provider_runtime.aclose()
+                    try:
+                        await self.mcp_connections.close()
+                    finally:
+                        await self._provider_runtime.aclose()
 
 
 def create_system_runtime(
@@ -199,25 +214,40 @@ def create_system_runtime(
         paths,
         credential_store=provider_runtime.credential_store,
     )
+    capability_resolver = ProviderModelCapabilityResolver(
+        provider_runtime.connections,
+        operation_locks=provider_runtime.operation_locks,
+    )
+    child_executions = ChildExecutionRepository(paths.database_file)
+    delegation = DelegationCoordinator(child_executions, ChildAgentExecutor(
+        provider_runtime.model_gateway, capability_resolver, child_executions,
+        FilePromptLogWriter(paths),
+    ))
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         tools=tool_registry,
         tool_availability=tool_settings,
         dynamic_tools=mcp_connections,
-        capability_resolver=ProviderModelCapabilityResolver(
-            provider_runtime.connections,
-            operation_locks=provider_runtime.operation_locks,
-        ),
+        capability_resolver=capability_resolver,
         system_prompt_provider=create_system_prompt_provider(
             paths,
             general_settings,
         ),
         prompt_log_writer=FilePromptLogWriter(paths),
+        delegation=delegation,
     )
     run_manager = RunManager(repository, agent_loop)
     skills = SkillsService(paths, workspaces)
-    workspaces.on_removed = skills.forget_workspace
+    custom_agents = CustomAgentsService(paths, workspaces)
+
+    def remove_workspace_registrations(workspace_id: str) -> None:
+        # Called under the Workspace mutation gate. Neither cleanup removes
+        # workspace files; both are idempotent if a later catalog write fails.
+        skills.forget_workspace(workspace_id)
+        custom_agents.remove_workspace(workspace_id)
+
+    workspaces.on_removed = remove_workspace_registrations
     agent_chat = AgentChatService(
         repository,
         ai_settings,
@@ -227,6 +257,7 @@ def create_system_runtime(
         workspace_mutation_gate,
         event_notifier=event_notifier,
         skills=skills,
+        custom_agents=custom_agents,
     )
     schedule_repository = SqliteScheduleRepository(paths.database_file)
     schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
@@ -249,6 +280,9 @@ def create_system_runtime(
         schedules,
         schedule_coordinator,
         skills,
+        custom_agents,
+        child_executions,
+        delegation,
     )
 
 
@@ -338,9 +372,15 @@ def create_system_app(
                 UnavailableWorkspaces(),
             )
             app.state.skills = getattr(runtime, "skills", None)
+            app.state.custom_agents = getattr(runtime, "custom_agents", None)
+            app.state.child_executions = getattr(runtime, "child_executions", None)
+            app.state.delegation = getattr(runtime, "_delegation", None)
             yield
         finally:
             app.state.skills = None
+            app.state.custom_agents = None
+            app.state.child_executions = None
+            app.state.delegation = None
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()

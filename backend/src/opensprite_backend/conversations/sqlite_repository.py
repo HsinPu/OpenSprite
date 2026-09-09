@@ -69,6 +69,7 @@ _OUTPUT_BUDGETS = {"auto", "8k", "16k", "32k", "64k", "max"}
 _OUTPUT_CONTINUATIONS = {"off", "1", "2", "3", "5", "10", "20", "50", "unlimited"}
 _PUBLIC_ERROR_CODES = {
     "invalid_request",
+    "idempotency_conflict",
     "not_found",
     "run_busy",
     "run_not_active",
@@ -454,6 +455,51 @@ class SqliteConversationRepository:
                 raise ConversationStoreError(
                     StoreFailure.DATABASE_UNAVAILABLE
                 ) from error
+            finally:
+                connection.close()
+
+    def find_run_request(
+        self, *, conversation_id: str | None, workspace_id: str,
+        client_request_id: str, message: str, source: RunSource,
+        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+    ) -> StartRunResult | None:
+        """Replay an accepted identity without consulting mutable configuration."""
+        if conversation_id is not None:
+            self._require_identifier(conversation_id)
+        self._require_identifier(workspace_id)
+        self._require_identifier(client_request_id)
+        normalized_message = self._require_text(message, maximum=32768)
+        if source not in {"user", "schedule"} or (source == "user") != (occurrence_id is None):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if occurrence_id is not None:
+            self._require_identifier(occurrence_id)
+        if len(skill_ids) > 5 or len(set(skill_ids)) != len(skill_ids):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        for skill_id in skill_ids:
+            self._require_identifier(skill_id)
+        fingerprint = self._request_fingerprint(
+            conversation_id, workspace_id, normalized_message, source, occurrence_id, skill_ids,
+        )
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return None
+            try:
+                row = connection.execute(
+                    "SELECT * FROM runs WHERE client_request_id = ?", (client_request_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                if row["request_fingerprint"] != fingerprint:
+                    raise ConversationStoreError(StoreFailure.IDEMPOTENCY_CONFLICT)
+                conversation = connection.execute(
+                    "SELECT * FROM conversations WHERE id = ?", (row["conversation_id"],),
+                ).fetchone()
+                if conversation is None:
+                    raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
+                return StartRunResult(conversation=self._conversation(conversation), run=self._run(row), replayed=True)
+            except (sqlite3.Error, TypeError, ValueError) as error:
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
             finally:
                 connection.close()
 
@@ -1449,6 +1495,8 @@ class SqliteConversationRepository:
             "run_events",
             "schedules",
             "schedule_occurrences",
+            "agent_executions",
+            "agent_execution_events",
         }:
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
 
@@ -1931,7 +1979,6 @@ class SqliteConversationRepository:
                 tool_names = data["toolNames"]
                 if (
                     not isinstance(tool_names, list)
-                    or len(tool_names) > 64
                     or any(
                         not SqliteConversationRepository._is_bounded_text(
                             name,
@@ -1939,7 +1986,8 @@ class SqliteConversationRepository:
                         )
                         for name in tool_names
                     )
-                    or len(set(tool_names)) != len(tool_names)
+                    or any(re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) is None for name in tool_names)
+                    or tool_names != sorted(set(tool_names))
                 ):
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

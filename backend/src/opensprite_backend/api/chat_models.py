@@ -152,6 +152,7 @@ class ChatErrorEnvelope(ChatContractModel):
 
 _ERRORS: dict[ChatErrorCode, tuple[int, str, bool]] = {
     ChatErrorCode.INVALID_REQUEST: (400, "送出的對話資料無效。", False),
+    ChatErrorCode.IDEMPOTENCY_CONFLICT: (409, "相同請求識別碼已用於不同的對話資料。", False),
     ChatErrorCode.NOT_FOUND: (404, "找不到指定的對話或執行。", False),
     ChatErrorCode.RUN_BUSY: (409, "這個對話目前已有執行中的回覆。", True),
     ChatErrorCode.RUN_NOT_ACTIVE: (409, "這次執行目前無法取消。", False),

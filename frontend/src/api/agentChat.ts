@@ -10,7 +10,7 @@ const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed1
 export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
+export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
 export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error" | "skill_unavailable";
 
@@ -241,7 +241,7 @@ export async function moveConversationToWorkspace(conversationId: string, worksp
 export async function startRun(input: StartRunInput): Promise<StartRunResult> {
   if (input.skillIds && (input.skillIds.length > 5 || new Set(input.skillIds).size !== input.skillIds.length || input.skillIds.some(id => !isIdentifier(id)))) throw new AgentChatApiError("malformed_response");
   if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.workspaceId) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
-  const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [409, ["run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
+  const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [409, ["idempotency_conflict", "run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
   if (!record(body) || !exactKeys(body, ["conversationId", "workspaceId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.workspaceId) || body.workspaceId !== input.workspaceId || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
   return body as StartRunResult;
 }
@@ -310,7 +310,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
     if ((!exactKeys(data, legacyKeys) && !hasContext) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072) throw new AgentChatApiError("malformed_response");
     if (hasContext && (!Number.isInteger(data.contextTokens) || (data.contextTokens as number) < 1 || !Number.isInteger(data.contextLimitTokens) || (data.contextLimitTokens as number) < 1 || (data.contextLimitTokens as number) > 4_000_000 || !Number.isInteger(data.inputBudgetTokens) || (data.inputBudgetTokens as number) < 1 || (data.inputBudgetTokens as number) > (data.contextLimitTokens as number) || (data.contextTokens as number) > (data.inputBudgetTokens as number))) throw new AgentChatApiError("malformed_response");
     if (exactKeys(data, toolContextKeys)) {
-      if (!Array.isArray(data.toolNames) || data.toolNames.length > 64 || data.toolNames.some((name) => !boundedString(name, 1, 64) || !/^[a-z][a-z0-9_]{0,63}$/.test(name)) || data.toolNames.join("\0") !== [...new Set(data.toolNames)].sort().join("\0")) throw new AgentChatApiError("malformed_response");
+      if (!Array.isArray(data.toolNames) || data.toolNames.some((name) => !boundedString(name, 1, 64) || !/^[a-z][a-z0-9_]{0,63}$/.test(name)) || data.toolNames.join("\0") !== [...new Set(data.toolNames)].sort().join("\0")) throw new AgentChatApiError("malformed_response");
     }
   }
   if (expectedType === "response.continuation.started") {
@@ -367,6 +367,7 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
   const code = error instanceof AgentChatApiError ? error.code : "network_error";
   const keys = {
     invalid_request: "error.chat.invalidRequest",
+    idempotency_conflict: "error.chat.idempotencyConflict",
     not_found: "error.chat.notFound",
     run_busy: "error.chat.runBusy",
     run_not_active: "error.chat.runNotActive",

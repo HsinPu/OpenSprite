@@ -1,8 +1,17 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import { ExecutionContext } from "../src/features/chat/ExecutionContext";
+
+vi.mock("../src/api/subagents", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/api/subagents")>(),
+  // Keep the context disclosure tests focused on layout; a never-resolving
+  // request avoids an asynchronous child update after each synchronous test.
+  listSubagents: vi.fn().mockImplementation(() => new Promise(() => undefined)),
+  getSubagentResult: vi.fn(),
+  cancelSubagent: vi.fn(),
+}));
 
 
 const run: RunSnapshot = {
@@ -61,7 +70,7 @@ describe("execution context disclosure", () => {
   it("places Skills after tools with the shared empty card", () => {
     render(<ExecutionContext modelName="Auto Router" run={run} events={[]} timeZone="system" defaultExpanded />);
     const headings = screen.getAllByRole("heading", { level: 3 }).map(node => node.textContent);
-    expect(headings.slice(0, 4)).toEqual(["模型", "工具", "Skills", "執行資訊"]);
+    expect(headings.slice(0, 5)).toEqual(["模型", "工具", "Skills", "Subagents", "執行資訊"]);
     expect(screen.getByText("本次執行未使用 Skills。").className).toBe("chat-workspace__empty-tools");
   });
 

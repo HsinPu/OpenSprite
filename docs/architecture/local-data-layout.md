@@ -20,6 +20,14 @@ the user explicitly requests verified user-data deletion.
 
 ## Authoritative layout
 
+Agents (0.20.0) add lazy-created `agents/*.toml` globally and
+`workspace/<workspace-directory>/agents/*.toml` per workspace. Registration and
+enabled state live in `config/agents.json`; interrupted file/catalog mutations
+use `config/agents-transaction.json`. Removed files are archived under
+`archive/agents/<UUID>/`. Child execution records and reports remain in SQLite,
+not workspace folders. Definition bodies are held in memory during execution;
+only explicit prompt logging may store the actual model prompt.
+
 Skills (0.13.0) add lazy-created `skills/<directory>/SKILL.md` globally and
 `workspace/<workspace-directory>/skills/<directory>/SKILL.md` per Workspace.
 `config/skills.json` v3 owns activation; Workspace names automatically shadow globals.

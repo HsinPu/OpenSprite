@@ -146,6 +146,16 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
     }
 
     assert operations == {
+        ("/api/agents/settings", "get", "getAgentsSettings"),
+        ("/api/agents/settings", "put", "setAgentsSettings"),
+        ("/api/agents", "get", "listAgents"),
+        ("/api/agents", "post", "createAgent"),
+        ("/api/agents/scan", "post", "scanAgents"),
+        ("/api/agents/batch", "post", "batchAgents"),
+        ("/api/agents/{agent_id}", "get", "getAgent"),
+        ("/api/agents/{agent_id}", "put", "updateAgent"),
+        ("/api/agents/{agent_id}", "delete", "deleteAgent"),
+        ("/api/agents/{agent_id}/enabled", "put", "setAgentEnabled"),
         ("/api/skills/settings", "get", "getSkillsSettings"),
         ("/api/skills/settings", "put", "putSkillsSettings"),
         ("/api/skills", "get", "listSkills"),
@@ -202,6 +212,9 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/runs/{run_id}", "get", "getRun"),
         ("/api/runs/{run_id}/events", "get", "streamRunEvents"),
         ("/api/runs/{run_id}/cancel", "post", "cancelRun"),
+        ("/api/runs/{parent_id}/agents", "get", "listSubagents"),
+        ("/api/runs/{parent_id}/agents/{child_id}", "get", "getSubagentResult"),
+        ("/api/runs/{parent_id}/agents/{child_id}/cancel", "post", "cancelSubagent"),
         ("/api/schedules", "get", "listSchedules"),
         ("/api/schedules", "post", "createSchedule"),
         ("/api/schedules/runtime-status", "get", "getScheduleRuntimeStatus"),
@@ -376,7 +389,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.19.2",
+        "version": "0.20.0",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

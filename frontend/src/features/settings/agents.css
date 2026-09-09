@@ -1,0 +1,195 @@
+.agents-settings {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* The settings page supplies the Drawer container. Keep the mobile overlay
+   bounded by the viewport even when that container has a wider layout box. */
+.agents-drawer,
+.agents-drawer .ant-drawer-content-wrapper,
+.agents-drawer .ant-drawer-content,
+.agents-drawer .ant-drawer-body,
+.agents-modal,
+.agents-modal .ant-modal-content {
+  box-sizing: border-box;
+  max-width: 100vw;
+  min-width: 0;
+}
+
+.agents-drawer .ant-drawer-body {
+  overflow-x: hidden;
+}
+
+.agents-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.agents-heading h2,
+.agents-heading p,
+.agents-toolbar h3,
+.agents-inherited h3 {
+  margin: 0;
+}
+
+.agents-heading p,
+.agents-inherited > p {
+  margin-top: 8px;
+  color: var(--settings-muted, #6b7280);
+}
+
+.agents-master,
+.agents-workspace-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.agents-workspace-select {
+  display: grid;
+  gap: 6px;
+  white-space: normal;
+}
+
+.agents-workspace-select .ant-select {
+  width: 100%;
+}
+
+.agents-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agents-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agents-list {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--settings-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--settings-surface, #fff);
+}
+
+.agents-row-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agents-row-main strong {
+  overflow-wrap: anywhere;
+}
+
+.agents-warning {
+  flex-basis: 100%;
+  color: #b45309;
+  font-size: 0.875rem;
+}
+
+.agents-row-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.agents-inherited {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--settings-border, #e5e7eb);
+}
+
+.agents-editor {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.agents-editor label,
+.agents-editor .ant-alert,
+.agents-editor .ant-input,
+.agents-editor .ant-input-textarea,
+.agents-editor .ant-input-affix-wrapper,
+.agents-editor .ant-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.agents-editor label {
+  display: grid;
+  gap: 6px;
+}
+
+.agents-editor .ant-input-textarea textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.agents-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agents-batch-confirm {
+  display: grid;
+  gap: 10px;
+}
+
+.agents-loading {
+  color: var(--settings-muted, #6b7280);
+}
+
+@media (max-width: 767px) {
+  .agents-heading,
+  .agents-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agents-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .agents-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agents-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

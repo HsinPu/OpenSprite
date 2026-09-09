@@ -3,6 +3,8 @@
 from __future__ import annotations
 from opensprite_backend.skills.service import SkillsService
 from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
+from opensprite_backend.custom_agents.service import CustomAgentsService
+from opensprite_backend.custom_agents.models import AgentExecutionSnapshot, AgentError
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -43,6 +45,7 @@ from opensprite_backend.workspaces import (
 
 class ChatErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     NOT_FOUND = "not_found"
     RUN_BUSY = "run_busy"
     RUN_NOT_ACTIVE = "run_not_active"
@@ -207,6 +210,7 @@ class AgentChatService:
         *,
         event_notifier: RunEventNotifier | None = None,
         skills: SkillsService | None = None,
+        custom_agents: CustomAgentsService | None = None,
         event_poll_seconds: float = 0.05,
         event_wait_seconds: float = 5.0,
     ) -> None:
@@ -220,6 +224,7 @@ class AgentChatService:
         self._run_manager = run_manager
         self._workspaces = workspaces
         self._skills = skills
+        self._custom_agents = custom_agents
         self._workspace_mutation_gate = workspace_mutation_gate
         self._event_poll_seconds = event_poll_seconds
         self._event_wait_seconds = event_wait_seconds
@@ -326,6 +331,13 @@ class AgentChatService:
         message: str,
         skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
+        replay = await self._find_run_request(
+            conversation_id=conversation_id, workspace_id=workspace_id,
+            client_request_id=client_request_id, message=message,
+            source="user", occurrence_id=None, skill_ids=skill_ids,
+        )
+        if replay is not None:
+            return replay
         try:
             settings = await self._ai_settings.get()
         except SettingsStoreError as error:
@@ -361,6 +373,13 @@ class AgentChatService:
         profile: ExecutionProfile,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> StartRunResult:
+        replay = await self._find_run_request(
+            conversation_id=conversation_id, workspace_id=workspace_id,
+            client_request_id=occurrence_id, message=message,
+            source="schedule", occurrence_id=occurrence_id,
+        )
+        if replay is not None:
+            return replay
         return await self._start_configured_run(
             conversation_id=conversation_id,
             workspace_id=workspace_id,
@@ -374,6 +393,22 @@ class AgentChatService:
 
     async def wait_run(self, run_id: str) -> RunSnapshot | None:
         return await self._run_manager.wait(run_id)
+
+    async def _find_run_request(
+        self, *, conversation_id: str | None, workspace_id: str,
+        client_request_id: str, message: str, source: str,
+        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+    ) -> StartRunResult | None:
+        async with self._workspace_mutation_gate.hold():
+            try:
+                return await asyncio.to_thread(
+                    self._repository.find_run_request,
+                    conversation_id=conversation_id, workspace_id=workspace_id,
+                    client_request_id=client_request_id, message=message,
+                    source=source, occurrence_id=occurrence_id, skill_ids=skill_ids,
+                )
+            except ConversationStoreError as error:
+                raise _store_error(error) from error
 
     async def _start_configured_run(
         self,
@@ -410,6 +445,11 @@ class AgentChatService:
         async with self._workspace_mutation_gate.hold():
             try:
                 workspace = self._workspaces.execution_context(workspace_id)
+                try:
+                    agent_snapshot = self._custom_agents.snapshot(workspace_id) if self._custom_agents else AgentExecutionSnapshot()
+                except AgentError:
+                    # Bad Agent configuration must not prevent ordinary chat.
+                    agent_snapshot = AgentExecutionSnapshot()
                 skill_snapshot = self._skills.snapshot(workspace_id, skill_ids) if self._skills else SkillExecutionSnapshot()
                 if skill_ids and self._skills is None:
                     raise SkillError("skill_unavailable")
@@ -438,8 +478,10 @@ class AgentChatService:
                 raise _workspace_error(error) from error
             except ConversationStoreError as error:
                 raise _store_error(error) from error
-        if accepted.run.status is RunStatus.QUEUED:
-            if self._skills is None:
+        if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
+            if self._custom_agents is not None:
+                await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot)
+            elif self._skills is None:
                 await self._run_manager.start(accepted.run.id, workspace)
             else:
                 await self._run_manager.start(accepted.run.id, workspace, skill_snapshot)
@@ -503,7 +545,7 @@ class AgentChatService:
 def _store_error(error: ConversationStoreError) -> AgentChatError:
     code = {
         StoreFailure.INVALID_REQUEST: ChatErrorCode.INVALID_REQUEST,
-        StoreFailure.IDEMPOTENCY_CONFLICT: ChatErrorCode.INVALID_REQUEST,
+        StoreFailure.IDEMPOTENCY_CONFLICT: ChatErrorCode.IDEMPOTENCY_CONFLICT,
         StoreFailure.NOT_FOUND: ChatErrorCode.NOT_FOUND,
         StoreFailure.RUN_BUSY: ChatErrorCode.RUN_BUSY,
         StoreFailure.RUN_NOT_ACTIVE: ChatErrorCode.RUN_NOT_ACTIVE,

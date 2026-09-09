@@ -1,0 +1,129 @@
+.subagent-execution__list {
+  display: grid;
+  gap: 10px;
+}
+
+.subagent-execution__card {
+  overflow: hidden;
+  border: 1px solid var(--chat-border);
+  border-radius: 11px;
+  background: var(--chat-bg);
+}
+
+.subagent-execution__card-heading {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px 0 14px;
+}
+
+.subagent-execution__expand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  color: var(--chat-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.subagent-execution__name,
+.subagent-execution__model {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.subagent-execution__name {
+  font-weight: 650;
+}
+
+.subagent-execution__model {
+  grid-column: 1;
+  color: var(--chat-muted);
+  font-size: 0.76rem;
+}
+
+.subagent-execution__status {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #e8f7f4;
+  color: #258d7b;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.subagent-execution__status--failed,
+.subagent-execution__status--interrupted,
+.subagent-execution__status--timed_out { background: #fff0ec; color: #a84335; }
+.subagent-execution__status--cancelled { background: #f1f1f1; color: #666; }
+.subagent-execution__status--cancelling { background: #fff8eb; color: #9b5b16; }
+
+.subagent-execution__cancel,
+.subagent-execution__result button,
+.subagent-execution__result-error button,
+.subagent-execution__refresh-error + button {
+  align-self: center;
+  padding: 5px 8px;
+  border: 1px solid var(--chat-border);
+  border-radius: 7px;
+  background: var(--chat-surface);
+  color: var(--chat-primary-strong, var(--chat-primary));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.subagent-execution__cancel:disabled,
+.subagent-execution__result button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.subagent-execution__error,
+.subagent-execution__refresh-error {
+  margin: 0;
+  padding: 0 14px 10px;
+  color: #a84335;
+  font-size: 0.78rem;
+}
+
+.subagent-execution__result {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 12px;
+  border-top: 1px solid var(--chat-border);
+}
+
+.subagent-execution__result pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--chat-surface);
+  color: var(--chat-text);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.subagent-execution__result > button { justify-self: start; }
+.subagent-execution__result-error { color: #a84335; font-size: 0.82rem; }
+.subagent-execution__result-error p { margin: 10px 0; }
+
+@media (max-width: 767px) {
+  .subagent-execution__card-heading { padding-left: 12px; padding-right: 8px; }
+  .subagent-execution__expand { grid-template-columns: minmax(0, 1fr); }
+  .subagent-execution__status { grid-column: 1; grid-row: auto; justify-self: start; }
+  .subagent-execution__cancel { align-self: center; }
+}

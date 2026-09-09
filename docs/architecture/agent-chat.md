@@ -1,5 +1,38 @@
 # Agent chat architecture
 
+## Custom Agents and child execution (0.20.0)
+
+New parent Runs capture enabled Agent definitions alongside their Workspace and
+Skills snapshots. Discovery exposes bounded descriptions; delegation starts a
+separate child Context containing only the explicitly supplied task and role
+instructions, not the parent conversation history. The same Agent loop owns
+model, Skills and tool execution in both cases.
+
+Children cannot delegate again or request tool approval. Their tool set is a
+subset of the parent's accepted set. Each parent may create six children, with
+two running per parent and four globally; the ten-minute deadline includes
+queue time. Parent completion waits for children, while cancellation/failure
+settles and releases child tasks. Restart interrupts unfinished child records.
+
+Child events and bounded result pages are separate from conversation messages.
+Role instructions and full paths are excluded from normal metadata; full prompt
+logging retains its existing explicit policy. See `custom-agents.md` for storage,
+API and configuration boundaries.
+
+## Accepted request replay (0.19.3)
+
+User and scheduled submissions first query the accepted request identity using
+the same fingerprint as transactional creation. A matching Run is returned
+without consulting current configuration or restarting execution. Mismatches
+return HTTP 409 `idempotency_conflict`. New submissions still validate current
+settings and obtain immutable Workspace/Skills snapshots; creation retains its
+transactional duplicate check for concurrent requests.
+
+`model.started.toolNames` records the complete advertised set without a separate
+64-item event cap. Storage and browser validators require unique, sorted, valid
+tool names. Context budgets, MCP discovery caps and execution-round limits remain
+separate controls.
+
 ## Reliability and module boundaries (0.19.0)
 
 The composer blocks concurrent submission and retains an unaccepted draft.
