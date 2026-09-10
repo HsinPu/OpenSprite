@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
+import { UserMenu } from "./UserMenu";
 import { FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 
@@ -135,7 +136,8 @@ export function App() {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const settingsDialogRef = useRef<HTMLDialogElement>(null);
+  const settingsSurfaceRef = useRef<HTMLDivElement>(null);
+  const settingsWasOpen = useRef(false);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const appContentRef = useRef<HTMLElement>(null);
   const scheduleConversationTargetRef = useRef<string | null>(null);
@@ -237,17 +239,27 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const dialog = settingsDialogRef.current;
-    if (!dialog) return;
-
-    if (settingsOpen && !dialog.open) {
-      dialog.showModal();
+    if (settingsOpen) {
+      settingsSurfaceRef.current?.focus();
+    } else if (settingsWasOpen.current) {
+      const target = scheduleConversationTargetRef.current;
+      scheduleConversationTargetRef.current = null;
+      if (target !== null) {
+        setConversationId(target);
+        window.location.hash = `chat=${target}`;
+        setMenuOpen(false);
+        window.requestAnimationFrame(() => appContentRef.current?.focus());
+      } else {
+        const opener = settingsOpenerRef.current;
+        if (mobileNavigation && opener?.closest(".main-sidebar")) setMenuOpen(true);
+        window.requestAnimationFrame(() => {
+          if (opener?.isConnected) opener.focus();
+          else appContentRef.current?.focus();
+        });
+      }
     }
-
-    if (!settingsOpen && dialog.open) {
-      dialog.close();
-    }
-  }, [settingsOpen]);
+    settingsWasOpen.current = settingsOpen;
+  }, [settingsOpen, mobileNavigation]);
 
   useEffect(() => {
     if (menuOpen) {
@@ -386,7 +398,7 @@ export function App() {
   };
 
   return (
-    <div className={`app-shell${sidebarCollapsed && !mobileNavigation ? " is-sidebar-collapsed" : ""}`}
+    <><div hidden={settingsOpen} inert={settingsOpen} className={`app-shell${sidebarCollapsed && !mobileNavigation ? " is-sidebar-collapsed" : ""}`}
       style={!mobileNavigation ? { "--app-sidebar-width": `${panels.actual.left}px`, "--execution-panel-width": `${panels.actual.right}px` } as CSSProperties : undefined}>
       {!mobileNavigation && (["left", "right"] as const).map(side =>
         (side === "left" ? !sidebarCollapsed : executionExpanded) && <PanelResizeHandle key={side}
@@ -511,23 +523,7 @@ export function App() {
         </nav>
 
         <nav className="utility-nav" aria-label={t("app.features")}>
-          <button
-            ref={settingsButtonRef}
-            className={settingsOpen ? "is-active" : ""}
-            type="button"
-            aria-label={t("app.settings")}
-            title={t("app.settings")}
-            aria-haspopup="dialog"
-            aria-expanded={settingsOpen}
-            onClick={(event) => openSettings("general", event.currentTarget)}
-          >
-            <span aria-hidden="true">⚙</span>
-            <span className="utility-label">{t("app.settings")}</span>
-          </button>
-          {authMode === "password_required" ? <button type="button" aria-label={t("app.logout")} title={t("app.logout")} onClick={() => void signOut()}>
-            <span aria-hidden="true">↪</span>
-            <span className="utility-label">{t("app.logout")}</span>
-          </button> : null}
+          <UserMenu triggerRef={settingsButtonRef} onSettings={openSettings} onLogout={authMode === "password_required" ? () => void signOut() : undefined} />
         </nav>
       </aside>
 
@@ -566,37 +562,21 @@ export function App() {
         />
       </main>
 
-      <dialog
-        ref={settingsDialogRef}
-        className={`settings-dialog settings-dialog--${settingsSection}`}
+    </div>
+      <div
+        ref={settingsSurfaceRef}
+        hidden={!settingsOpen}
+        tabIndex={-1}
+        role="region"
+        className={`settings-surface settings-surface--${settingsSection}`}
         aria-labelledby="settings-page-title"
-        onClose={() => {
-          setSettingsOpen(false);
-          const scheduleConversationId = scheduleConversationTargetRef.current;
-          scheduleConversationTargetRef.current = null;
-          if (scheduleConversationId !== null) {
-            setConversationId(scheduleConversationId);
-            window.location.hash = `chat=${scheduleConversationId}`;
-            setMenuOpen(false);
-            window.requestAnimationFrame(() => appContentRef.current?.focus());
-            return;
-          }
-          const opener = settingsOpenerRef.current;
-          if (mobileNavigation && opener?.closest(".main-sidebar")) {
-            setMenuOpen(true);
-          }
-          window.requestAnimationFrame(() => {
-            if (opener?.isConnected) opener.focus();
-            else settingsButtonRef.current?.focus();
-          });
-        }}
-        onCancel={(event) => {
-          if (providerModalOpen || scheduleOverlayOpen || workspaceOverlayOpen || hasProviderModal()) event.preventDefault();
-        }}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) {
-            closeSettings();
-          }
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || event.defaultPrevented) return;
+          // Floating editors and menus own Escape before the settings page does.
+          const overlays = document.querySelectorAll('.ant-modal-wrap:not([style*="display: none"]), .ant-drawer-open, .ant-popover:not(.ant-popover-hidden), .ant-select-dropdown:not(.ant-select-dropdown-hidden), .ant-dropdown:not(.ant-dropdown-hidden)');
+          if (Array.from(overlays).some(overlay => !overlay.closest("[hidden]"))) return;
+          event.stopPropagation();
+          closeSettings();
         }}
       >
         <DeferredSettingsPage
@@ -632,7 +612,6 @@ export function App() {
           onProviderModalChange={setProviderModalOpen}
           onScheduleOverlayChange={setScheduleOverlayOpen}
         />
-      </dialog>
-    </div>
+      </div></>
   );
 }

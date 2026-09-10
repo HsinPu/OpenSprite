@@ -14,13 +14,31 @@
 .skills-settings > .ant-empty { padding-block: 32px; }
 .skills-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; border-bottom: 1px solid #ddd; }
 .skills-row-info { min-width: 0; flex: 1; }
-.skills-row-info h3 { margin: 0; font-size: 16px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skills-row-info h3 { margin: 0; font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
 .skills-row-info .ant-tag { margin-top: 6px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .skills-row-hint { margin: 6px 0 0; font-size: 13px; color: #737373; overflow-wrap: anywhere; }
 .skills-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .skills-remove.ant-btn { color: #737373; }
 .skills-remove.ant-btn:not(:disabled):hover { color: #d9363e; background: #fff1f0; }
 .skills-import-menu { display: grid; gap: 4px; padding: 8px; border-radius: 10px; background: white; box-shadow: 0 6px 24px #0002; }
+.skills-settings { container-type: inline-size; }
+.skills-intro, .skills-result-count, .skills-help { color: var(--settings-muted, #737373); font-size: 13px; line-height: 1.6; }
+.skills-help { margin-top: 16px; }
+.skills-help summary { cursor: pointer; width: fit-content; padding: 6px 0; }
+.skills-help summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.skills-filters { display: flex; gap: 12px; margin: 16px 0 8px; }
+.skills-filters > .ant-input-affix-wrapper { flex: 1; min-width: 0; }
+.skills-filters .ant-input-affix-wrapper input:focus-visible { outline: none; }
+.skills-filters > .ant-select { flex: 0 0 160px; min-width: 0; }
+.skills-inherited-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.skills-inherited-heading h3 { margin: 0; font-size: 16px; }
+.skills-empty { padding: 16px 0; color: var(--settings-muted, #737373); }
+.skills-settings > .ant-pagination { margin-top: 16px; }
+@container (max-width: 540px) {
+  .skills-filters { flex-direction: column; }
+  .skills-filters > .ant-select { flex-basis: auto; width: 100%; }
+  .skills-master { width: 100%; justify-content: space-between; }
+}
 @media (max-width: 600px) {
   .skills-master { width: 100%; justify-content: space-between; }
   .skills-toolbar-actions { width: 100%; }

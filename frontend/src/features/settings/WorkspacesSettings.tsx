@@ -1,5 +1,5 @@
-import { EditOutlined, FolderAddOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Drawer, Input, Modal, Popconfirm, Select, Switch, Tag } from "antd";
+import { DownOutlined, EditOutlined, FolderAddOutlined, FolderOpenOutlined, MoreOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
+import { Button, Drawer, Dropdown, Input, Modal, Popconfirm, Popover, Select, Switch, Tag } from "antd";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import {
@@ -56,7 +56,11 @@ export function WorkspacesSettings({
   const [mountDraft, setMountDraft] = useState<MountDraft>(emptyMount);
   const [formError, setFormError] = useState<string | null>(null);
   const [mountConfirmationOpen, setMountConfirmationOpen] = useState(false);
+  const [expandedMounts, setExpandedMounts] = useState<Record<string, boolean>>({});
+  const [removingWorkspace, setRemovingWorkspace] = useState<Workspace | null>(null);
+  const [visiblePath, setVisiblePath] = useState<string | null>(null);
   const opener = useRef<HTMLElement | null>(null);
+  const workspaceRoot = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const resize = () => setMobile(window.innerWidth <= 767);
@@ -64,12 +68,15 @@ export function WorkspacesSettings({
     return () => window.removeEventListener("resize", resize);
   }, []);
 
-  const anyOverlay = workspaceEditorOpen || importOpen || mountEditorOpen || mountConfirmationOpen;
+  const anyOverlay = workspaceEditorOpen || importOpen || mountEditorOpen || mountConfirmationOpen || removingWorkspace !== null;
   useEffect(() => { onOverlayChange?.(anyOverlay); }, [anyOverlay, onOverlayChange]);
   useEffect(() => () => onOverlayChange?.(false), [onOverlayChange]);
 
   const rememberOpener = (source: HTMLElement) => { opener.current = source; };
-  const restoreFocus = () => window.requestAnimationFrame(() => opener.current?.focus());
+  const restoreFocus = () => window.requestAnimationFrame(() => {
+    if (opener.current?.isConnected) opener.current.focus();
+    else workspaceRoot.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  });
   const closeWorkspaceEditor = () => { setWorkspaceEditorOpen(false); restoreFocus(); };
   const closeImport = () => { setImportOpen(false); restoreFocus(); };
   const closeMountEditor = () => { setMountConfirmationOpen(false); setMountEditorOpen(false); restoreFocus(); };
@@ -158,6 +165,7 @@ export function WorkspacesSettings({
           mountDraft.accessMode,
         );
       }
+      setExpandedMounts(current => ({ ...current, [mountWorkspace.id]: true }));
       closeMountEditor();
     } catch (error) {
       setFormError(workspaceErrorText(error, t));
@@ -214,20 +222,56 @@ export function WorkspacesSettings({
     {formError ? <p className="workspace-editor__error" role="alert">{formError}</p> : null}
   </div>;
 
-  return <section className="workspace-settings" aria-label={t("settings.category.workspaces")}>
-    <div className="workspace-settings__toolbar"><Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={(event) => openWorkspaceEditor(null, event.currentTarget)} disabled={!controller.catalog || controller.saving}>{t("workspaces.create")}</Button><Button icon={<FolderAddOutlined aria-hidden="true" />} onClick={(event) => openImport(event.currentTarget)} disabled={!controller.catalog || controller.saving}>{t("workspaces.importExisting")}</Button></div>
+  return <section ref={workspaceRoot} className="workspace-settings" aria-label={t("settings.category.workspaces")}>
+    <header className="workspace-settings__heading"><div className="settings-intro"><h2>{t("settings.category.workspaces")}</h2><p>{t("settings.workspacesIntro")}</p></div><div className="workspace-settings__toolbar"><Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={(event) => openWorkspaceEditor(null, event.currentTarget)} disabled={!controller.catalog || controller.saving}>{t("workspaces.create")}</Button><Button icon={<FolderAddOutlined aria-hidden="true" />} onClick={(event) => openImport(event.currentTarget)} disabled={!controller.catalog || controller.saving}>{t("workspaces.importExisting")}</Button></div></header>
     <p className="settings-control-description">{t("workspaces.noFileToolsNotice")}</p>
     {controller.loading ? <p role="status">{t("workspaces.loading")}</p> : null}
     {controller.error ? <div className="settings-model-load-error" role="alert"><p>{workspaceErrorText(controller.error, t)}</p><Button onClick={() => void controller.reload()}>{t("common.retry")}</Button></div> : null}
     <div className="workspace-settings__list">{controller.catalog?.workspaces.map((item) => {
       const empty = item.usage.conversationCount === 0 && item.usage.scheduleCount === 0 && item.usage.activeRunCount === 0;
+      const expanded = item.mounts.length > 0 && Boolean(expandedMounts[item.id]);
+      const failures = item.mounts.filter(mount => mount.availability === "unavailable").length;
+      const mountListId = `workspace-mounts-${item.id}`;
       return <article className="workspace-settings__item" key={item.id}>
-        <div className="workspace-settings__summary"><div><h3>{displayName(item)}</h3><p title={item.rootPath}>{item.rootPath}</p><small>{t("workspaces.directoryName", { name: item.directoryName })}</small></div><Tag color={item.availability === "available" ? "green" : "red"}>{availability(item)}</Tag></div>
-        <dl><div><dt>{t("workspaces.conversations")}</dt><dd>{item.usage.conversationCount}</dd></div><div><dt>{t("workspaces.schedules")}</dt><dd>{item.usage.scheduleCount}</dd></div><div><dt>{t("workspaces.activeRuns")}</dt><dd>{item.usage.activeRunCount}</dd></div></dl>
-        <section className="workspace-mounts" aria-label={`${t("workspaces.mounts")} ${displayName(item)}`}><div className="workspace-mounts__header"><h4>{t("workspaces.mounts")}</h4><Button aria-label={`${t("workspaces.addMount")} ${displayName(item)}`} icon={<PlusOutlined aria-hidden="true" />} disabled={controller.saving || item.usage.activeRunCount > 0 || item.mounts.length >= 20} onClick={(event) => openMountEditor(item, null, event.currentTarget)}>{t("workspaces.addMount")}</Button></div>{item.mounts.length === 0 ? <p>{t("workspaces.noMounts")}</p> : item.mounts.map((mount) => <article className="workspace-mount" key={mount.id}><div><strong>{mount.alias}</strong><span title={mount.rootPath}>{mount.rootPath}</span><small>{t(mount.accessMode === "read_only" ? "workspaces.readOnly" : "workspaces.readWrite")} · {availability(mount)}</small></div><div><Button aria-label={`${t("common.edit")} ${mount.alias}`} icon={<EditOutlined aria-hidden="true" />} disabled={controller.saving || item.usage.activeRunCount > 0} onClick={(event) => openMountEditor(item, mount, event.currentTarget)}>{t("common.edit")}</Button><Popconfirm getPopupContainer={() => container ?? document.body} title={t("workspaces.removeMountConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.removeMount(item, mount.id).catch(() => undefined)}><Button aria-label={`${t("common.remove")} ${mount.alias}`} danger disabled={controller.saving || item.usage.activeRunCount > 0}>{t("common.remove")}</Button></Popconfirm></div></article>)}</section>
-        <div className="workspace-settings__actions">{item.kind === "managed" ? <><Button aria-label={`${t("common.edit")} ${displayName(item)}`} icon={<EditOutlined aria-hidden="true" />} onClick={(event) => openWorkspaceEditor(item, event.currentTarget)}>{t("common.edit")}</Button><Popconfirm getPopupContainer={() => container ?? document.body} title={t("workspaces.deleteConfirm")} description={empty ? t("workspaces.deletePreservesDirectory") : t("workspaces.deleteBlocked")} okText={t("common.remove")} cancelText={t("common.cancel")} disabled={!empty} onConfirm={async () => { await controller.remove(item); if (item.id === controller.catalog?.activeWorkspaceId) onActivated(DEFAULT_WORKSPACE_ID); }}><Button aria-label={`${t("common.remove")} ${displayName(item)}`} danger disabled={!empty || controller.saving}>{t("common.remove")}</Button></Popconfirm></> : <Tag>{t("workspaces.defaultFixed")}</Tag>}</div>
+        <div className="workspace-settings__summary">
+          <div>
+            <div className="workspace-settings__name"><h3>{displayName(item)}</h3>{item.kind === "default" ? <Tag>{t("workspaces.defaultBadge")}</Tag> : null}<Tag color={item.availability === "available" ? "green" : "red"}>{availability(item)}</Tag></div>
+            <Popover open={visiblePath === item.id} onOpenChange={open => setVisiblePath(current => open ? item.id : current === item.id ? null : current)} trigger={["hover", "click"]} content={<span className="workspace-full-path">{item.rootPath}</span>} getPopupContainer={() => container ?? document.body}>
+              <button type="button" className="workspace-settings__path" aria-expanded={visiblePath === item.id} aria-label={t("workspaces.showPath", { name: displayName(item) })} onKeyDown={event => { if (event.key === "Escape" && visiblePath === item.id) { event.stopPropagation(); setVisiblePath(null); } }}>{item.rootPath}</button>
+            </Popover>
+          </div>
+          {item.kind === "managed" ? <Dropdown trigger={["click"]} getPopupContainer={() => container ?? document.body} menu={{ items: [
+            { key: "edit", label: t("common.edit"), icon: <EditOutlined aria-hidden="true" /> },
+            { type: "divider" },
+            { key: "remove", danger: true, disabled: !empty || controller.saving, label: <span>{t("common.remove")}{!empty ? <small className="workspace-delete-reason">{t("workspaces.deleteBlocked")}</small> : null}</span> },
+          ], onClick: ({ key }) => {
+            const trigger = document.getElementById(`workspace-actions-${item.id}`);
+            if (!trigger) return;
+            if (key === "edit") openWorkspaceEditor(item, trigger);
+            if (key === "remove" && empty && !controller.saving) { rememberOpener(trigger); setFormError(null); setRemovingWorkspace(item); }
+          } }}>
+            <Button id={`workspace-actions-${item.id}`} type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={t("workspaces.actions", { name: displayName(item) })} />
+          </Dropdown> : null}
+        </div>
+        <dl className="workspace-settings__stats"><div><dt>{t("workspaces.conversations")}</dt><dd>{item.usage.conversationCount}</dd></div><div><dt>{t("workspaces.schedules")}</dt><dd>{item.usage.scheduleCount}</dd></div><div><dt>{t("workspaces.activeRuns")}</dt><dd>{item.usage.activeRunCount}</dd></div></dl>
+        <section className="workspace-mounts" aria-label={`${t("workspaces.mounts")} ${displayName(item)}`}>
+          <div className="workspace-mounts__header">
+            <div className="workspace-mounts__title">{item.mounts.length > 0
+              ? <button type="button" className="workspace-mounts__toggle" aria-expanded={expanded} aria-controls={mountListId} onClick={() => setExpandedMounts(current => ({ ...current, [item.id]: !expanded }))}>{expanded ? <DownOutlined aria-hidden="true" /> : <RightOutlined aria-hidden="true" />}{t("workspaces.mounts")}（{item.mounts.length}）</button>
+              : <h4>{t("workspaces.mounts")}（0）</h4>}
+              {failures > 0 ? <Tag color="error">{t("workspaces.mountIssues", { count: failures })}</Tag> : null}
+            </div>
+            <Button aria-label={`${t("workspaces.addMount")} ${displayName(item)}`} icon={<PlusOutlined aria-hidden="true" />} disabled={controller.saving || item.usage.activeRunCount > 0 || item.mounts.length >= 20} onClick={(event) => openMountEditor(item, null, event.currentTarget)}>{t("workspaces.addMount")}</Button>
+          </div>
+          {item.mounts.length > 0 ? <div id={mountListId} hidden={!expanded} className="workspace-mounts__list">{item.mounts.map((mount) => <article className="workspace-mount" key={mount.id}><div><strong>{mount.alias}</strong><span title={mount.rootPath}>{mount.rootPath}</span><small>{t(mount.accessMode === "read_only" ? "workspaces.readOnly" : "workspaces.readWrite")} · {availability(mount)}</small></div><div><Button aria-label={`${t("common.edit")} ${mount.alias}`} icon={<EditOutlined aria-hidden="true" />} disabled={controller.saving || item.usage.activeRunCount > 0} onClick={(event) => openMountEditor(item, mount, event.currentTarget)}>{t("common.edit")}</Button><Popconfirm getPopupContainer={() => container ?? document.body} title={t("workspaces.removeMountConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.removeMount(item, mount.id).catch(() => undefined)}><Button aria-label={`${t("common.remove")} ${mount.alias}`} danger disabled={controller.saving || item.usage.activeRunCount > 0}>{t("common.remove")}</Button></Popconfirm></div></article>)}</div> : null}
+        </section>
       </article>;
     })}</div>
+    <Modal getContainer={container ?? false} open={removingWorkspace !== null} title={t("workspaces.deleteConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} okButtonProps={{ danger: true }} confirmLoading={controller.saving} onCancel={() => { setRemovingWorkspace(null); restoreFocus(); }} onOk={async () => {
+      if (!removingWorkspace) return;
+      try { await controller.remove(removingWorkspace); if (removingWorkspace.id === controller.catalog?.activeWorkspaceId) onActivated(DEFAULT_WORKSPACE_ID); setRemovingWorkspace(null); restoreFocus(); }
+      catch (error) { setFormError(workspaceErrorText(error, t)); }
+    }} destroyOnHidden><p>{t("workspaces.deletePreservesDirectory")}</p>{formError ? <p role="alert">{formError}</p> : null}</Modal>
     {overlay(workspaceEditorOpen, editingWorkspace ? t("workspaces.editTitle") : t("workspaces.createTitle"), closeWorkspaceEditor, workspaceEditor)}
     {overlay(importOpen, t("workspaces.importTitle"), closeImport, importBody)}
     {overlay(mountEditorOpen, editingMount ? t("workspaces.editMountTitle") : t("workspaces.addMountTitle"), closeMountEditor, mountEditor)}

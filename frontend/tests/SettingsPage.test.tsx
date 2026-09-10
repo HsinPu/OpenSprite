@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { StrictMode, useState, type ComponentProps } from "react";
+import { StrictMode, useEffect, useState, type ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPage as ProductionSettingsPage } from "../src/features/settings/SettingsPage";
+import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
+import type { Locale } from "../src/i18n/catalog";
 import type { SettingsSection } from "../src/features/settings/settingsState";
 import type { ResponseDelivery, ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
@@ -147,13 +149,13 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, aiSettingsLoaded = true }: { initialSelection?: ModelSelection | null; aiSettingsLoaded?: boolean }) {
+function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, aiSettingsLoaded = true, logFullPrompts = false }: { initialSelection?: ModelSelection | null; aiSettingsLoaded?: boolean; logFullPrompts?: boolean }) {
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
   const [outputContinuation, setOutputContinuation] = useState<"off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited">("5");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={false} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
 }
 
 function GuardedDialogHarness() {
@@ -175,7 +177,45 @@ function GeneralSettingsPageHarness({ saving = false, section = "general" }: { s
   return <SettingsPage section={section} onSectionChange={() => undefined} modelSelection={null} responseMode="default" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
 }
 
+function LocalizedModels({ locale }: { locale: Locale }) {
+  const { setLocale } = useI18n();
+  useEffect(() => { setLocale(locale); }, [locale, setLocale]);
+  return <SettingsHarness logFullPrompts />;
+}
+
 describe("provider settings", () => {
+  it.each([
+    ["zh-TW", "供應商連線", "預設模型", "回覆設定", "進階與除錯", "記錄已開啟", "規劃中功能"],
+    ["en", "Provider connections", "Default model", "Response settings", "Advanced and debugging", "Logging enabled", "Planned features"],
+    ["ja", "プロバイダー接続", "既定のモデル", "応答設定", "詳細設定とデバッグ", "記録は有効です", "今後の機能"],
+  ] as const)("localizes the ordered groups and visible logging status in %s", async (locale, providers, model, response, advanced, logging, planned) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
+    render(<I18nProvider><LocalizedModels locale={locale} /></I18nProvider>);
+    await screen.findByRole("heading", { name: providers });
+    expect(screen.getAllByRole("heading", { level: 3 }).map(item => item.textContent)).toEqual([providers, model, response]);
+    const disclosure = screen.getByRole("button", { name: new RegExp(advanced) });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(within(disclosure).getByText(logging)).toBeTruthy();
+    expect(screen.getByRole("button", { name: planned }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("orders connections before the model and response settings, keeping advanced controls collapsed", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness />);
+    await screen.findByRole("button", { name: "OpenAI 操作" });
+    expect(screen.getAllByRole("heading", { level: 3 }).map((item) => item.textContent)).toEqual(["供應商連線", "預設模型", "回覆設定"]);
+    expect(within(screen.getByRole("region", { name: "預設模型" })).getByRole("group", { name: "回應模式" })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "回覆設定" })).getByLabelText("對話內容上限")).toBeTruthy();
+    expect(screen.queryByText("••••1234")).toBeNull();
+    expect(screen.queryByRole("switch", { name: "記錄完整送出 Prompt" })).toBeNull();
+    const calls = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "進階與除錯" }));
+    expect(screen.getByRole("switch", { name: "記錄完整送出 Prompt" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "進階與除錯" }));
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
   it("offers custom connection as the final provider row instead of an add button", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(connectedCatalog)))));
     const { container } = render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "auto" }} />);
@@ -253,6 +293,7 @@ describe("provider settings", () => {
     expect(responseModes.querySelectorAll("button:not(:disabled)")).toHaveLength(0);
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
     expect(screen.getByRole("combobox", { name: "自動續接過長回覆" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "進階與除錯" }));
     expect(screen.getByRole("switch", { name: "記錄完整送出 Prompt" }).classList.contains("ant-switch-disabled")).toBe(true);
   });
 
@@ -290,6 +331,8 @@ describe("provider settings", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
 
+    expect(screen.queryByText("未來上線")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "規劃中功能" }));
     expect(screen.getAllByText("未來上線")).toHaveLength(2);
     expect(screen.getByText("自動選擇可用模型")).toBeTruthy();
     expect(screen.getByText("顯示模型名稱")).toBeTruthy();
@@ -307,19 +350,23 @@ describe("provider settings", () => {
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
     expect(screen.getAllByText("Demo")).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "啟動與對話" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "對話偏好" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "執行面板" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "啟動時開啟" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "訊息傳送方式" })).toBeTruthy();
     const autoScroll = screen.getByRole("switch", { name: "自動捲動至最新訊息" });
     const executionPanel = screen.getByRole("switch", { name: "預設展開執行資訊" });
     expect(autoScroll.getAttribute("aria-checked")).toBe("true");
     expect(executionPanel.getAttribute("aria-checked")).toBe("false");
+    expect(screen.queryByText("未來上線")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "規劃中功能" }));
     expect(screen.getAllByText("未來上線")).toHaveLength(1);
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByText("已儲存")).toBeNull();
-    fireEvent.change(screen.getByRole("combobox", { name: "啟動時開啟" }), { target: { value: "recent" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "訊息傳送方式" }), { target: { value: "modifier-enter" } });
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "啟動時開啟" }));
+    fireEvent.click(screen.getByText("最近更新的對話"));
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "訊息傳送方式" }));
+    fireEvent.click(screen.getByText("Ctrl / Cmd + Enter 傳送"));
     fireEvent.click(autoScroll);
     fireEvent.click(executionPanel);
     expect(saveStartupView).toHaveBeenCalledWith("recent");
@@ -378,11 +425,14 @@ describe("provider settings", () => {
     const calculatorSwitch = screen.getByRole("switch", { name: "啟用工具：計算器" });
     expect(globalSwitch.getAttribute("aria-checked")).toBe("true");
     expect(calculatorSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("內建 · 唯讀")).toBeTruthy();
-    expect(screen.getByText("可使用")).toBeTruthy();
+    expect(screen.getByText("內建")).toBeTruthy();
+    expect(screen.getByText("唯讀")).toBeTruthy();
+    expect(screen.queryByText("可使用")).toBeNull();
+    expect(screen.queryByText("自訂工具")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "規劃中功能" }));
     expect(screen.getAllByText("未來上線")).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "MCP Server" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "新增 MCP Server" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "MCP 連線" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "新增連線" })).toBeTruthy();
     expect(screen.getByText("自訂工具")).toBeTruthy();
     expect(screen.getByText("第三方服務")).toBeTruthy();
 
@@ -396,7 +446,7 @@ describe("provider settings", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<GeneralSettingsPageHarness section="tools" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
     const transport = await screen.findByRole("combobox", { name: "連線方式" });
     fireEvent.mouseDown(transport);
     const option = (await screen.findByText("網路位址")).closest(".ant-select-item-option")!;
@@ -472,8 +522,8 @@ describe("provider settings", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(checkedFailure)));
     vi.stubGlobal("fetch", fetchMock);
     render(<SettingsHarness />);
-    await screen.findAllByText("測試連線");
-    fireEvent.click(screen.getByRole("button", { name: "測試連線" }));
+    fireEvent.click(await screen.findByRole("button", { name: "OpenAI 操作" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "測試連線" }));
     expect(await screen.findByText("API 金鑰無效")).toBeTruthy();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect((screen.getByLabelText("模型") as HTMLInputElement).closest(".ant-select")?.className).not.toContain("ant-select-disabled");
@@ -493,21 +543,26 @@ describe("provider settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SettingsHarness />);
 
-    await screen.findAllByText("測試連線");
+    await screen.findByRole("button", { name: "OpenAI 操作" });
     const openAiActions = screen.getByRole("group", { name: "OpenAI 操作" });
     const anthropicActions = screen.getByRole("group", { name: "Anthropic 操作" });
-    fireEvent.click(within(openAiActions).getByRole("button", { name: "測試連線" }));
-    fireEvent.click(within(openAiActions).getByRole("button", { name: "處理中…" }));
-    fireEvent.click(within(anthropicActions).getByRole("button", { name: "測試連線" }));
+    fireEvent.click(within(openAiActions).getByRole("button", { name: "OpenAI 操作" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "測試連線" }));
+    expect(within(openAiActions).getByRole("button", { name: "OpenAI 操作" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.click(within(anthropicActions).getByRole("button", { name: "Anthropic 操作" }));
+    fireEvent.click((await screen.findAllByRole("menuitem", { name: "測試連線" })).at(-1)!);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(openAiActions.getAttribute("aria-busy")).toBe("true");
     expect(anthropicActions.getAttribute("aria-busy")).toBe("true");
     expect(screen.getAllByText("OpenAI 正在測試連線。")).toHaveLength(1);
-    expect(document.querySelector(".settings-provider-announcement")?.getAttribute("aria-atomic")).toBeNull();
+    expect(openAiActions.closest(".settings-service-card")?.textContent).toContain("OpenAI 正在測試連線。");
 
     anthropicTest.resolve(new Response(JSON.stringify({ ...connectedBothCatalog.providers[1], credentialPreview: "••••9999" })));
-    await screen.findByText("••••9999");
+    await waitFor(() => expect(anthropicActions.getAttribute("aria-busy")).toBe("false"));
+    fireEvent.click(within(anthropicActions).getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("••••9999")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(anthropicActions.getAttribute("aria-busy")).toBe("false");
 
     openAiTest.resolve(new Response(JSON.stringify({ error: { code: "invalid_credentials", message: "private", retryable: false } }), { status: 422 }));
@@ -519,7 +574,8 @@ describe("provider settings", () => {
     ] })));
 
     await screen.findByText("API 金鑰無效");
-    expect(screen.getByText("••••9999")).toBeTruthy();
+    fireEvent.click(within(anthropicActions).getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("••••9999")).toBeTruthy();
     expect(openAiActions.getAttribute("aria-busy")).toBe("false");
   });
 
@@ -725,9 +781,10 @@ describe("provider settings", () => {
 
     const openRouterActions = await screen.findByRole("group", { name: "OpenRouter 操作" });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    fireEvent.click(within(openRouterActions).getByRole("button", { name: "移除" }));
+    fireEvent.click(within(openRouterActions).getByRole("button", { name: "OpenRouter 操作" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "移除連線" }));
     const confirmation = await screen.findByText("移除 OpenRouter 的已儲存 API 金鑰？");
-    const popover = confirmation.closest(".ant-popover")!;
+    const popover = confirmation.closest(".ant-modal")!;
     expect(document.querySelector(".settings-page")?.contains(popover)).toBe(true);
     fireEvent.click(within(popover as HTMLElement).getByRole("button", { name: /移\s*除/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));

@@ -112,40 +112,70 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe("settings dialog focus restoration", () => {
-  it("uses compact General height and full Models height", async () => {
+async function openSettingsMenu() {
+  const opener = screen.getByRole("button", { name: "使用者" });
+  fireEvent.click(opener);
+  fireEvent.click(await screen.findByRole("menuitem", { name: "設定" }));
+  await screen.findByRole("button", { name: "返回對話" });
+  return opener;
+}
+
+describe("settings page focus restoration", () => {
+  it("preserves the chat DOM, draft and hash while settings are open", async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    const dialog = container.querySelector("dialog")!;
-    expect(dialog.classList.contains("settings-dialog--general")).toBe(true);
+    const input = screen.getByRole("textbox", { name: "輸入訊息" });
+    fireEvent.change(input, { target: { value: "unsent settings draft" } });
+    const hash = window.location.hash;
+    await openSettingsMenu();
+    expect(container.querySelector(".app-shell")?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector(".app-shell")?.hasAttribute("hidden")).toBe(true);
+    expect(container.querySelector("textarea")).toBe(input);
+    expect(container.querySelector("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "返回對話" }));
+    expect(screen.getByRole("textbox", { name: "輸入訊息" })).toBe(input);
+    expect((input as HTMLTextAreaElement).value).toBe("unsent settings draft");
+    expect(window.location.hash).toBe(hash);
+  });
+
+  it("selects a category in the mobile drawer and closes the drawer only", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
+    await openSettingsMenu();
+    fireEvent.click(screen.getByRole("button", { name: "設定分類" }));
+    const drawer = container.querySelector<HTMLElement>(".settings-category-drawer")!;
+    fireEvent.click(within(drawer).getByRole("button", { name: "AI 模型" }));
+    expect(container.querySelector(".settings-surface--models")?.hasAttribute("hidden")).toBe(false);
+    expect(screen.getByRole("button", { name: "設定分類" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("uses a full-page surface for every section", async () => {
+    const { container } = render(<App />);
+    await openSettingsMenu();
+    const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
+    expect(dialog.classList.contains("settings-surface--general")).toBe(true);
 
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }, { timeout: 5000 }));
-    expect(dialog.classList.contains("settings-dialog--models")).toBe(true);
+    expect(dialog.classList.contains("settings-surface--models")).toBe(true);
   });
 
   it.each([[1440], [390]])("returns focus to the actual settings opener at %ipx after close", async (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     render(<App />);
     if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    const opener = screen.getByRole("button", { name: "設定" });
-    fireEvent.click(opener);
-    fireEvent.click(screen.getByRole("button", { name: "關閉設定" }));
+    const opener = await openSettingsMenu();
+    fireEvent.click(screen.getByRole("button", { name: "返回對話" }));
 
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
-  it.each([[1440], [390]])("returns focus to the opener after native-dialog Escape at %ipx", async (width) => {
+  it.each([[1440], [390]])("returns focus to the opener after settings Escape at %ipx", async (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     const { container } = render(<App />);
     if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    const opener = screen.getByRole("button", { name: "設定" });
-    fireEvent.click(opener);
-    const dialog = container.querySelector("dialog")!;
-    const cancel = new Event("cancel", { cancelable: true });
-    act(() => {
-      dialog.dispatchEvent(cancel);
-      if (!cancel.defaultPrevented) dialog.close();
-    });
+    const opener = await openSettingsMenu();
+    const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
+    fireEvent.keyDown(dialog, { key: "Escape" });
 
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
@@ -211,7 +241,7 @@ describe("Ant Design shell controls", () => {
     expect(container.querySelector(".chat-workspace__context-heading button")).toBeNull();
     expect(expandSidebar.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(expandSidebar);
-    expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "使用者" })).toBeTruthy();
   });
 
   it("uses only the mobile menu on narrow screens", () => {
@@ -241,7 +271,7 @@ describe("persisted AI settings", () => {
     render(<App />);
 
     expect(screen.queryByRole("combobox", { name: /目前模型/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
@@ -260,7 +290,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(true);
     hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
@@ -280,7 +310,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
@@ -300,7 +330,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
@@ -321,7 +351,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const deep = await screen.findByRole("button", { name: "深入" });
     expect(deep.getAttribute("aria-pressed")).toBe("true");
@@ -346,7 +376,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const balanced = await screen.findByRole("button", { name: "平衡" });
     await waitFor(() => expect(balanced.getAttribute("aria-pressed")).toBe("true"));
@@ -460,12 +490,12 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
 
     expect(within(sidebar).queryByRole("button", { name: "排程" })).toBeNull();
-    fireEvent.click(within(sidebar).getByRole("button", { name: "設定" }));
-    const dialog = container.querySelector<HTMLElement>(".settings-dialog")!;
+    await openSettingsMenu();
+    const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
 
     expect(within(dialog).getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
+    expect(container.querySelector(".app-shell")?.hasAttribute("hidden")).toBe(true);
     expect(window.location.hash).not.toBe("#schedules");
   });
 
@@ -488,13 +518,13 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const { container } = render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    const dialog = container.querySelector<HTMLDialogElement>(".settings-dialog")!;
+    await openSettingsMenu();
+    const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
     await screen.findByRole("heading", { name: "晨間整理" });
     fireEvent.click(screen.getByRole("button", { name: "開啟對話" }));
 
-    await waitFor(() => expect(dialog.open).toBe(false));
+    await waitFor(() => expect(dialog.hidden).toBe(true));
     expect(window.location.hash).toBe(`#chat=${conversationId}`);
     expect(container.querySelector("#main-navigation-sidebar")?.hasAttribute("inert")).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(container.querySelector(".app-content")));

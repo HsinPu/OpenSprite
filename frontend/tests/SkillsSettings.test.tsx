@@ -29,6 +29,43 @@ async function openBatchMenu(action: string) {
   fireEvent.click(await screen.findByRole("menuitem", { name: action }));
 }
 
+it("searches the full collection with normalized names and retains the batch scope", async () => {
+  vi.mocked(listSkills).mockResolvedValue({ revision: 1, enabled: true, skills: Array.from({ length: 297 }, (_, index) => ({ ...skill, id: String(index), name: index === 296 ? "Café-Review" : `skill-${index}` })) });
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await screen.findByText("skill-0");
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Skill 名稱" }), { target: { value: "CAFE\u0301" } });
+  expect(screen.getByText("Café-Review")).toBeTruthy();
+  expect(screen.queryByText("skill-0")).toBeNull();
+  expect(screen.getByText("符合 1 個／共 297 個")).toBeTruthy();
+  await openBatchMenu("全部啟用");
+  expect(screen.getByText("範圍：全域，共 297 個 Skills。")).toBeTruthy();
+  expect(screen.getByText(/不限搜尋結果或目前頁面/)).toBeTruthy();
+});
+
+it("filters enabled settings separately from effective state and shows no matches", async () => {
+  vi.mocked(listSkills).mockResolvedValue({ revision: 1, enabled: false, skills: [skill, { ...skill, id: "other", name: "broken", enabled: true, state: "missing", reason: "missing" }] });
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await screen.findByText("review");
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "篩選狀態" }));
+  fireEvent.click(await screen.findByText("已啟用"));
+  expect(screen.queryByText("review")).toBeNull();
+  expect(screen.getByText("broken")).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Skill 名稱" }), { target: { value: "not-found" } });
+  expect(screen.getByText("沒有符合搜尋條件的 Skills。")).toBeTruthy();
+  expect(screen.getByText("Skills 使用已暫停，個別設定仍會保留。")).toBeTruthy();
+});
+
+it("retains rows after a failed refresh but prevents stale writes", async () => {
+  render(<SkillsSettings workspaces={{ catalog: null }} container={null} />);
+  await screen.findByText("review");
+  vi.mocked(listSkills).mockRejectedValue(new Error("network_error"));
+  fireEvent.click(screen.getByRole("button", { name: "重新掃描" }));
+  await screen.findByRole("alert");
+  expect(screen.getByText("review")).toBeTruthy();
+  expect((screen.getByRole("switch", { name: "啟用 review" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "批次操作" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
 it("renders bounded pages while batch actions retain the complete scope", async () => {
   vi.mocked(listSkills).mockResolvedValue({ revision: 1, enabled: true,
     skills: Array.from({ length: 45 }, (_, index) => ({ ...skill, id: `${index}`, name: `skill-${index}` })) });
@@ -104,10 +141,10 @@ it("shows automatic inheritance read-only and warns about disabled workspace sha
   await screen.findByText("review");
   fireEvent.click(screen.getByRole("tab", { name: "工作區" }));
   expect(await screen.findByText("已由工作區版本取代")).toBeTruthy();
-  expect(screen.getByText("繼承自全域")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /繼承自全域/ })).toBeTruthy();
   expect(screen.getByText("此工作區版本目前不可用，不會回退同名全域版本。")).toBeTruthy();
   expect(screen.getAllByRole("switch")).toHaveLength(2);
-  expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  expect(screen.getAllByRole("combobox")).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "移除 review" }));
   expect(await screen.findByText("移除後，後續執行會重新繼承可用的同名全域 Skill。")).toBeTruthy();
   expect(skillRequest).not.toHaveBeenCalled();
@@ -115,7 +152,7 @@ it("shows automatic inheritance read-only and warns about disabled workspace sha
 
 it.each(["zh-TW", "en", "ja"] as const)("provides inheritance messages in %s", locale => {
   const t = createTranslator(locale);
-  for (const key of ["skills.inherited", "skills.inheritanceHint", "skills.shadowed", "skills.nameConflict", "skills.noFallback", "skills.removeInheritance"] as const) {
+  for (const key of ["skills.inherited", "skills.inheritanceHint", "skills.shadowed", "skills.nameConflict", "skills.noFallback", "skills.removeInheritance", "skills.search", "skills.filter", "skills.filterAll", "skills.filterEnabled", "skills.filterAbnormal", "skills.results", "skills.noMatches", "skills.workspaceEmpty", "skills.manageGlobal", "skills.batchUnfiltered", "skills.shortIntro", "skills.paused", "skills.help"] as const) {
     expect(t(key)).not.toBe(key);
     expect(t(key).length).toBeGreaterThan(0);
   }
@@ -128,8 +165,8 @@ it("imports Markdown locally with a filename without saving or enabling", async 
   const file = new File([content], "SKILL.md", { type: "text/markdown" });
   Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode(content).buffer });
   fireEvent.change(document.querySelector('input[accept=".md,text/markdown"]')!, { target: { files: [file] } });
-  expect((await screen.findByRole("status")).textContent).toBe("SKILL.md");
-  expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(content);
+  expect((await screen.findByText("SKILL.md")).textContent).toBe("SKILL.md");
+  expect((screen.getByRole("textbox", { name: "SKILL.md 內容" }) as HTMLTextAreaElement).value).toBe(content);
   expect(skillRequest).not.toHaveBeenCalled();
 });
 
@@ -145,7 +182,7 @@ it.each([
   Object.defineProperty(file, "arrayBuffer", { value: async () => typeof bytes === "string" ? new TextEncoder().encode(bytes).buffer : bytes.buffer });
   fireEvent.change(document.querySelector('input[accept=".md,text/markdown"]')!, { target: { files: [file] } });
   await waitFor(() => expect(screen.getAllByRole("alert").some(item => item.textContent?.includes(code))).toBe(true));
-  expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("---\nname: \ndescription: \n---\n");
+  expect((screen.getByRole("textbox", { name: "SKILL.md 內容" }) as HTMLTextAreaElement).value).toBe("---\nname: \ndescription: \n---\n");
   expect(skillRequest).not.toHaveBeenCalled();
 });
 it("enables directly without editing or version confirmation", async () => {
@@ -187,7 +224,7 @@ it("does not expose the previous workspace actions while the next workspace load
   fireEvent.click(screen.getByRole("tab", { name: "工作區" }));
   expect(await screen.findByText("alpha-skill")).toBeTruthy();
 
-  fireEvent.mouseDown(screen.getByRole("combobox"));
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "工作區" }));
   fireEvent.click(await screen.findByText("Beta"));
 
   expect(screen.queryByText("alpha-skill")).toBeNull();
@@ -204,7 +241,7 @@ it("keeps the editor open when the post-save refresh fails", async () => {
 
   await waitFor(() => expect(screen.getAllByRole("alert").some(item => item.textContent?.includes("network_error"))).toBe(true));
   expect(screen.getByRole("button", { name: /儲\s*存/ })).toBeTruthy();
-  expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
+  expect((screen.getByRole("textbox", { name: "SKILL.md 內容" }) as HTMLTextAreaElement).disabled).toBe(true);
   expect((screen.getByRole("button", { name: "匯入 SKILL.md" }) as HTMLButtonElement).disabled).toBe(true);
 });
 

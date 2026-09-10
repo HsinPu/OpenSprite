@@ -45,13 +45,54 @@ beforeEach(() => {
 });
 
 describe("Workspace settings", () => {
-  it("shows managed roots and keeps the fixed default Workspace immutable", () => {
+  it("shows a selectable full path and closes it with Escape", async () => {
+    render(<WorkspacesSettings controller={controller} container={null} onActivated={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "查看 Alpha 的完整路徑" });
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".workspace-full-path")?.textContent).toBe(alpha.rootPath);
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("requires confirmation before removing an empty Workspace", async () => {
+    render(<WorkspacesSettings controller={controller} container={null} onActivated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Empty 的工作區操作" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "移除" }));
+    expect(remove).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /移.*除/ }));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(empty));
+  });
+
+  it("does not show an expansion control for empty mounts", () => {
+    render(<WorkspacesSettings controller={controller} container={null} onActivated={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "外部掛載（0）" })).toBeNull();
+    expect(screen.getAllByRole("heading", { name: "外部掛載（0）" })).toHaveLength(3);
+  });
+
+  it("automatically expands a newly added mount after the catalog updates", async () => {
+    const { rerender } = render(<WorkspacesSettings controller={controller} container={null} onActivated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "新增掛載 Alpha" }));
+    fireEvent.change(screen.getByLabelText("掛載名稱"), { target: { value: "Docs" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /外部目錄/ }), { target: { value: "D:\\Docs" } });
+    fireEvent.click(screen.getByRole("button", { name: /儲.*存/ }));
+    await waitFor(() => expect(addMount).toHaveBeenCalledWith(alpha, "Docs", "D:\\Docs", "read_only"));
+    const mounted: Workspace = { ...alpha, mounts: [{ id: "33333333-3333-4333-8333-333333333333", alias: "Docs", rootPath: "D:\\Docs", rootHash: "a".repeat(64), accessMode: "read_only", enabled: true, availability: "available", unavailableReason: null }] };
+    rerender(<WorkspacesSettings controller={{ ...controller, catalog: { ...catalog, workspaces: [mounted] } }} container={null} onActivated={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "外部掛載（1）" }).getAttribute("aria-expanded")).toBe("true"));
+    expect(screen.getByRole("button", { name: "編輯 Docs" })).toBeTruthy();
+  });
+
+  it("shows managed roots and keeps the fixed default Workspace immutable", async () => {
     render(<WorkspacesSettings controller={controller} container={null} onActivated={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "預設工作區" })).toBeTruthy();
-    expect(screen.getByText("固定工作區")).toBeTruthy();
+    expect(screen.getByText("預設")).toBeTruthy();
     expect(screen.getByText("C:\\Users\\Test\\OpenSprite\\workspace\\Alpha")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "移除 Alpha" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "預設工作區 的工作區操作" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Alpha 的工作區操作" }));
+    expect((await screen.findByRole("menuitem", { name: /移除/ })).getAttribute("aria-disabled")).toBe("true");
   });
 
   it.each([[1440, ".ant-modal"], [390, ".ant-drawer"]])("creates a managed Workspace at %ipx without asking for a root", async (width, selector) => {
@@ -108,6 +149,10 @@ describe("Workspace settings", () => {
     const legacyCatalog = { ...catalog, workspaces: [defaultWorkspace, legacy, empty] };
     render(<WorkspacesSettings controller={{ ...controller, catalog: legacyCatalog, activeWorkspace: legacy }} container={null} onActivated={vi.fn()} />);
 
+    expect(screen.getByText("1 項異常")).toBeTruthy();
+    const toggle = screen.getByRole("button", { name: "外部掛載（1）" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
     expect(screen.getByText(/路徑與其他工作區重疊/)).toBeTruthy();
   });
 
@@ -130,6 +175,7 @@ describe("Workspace settings", () => {
     };
     render(<WorkspacesSettings controller={{ ...controller, catalog: { ...catalog, workspaces: [defaultWorkspace, mounted, empty] }, activeWorkspace: mounted }} container={null} onActivated={vi.fn()} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "外部掛載（1）" }));
     fireEvent.click(screen.getByRole("button", { name: "編輯 Docs" }));
     if (change === "path") {
       fireEvent.change(screen.getByRole("textbox", { name: /外部目錄/ }), { target: { value: path } });

@@ -60,11 +60,27 @@ function renderSettings(value: McpConnectionsController) {
 }
 
 describe("McpServersSettings", () => {
+  it("hides command details and requires confirmation before removal", async () => {
+    const remove = vi.fn(async () => null);
+    const test = vi.fn(async () => null);
+    renderSettings(controller({ servers: [server], remove, test }));
+    expect(screen.queryByText(/C:\\Python312/)).toBeNull();
+    expect(screen.getByText("工具與連線資訊").closest("details")?.open).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "管理連線：Local Echo" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /移\s*除/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(remove).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: /移\s*除/ }));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(server.id));
+    expect(test).not.toHaveBeenCalled();
+  });
+
   it("requires a second confirmation that exposes the exact command before saving", async () => {
     const create = vi.fn(async () => null);
     renderSettings(controller({ create }));
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
+    fireEvent.click(screen.getByText("進階設定"));
     expect(screen.getByRole("switch", { name: "OpenSprite 啟動時自動啟動或連線" }).getAttribute("aria-checked")).toBe("true");
     fireEvent.change(await screen.findByLabelText("顯示名稱"), { target: { value: "Local Echo" } });
     fireEvent.change(screen.getByLabelText("Executable 絕對路徑"), { target: { value: "C:\\Python312\\python.exe" } });
@@ -108,7 +124,7 @@ describe("McpServersSettings", () => {
     const create = vi.fn(async () => null);
     renderSettings(controller({ create }));
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
     fireEvent.change(await screen.findByLabelText("顯示名稱"), { target: { value: "Remote MCP" } });
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "連線方式" }));
     fireEvent.click((await screen.findByText("網路位址")).closest(".ant-select-item-option")!);
@@ -134,7 +150,7 @@ describe("McpServersSettings", () => {
     const create = vi.fn(async () => null);
     renderSettings(controller({ create }));
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
     fireEvent.change(await screen.findByLabelText("顯示名稱"), { target: { value: "Protected MCP" } });
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "連線方式" }));
     fireEvent.click((await screen.findByText("網路位址")).closest(".ant-select-item-option")!);
@@ -166,7 +182,9 @@ describe("McpServersSettings", () => {
     };
     renderSettings(controller({ servers: [protectedServer], update }));
 
-    fireEvent.click(screen.getByRole("button", { name: /編\s*輯/ }));
+    fireEvent.click(screen.getByRole("button", { name: "管理連線：Local Echo" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /編\s*輯/ }));
+    fireEvent.click(screen.getByText("進階設定"));
     expect(screen.getByRole("switch", { name: "OpenSprite 啟動時自動啟動或連線" }).getAttribute("aria-checked")).toBe("false");
     const token = await screen.findByPlaceholderText("留空以保留目前的 Token");
     expect(token.getAttribute("placeholder")).toBe("留空以保留目前的 Token");
@@ -189,7 +207,7 @@ describe("McpServersSettings", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderSettings(controller());
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
     fireEvent.click(await screen.findByRole("button", { name: /瀏覽執行檔/ }));
     await waitFor(() => expect((screen.getByLabelText("Executable 絕對路徑") as HTMLInputElement).value).toBe("C:\\Tools\\server.exe"));
     fireEvent.click(screen.getByRole("button", { name: /瀏覽資料夾/ }));
@@ -200,7 +218,7 @@ describe("McpServersSettings", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
     renderSettings(controller());
 
-    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
     const input = await screen.findByLabelText("Executable 絕對路徑") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "C:\\Manual\\server.exe" } });
     fireEvent.click(screen.getByRole("button", { name: /瀏覽執行檔/ }));

@@ -24,7 +24,7 @@ const conversationSettings: ConversationSettingsController = {
 
 function GeneralSettingsHarness() {
   const generalSettings = useGeneralSettings();
-  return <GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} />;
+  return <><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /><button onClick={() => { void generalSettings.saveLocale("en"); void generalSettings.saveTimeZone("UTC"); }}>rapid saves</button></>;
 }
 
 function I18nHarness() {
@@ -54,12 +54,14 @@ describe("frontend internationalization", () => {
 
     await waitFor(() => expect((screen.getByRole("combobox", { name: "介面語言" }) as HTMLSelectElement).disabled).toBe(false));
 
-    fireEvent.change(screen.getByRole("combobox", { name: "介面語言" }), { target: { value: "en" } });
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "介面語言" }));
+    fireEvent.click(screen.getByText("English"));
     await waitFor(() => expect(document.documentElement.lang).toBe("en"));
     expect(screen.getByRole("region", { name: "Language and time" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Interface language" })).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Interface language" }), { target: { value: "ja" } });
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Interface language" }));
+    fireEvent.click(screen.getByText("日本語"));
     await waitFor(() => expect(document.documentElement.lang).toBe("ja"));
     expect(screen.getByRole("region", { name: "言語と時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "表示言語" })).toBeTruthy();
@@ -77,9 +79,10 @@ describe("frontend internationalization", () => {
 
     const timeZone = await screen.findByRole("combobox", { name: "時區" });
     await waitFor(() => expect((timeZone as HTMLSelectElement).disabled).toBe(false));
-    fireEvent.change(timeZone, { target: { value: "Asia/Taipei" } });
+    fireEvent.mouseDown(timeZone);
+    fireEvent.click(screen.getByText("Asia/Taipei (UTC+8)"));
 
-    await waitFor(() => expect((timeZone as HTMLSelectElement).value).toBe("Asia/Taipei"));
+    await waitFor(() => expect(timeZone.closest(".ant-select")?.textContent).toContain("Asia/Taipei (UTC+8)"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/general", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -98,10 +101,11 @@ describe("frontend internationalization", () => {
 
     const language = await screen.findByRole("combobox", { name: "介面語言" });
     await waitFor(() => expect((language as HTMLSelectElement).disabled).toBe(false));
-    fireEvent.change(language, { target: { value: "en" } });
+    fireEvent.mouseDown(language);
+    fireEvent.click(screen.getByText("English"));
 
     expect((await screen.findByRole("alert")).textContent).toContain("語言與時區設定暫時無法讀取或儲存");
-    expect((language as HTMLSelectElement).value).toBe("zh-TW");
+    expect(language.closest(".ant-select")?.textContent).toContain("繁體中文");
     expect(document.documentElement.lang).toBe("zh-TW");
   });
 
@@ -131,8 +135,7 @@ describe("frontend internationalization", () => {
     const language = await screen.findByRole("combobox", { name: "介面語言" });
     const timeZone = screen.getByRole("combobox", { name: "時區" });
     await waitFor(() => expect((language as HTMLSelectElement).disabled).toBe(false));
-    fireEvent.change(language, { target: { value: "en" } });
-    fireEvent.change(timeZone, { target: { value: "UTC" } });
+    fireEvent.click(screen.getByRole("button", { name: "rapid saves" }));
 
     await waitFor(() => expect(payloads).toHaveLength(1));
     expect(payloads[0]).toEqual({ locale: "en", timeZone: "system" });
@@ -143,7 +146,7 @@ describe("frontend internationalization", () => {
 
     await waitFor(() => {
       expect(document.documentElement.lang).toBe("en");
-      expect((timeZone as HTMLSelectElement).value).toBe("UTC");
+      expect(timeZone.closest(".ant-select")?.textContent).toContain("UTC");
     });
   });
 
@@ -155,9 +158,9 @@ describe("frontend internationalization", () => {
     render(<I18nHarness />);
 
     expect((await screen.findByRole("alert")).textContent).toContain("語言與時區設定暫時無法讀取或儲存");
-    fireEvent.click(screen.getByRole("button", { name: "重試" }));
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取" }));
 
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "時區" }) as HTMLSelectElement).value).toBe("UTC"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "時區" }).closest(".ant-select")?.textContent).toContain("UTC"));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
