@@ -24,7 +24,7 @@ import {
   ReloadOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   AgentApiError,
@@ -99,10 +99,6 @@ const reasonKeys: Record<AgentReason, MessageKey> = {
 
 const REASON_VALUES = new Set<string>(agentReasons);
 
-function normaliseName(name: string): string {
-  return name.normalize("NFC").toLocaleLowerCase();
-}
-
 function errorCode(error: unknown): string {
   return error instanceof AgentApiError ? error.code : error instanceof Error ? error.message : "network_error";
 }
@@ -163,7 +159,6 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   const [workspaceId, setWorkspaceId] = useState(workspaces.catalog?.activeWorkspaceId ?? "");
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [data, setData] = useState<AgentList | null>(null);
-  const [inherited, setInherited] = useState<AgentList | null>(null);
   const [page, setPage] = useState(1);
   const [globalPage, setGlobalPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -173,27 +168,23 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   const [batch, setBatch] = useState<BatchState | null>(null);
   const [batchError, setBatchError] = useState<string | null>(null);
   const generation = useRef(0);
+  const editorRequest = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
   const batchOpener = useRef<HTMLButtonElement | null>(null);
   const batchInFlight = useRef(false);
 
+  useEffect(() => {
+    if (draft === null) editorRequest.current += 1;
+  }, [draft]);
+  useEffect(() => () => { editorRequest.current += 1; }, []);
+
   const workspace = workspaces.catalog?.workspaces.find((item) => item.id === workspaceId);
   const workspaceUnavailable = scope === "workspace" && (!workspace || workspace.availability !== "available");
-  const currentItems = data?.items ?? [];
-  const globalItems = inherited?.items ?? [];
+  const currentItems = (data?.items ?? []).filter((item) => item.scope === scope && (scope === "global" || item.workspaceId === workspaceId));
+  const inheritedItems = scope === "workspace" ? (data?.items ?? []).filter((item) => item.scope === "global") : [];
   const currentPageNumber = Math.min(page, Math.max(1, Math.ceil(currentItems.length / 20)));
-  const globalPageNumber = Math.min(globalPage, Math.max(1, Math.ceil(globalItems.length / 20)));
+  const globalPageNumber = Math.min(globalPage, Math.max(1, Math.ceil(inheritedItems.length / 20)));
   const visibleItems = currentItems.slice((currentPageNumber - 1) * 20, currentPageNumber * 20);
-  const visibleGlobals = globalItems.slice((globalPageNumber - 1) * 20, globalPageNumber * 20);
-
-  const inheritedItems = useMemo(() => {
-    if (scope !== "workspace") return [];
-    const localByName = new Map(currentItems.map((item) => [normaliseName(item.name), item]));
-    return globalItems.map((item) => {
-      const local = localByName.get(normaliseName(item.name));
-      return local ? { ...item, reason: "shadowed_by_workspace" as const, shadowedByAgentId: local.id } : item;
-    });
-  }, [currentItems, globalItems, scope]);
 
   useEffect(() => {
     onOverlayChange?.(draft !== null || batch !== null);
@@ -229,11 +220,9 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
       const nextSettings = await getAgentSettings();
       if (scope === "workspace" && !workspaceId) throw new AgentApiError("workspace_unavailable");
       const next = await listAllAgents(scope, scope === "workspace" ? workspaceId : null);
-      const nextInherited = scope === "workspace" ? await listAllAgents("global", null) : null;
       if (current !== generation.current) return false;
       setSettings(nextSettings);
       setData(next);
-      setInherited(nextInherited);
       setError(null);
       return true;
     } catch (reason) {
@@ -245,7 +234,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   }, [scope, workspaceId]);
 
   useEffect(() => {
-    setPage(1); setGlobalPage(1); setData(null); setInherited(null); setError(null);
+    setPage(1); setGlobalPage(1); setData(null); setError(null);
     void reload();
     return () => { generation.current += 1; };
   }, [reload]);
@@ -263,17 +252,20 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   };
 
   const openCreate = (target: HTMLElement) => {
+    editorRequest.current += 1;
     opener.current = target;
     setError(null);
     setDraft(emptyDraft("create"));
   };
 
   const openEdit = async (item: CustomAgent, target: HTMLElement) => {
+    const request = ++editorRequest.current;
     opener.current = target;
     setError(null);
     setDraft({ ...emptyDraft("edit", item), loading: true });
     try {
       const detail = await getAgent(item.id);
+      if (request !== editorRequest.current) return;
       setDraft((current) => current?.mode === "edit" && current.item?.id === item.id ? {
         ...current,
         loading: false,
@@ -286,6 +278,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
         providerMode: detail.providerId && detail.model ? "specified" : "inherit",
       } : current);
     } catch (reason) {
+      if (request !== editorRequest.current) return;
       setDraft(null);
       setError(errorCode(reason));
       requestAnimationFrame(() => target.focus());
@@ -296,7 +289,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
     if (!draft || draft.loading || draft.committed || busy) return;
     const content = draft.mode === "import" ? draft.rawContent : serialiseDraft(draft);
     const expectedRevision = data?.revision ?? draft.item?.revision;
-    if (expectedRevision === undefined || (draft.mode !== "import" && (!draft.name.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim()))))) {
+    if (expectedRevision === undefined || (draft.mode !== "import" && (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim()))))) {
       setError("invalid_request");
       return;
     }
@@ -314,6 +307,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
 
   const beginImport = async (file: File) => {
     if (busy || loading || workspaceUnavailable || data === null) return Upload.LIST_IGNORE;
+    editorRequest.current += 1;
     setBusy(true); setError(null);
     try {
       if (!file.name.toLowerCase().endsWith(".toml")) throw new AgentApiError("invalid_format");
@@ -365,7 +359,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   const modelOptions = modelChoices.filter((choice) => !draft?.providerId || choice.selection.providerId === draft.providerId).map((choice) => ({ value: choice.selection.modelId, label: choice.label }));
   const row = (item: CustomAgent, readonly = false) => {
     const reason = REASON_VALUES.has(item.reason) ? item.reason : "invalid_format";
-    const noFallback = scope === "workspace" && !readonly && normaliseName(item.name) && reason !== "effective" && globalItems.some((global) => normaliseName(global.name) === normaliseName(item.name));
+    const noFallback = scope === "workspace" && !readonly && reason !== "effective" && inheritedItems.some((global) => global.reason === "shadowed_by_workspace" && global.shadowedByAgentId === item.id);
     return <article className="agents-row" key={item.id}>
       <div className="agents-row-main"><strong>{item.name}</strong><Tag>{t(reasonKeys[reason as AgentReason])}</Tag>{noFallback ? <span className="agents-warning">{t("agents.noFallback")}</span> : null}</div>
       <div className="agents-row-actions">
@@ -386,7 +380,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
       <label>{t("agents.importFile")}<Input.TextArea readOnly value={draft.rawContent} rows={16} /></label>
     </> : <>
       <label>{t("agents.name")}<Input autoFocus value={draft.name} disabled={busy || draft.committed} onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)} /></label>
-      <label>{t("agents.description")}<Input.TextArea value={draft.description} rows={3} disabled={busy || draft.committed} onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)} /></label>
+      <label>{t("agents.description")} *<Input.TextArea required aria-required="true" value={draft.description} rows={3} disabled={busy || draft.committed} onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)} /></label>
       <label>{t("agents.instructions")}<Input.TextArea value={draft.instructions} rows={12} disabled={busy || draft.committed} onChange={(event) => setDraft((current) => current ? { ...current, instructions: event.target.value } : current)} /></label>
       <label>{t("agents.model")}
         <Select getPopupContainer={getPopupContainer} value={draft.providerMode} options={[{ value: "inherit", label: t("agents.inheritModel") }, { value: "specified", label: t("agents.specifyModel") }]} disabled={busy || draft.committed} onChange={(value: "inherit" | "specified") => setDraft((current) => current ? { ...current, providerMode: value } : current)} />
@@ -397,7 +391,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
       </> : null}
     </>}
     {error ? <Alert type="error" role="alert" title={t("agents.error", { code: error })} /> : null}
-    <div className="agents-editor-actions"><Button onClick={() => { if (!busy) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }} disabled={busy}>{t("common.cancel")}</Button><Button type="primary" loading={busy} disabled={draft.loading || draft.committed || (draft.mode !== "import" && (!draft.name.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim())))) || workspaceUnavailable} onClick={() => void saveDraft()}>{t("agents.save")}</Button></div>
+    <div className="agents-editor-actions"><Button onClick={() => { if (!busy) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }} disabled={busy}>{t("common.cancel")}</Button><Button type="primary" loading={busy} disabled={draft.loading || draft.committed || (draft.mode !== "import" && (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim())))) || workspaceUnavailable} onClick={() => void saveDraft()}>{t("agents.save")}</Button></div>
     {draft.committed ? <Button loading={loading} onClick={async () => { if (await reload()) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }}>{t("common.retry")}</Button> : null}
   </div> : null;
 
@@ -412,10 +406,10 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   return <section className="agents-settings" aria-label={t("settings.category.agents")}>
     <div className="agents-heading"><div><h2>{t("settings.category.agents")}</h2><p>{t("agents.intro")}</p></div><label className="agents-master">{t("agents.master")} <Switch aria-label={t("agents.master")} checked={settings?.enabled ?? false} disabled={!settings || busy || loading} onChange={(enabled) => void toggleMaster(enabled)} /></label></div>
     <Tabs activeKey={scope} onChange={(key) => { if (!busy) { generation.current += 1; setScope(key as AgentScope); } }} items={[{ key: "global", label: t("agents.global"), disabled: busy }, { key: "workspace", label: t("agents.workspace"), disabled: busy }]} />
-    {scope === "workspace" ? <div className="agents-workspace-select"><label htmlFor="agents-workspace">{t("agents.workspaceSelect")}</label><Select id="agents-workspace" getPopupContainer={getPopupContainer} aria-label={t("agents.workspaceSelect")} value={workspaceId || undefined} disabled={busy || loading} options={workspaces.catalog?.workspaces.map((item) => ({ value: item.id, label: item.kind === "default" ? t("workspaces.default") : item.name }))} onChange={(value) => { generation.current += 1; setData(null); setInherited(null); setWorkspaceId(value); }} /></div> : null}
+    {scope === "workspace" ? <div className="agents-workspace-select"><label htmlFor="agents-workspace">{t("agents.workspaceSelect")}</label><Select id="agents-workspace" getPopupContainer={getPopupContainer} aria-label={t("agents.workspaceSelect")} value={workspaceId || undefined} disabled={busy || loading} options={workspaces.catalog?.workspaces.map((item) => ({ value: item.id, label: item.kind === "default" ? t("workspaces.default") : item.name }))} onChange={(value) => { generation.current += 1; setData(null); setWorkspaceId(value); }} /></div> : null}
     {workspaceUnavailable ? <Alert type="warning" title={t("agents.workspaceUnavailable")} /> : null}
     {error ? <Alert type="error" title={t("agents.error", { code: error })} action={<Button loading={loading} disabled={busy} onClick={() => void reload()}>{t("common.retry")}</Button>} /> : null}
-    <div className="agents-toolbar"><h3>{t(scope === "global" ? "agents.global" : "agents.workspace")} <span>· {data?.items.length ?? "—"}</span></h3><div className="agents-toolbar-actions">
+    <div className="agents-toolbar"><h3>{t(scope === "global" ? "agents.global" : "agents.workspace")} <span>· {data ? currentItems.length : "—"}</span></h3><div className="agents-toolbar-actions">
       <Tooltip title={t("agents.scan")} getPopupContainer={getPopupContainer}><Button aria-label={t("agents.scan")} icon={<ReloadOutlined />} disabled={busy || loading || !data || workspaceUnavailable} onClick={() => { if (data) void mutate(() => scanAgents({ scope, workspaceId: scope === "workspace" ? workspaceId : null, expectedRevision: data.revision })); }} /></Tooltip>
       <Upload accept=".toml,text/plain" multiple={false} showUploadList={false} beforeUpload={beginImport} disabled={busy || loading || !data || workspaceUnavailable}><Button icon={<UploadOutlined aria-hidden="true" />} disabled={busy || loading || !data || workspaceUnavailable}>{t("agents.import")}</Button></Upload>
       <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} disabled={busy || loading || !data || workspaceUnavailable} onClick={(event) => openCreate(event.currentTarget)}>{t("agents.create")}</Button>

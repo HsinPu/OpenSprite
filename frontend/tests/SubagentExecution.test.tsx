@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { cancelSubagent, getSubagentResult, listSubagents, type SubagentSummary } from "../src/api/subagents";
@@ -13,6 +13,55 @@ vi.mock("../src/api/subagents", async (importOriginal) => ({
 
 const parentRunId = "11111111-1111-4111-8111-111111111111";
 const childId = "22222222-2222-4222-8222-222222222222";
+
+it("paginates failed execution output and retries only transport failures", async () => {
+  const first = "x".repeat(4000);
+  vi.mocked(listSubagents).mockResolvedValue({ items: [summary({ status: "failed", errorCode: "execution_failed" })] });
+  vi.mocked(getSubagentResult)
+    .mockResolvedValueOnce({ childId, status: "failed", error: "execution_failed", text: first, nextOffset: 4000 })
+    .mockRejectedValueOnce(new Error("network_error"))
+    .mockResolvedValueOnce({ childId, status: "failed", error: "execution_failed", text: "tail", nextOffset: null });
+  render(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  fireEvent.click(await screen.findByRole("button", { name: /reviewer/ }));
+  await screen.findByText(first);
+  expect(screen.queryByRole("button", { name: "重試" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /更多/ }));
+  await screen.findByRole("alert");
+  expect(screen.getByText(first)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "重試" }));
+  await screen.findByText(first + "tail");
+  expect(getSubagentResult).toHaveBeenLastCalledWith(parentRunId, childId, 4000);
+  expect(screen.queryByRole("button", { name: "重試" })).toBeNull();
+  expect(screen.getByText(/execution_failed/)).toBeTruthy();
+});
+
+it("preserves result text and retries the failed page without duplicating content", async () => {
+  vi.mocked(getSubagentResult)
+    .mockResolvedValueOnce({ childId, status: "completed", error: null, text: "first page", nextOffset: 4000 })
+    .mockRejectedValueOnce(new Error("network_error"))
+    .mockResolvedValueOnce({ childId, status: "completed", error: null, text: "last page", nextOffset: null });
+  render(<SubagentExecution parentRunId={parentRunId} parentActive={false} />);
+  fireEvent.click(await screen.findByRole("button", { name: /reviewer/ }));
+  await screen.findByText("first page");
+  fireEvent.click(screen.getByRole("button", { name: /更多/ }));
+  await screen.findByRole("alert");
+  expect(screen.getByText("first page")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "重試" }));
+  await screen.findByText("first pagelast page");
+  expect(getSubagentResult).toHaveBeenLastCalledWith(parentRunId, childId, 4000);
+});
+
+it("resets cancellation state when switching parent runs with a pending cancel", async () => {
+  let resolveCancel!: (value: SubagentSummary) => void;
+  vi.mocked(cancelSubagent).mockImplementationOnce(() => new Promise(resolve => { resolveCancel = resolve; }));
+  vi.mocked(listSubagents).mockResolvedValue({ items: [summary({ status: "running" })] });
+  const view = render(<SubagentExecution parentRunId={parentRunId} parentActive />);
+  fireEvent.click(await screen.findByRole("button", { name: "取消" }));
+  view.rerender(<SubagentExecution parentRunId="44444444-4444-4444-8444-444444444444" parentActive />);
+  expect(await screen.findByRole("button", { name: "取消" })).toBeTruthy();
+  await act(async () => { resolveCancel(summary({ status: "cancelling" })); });
+  expect(screen.getByRole("button", { name: "取消" })).toBeTruthy();
+});
 
 it("concatenates result pages without changing their original text", async () => {
   const first = "a".repeat(4000);

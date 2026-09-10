@@ -22,9 +22,11 @@ type SubagentExecutionProps = {
 type ResultState = {
   status: SubagentStatus;
   error: string | null;
+  executionError?: string | null;
   text: string;
   nextOffset: number | null;
   loading: boolean;
+  retry?: { offset: number; append: boolean };
 };
 
 const statusKeys: Record<SubagentStatus, MessageKey> = {
@@ -86,6 +88,8 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
 
   useEffect(() => {
     generation.current += 1;
+    setBusy(false);
+    cancelInFlight.current = new Set<string>();
     setItems([]);
     setResults({});
     setExpandedId(null);
@@ -124,18 +128,18 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
     const current = generation.current;
     setResults((previous) => ({
       ...previous,
-      [childId]: { status: previous[childId]?.status ?? "running", error: null, text: append ? previous[childId]?.text ?? "" : "", nextOffset: previous[childId]?.nextOffset ?? null, loading: true },
+      [childId]: { status: previous[childId]?.status ?? "running", error: null, executionError: previous[childId]?.executionError, text: append ? previous[childId]?.text ?? "" : "", nextOffset: previous[childId]?.nextOffset ?? null, loading: true },
     }));
     try {
       const next = await getSubagentResult(parentRunId, childId, offset);
       if (current !== generation.current || resultTokens.current.get(childId) !== token) return;
       setResults((previous) => {
         const old = previous[childId];
-        return { ...previous, [childId]: { status: next.status, error: next.error, text: append && old?.text ? old.text + next.text : next.text, nextOffset: next.nextOffset, loading: false } };
+        return { ...previous, [childId]: { status: next.status, error: null, executionError: next.error, text: append && old?.text ? old.text + next.text : next.text, nextOffset: next.nextOffset, loading: false } };
       });
     } catch (reason) {
       if (current !== generation.current || resultTokens.current.get(childId) !== token) return;
-      setResults((previous) => ({ ...previous, [childId]: { ...(previous[childId] ?? { status: "running", error: null, text: "", nextOffset: null }), error: apiError(reason), loading: false } }));
+      setResults((previous) => ({ ...previous, [childId]: { ...(previous[childId] ?? { status: "running", error: null, text: "", nextOffset: null }), error: apiError(reason), loading: false, retry: { offset, append } } }));
     }
   }, [parentRunId]);
 
@@ -158,8 +162,9 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
   };
 
   const cancel = async (item: SubagentSummary) => {
-    if (cancelInFlight.current.has(item.id) || !activeStatus(item.status) || item.status === "cancelling") return;
-    cancelInFlight.current.add(item.id);
+    const inFlight = cancelInFlight.current;
+    if (inFlight.has(item.id) || !activeStatus(item.status) || item.status === "cancelling") return;
+    inFlight.add(item.id);
     setBusy(true); setError(null);
     const current = generation.current;
     try {
@@ -168,7 +173,7 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
     } catch (reason) {
       if (current === generation.current) setError(apiError(reason));
     } finally {
-      cancelInFlight.current.delete(item.id);
+      inFlight.delete(item.id);
       if (current === generation.current) setBusy(false);
     }
   };
@@ -191,10 +196,10 @@ export function SubagentExecution({ parentRunId, parentActive, historical = fals
             </button>
             {canCancel ? <button type="button" className="subagent-execution__cancel" disabled={busy} onClick={() => void cancel(item)}>{t("subagents.cancel")}</button> : null}
           </div>
-          {item.errorCode ? <p className="subagent-execution__error">{t("subagents.errorCode", { code: item.errorCode })}</p> : null}
+          {result?.executionError || item.errorCode ? <p className="subagent-execution__error">{t("subagents.errorCode", { code: result?.executionError ?? item.errorCode! })}</p> : null}
           {expanded ? <div id={`subagent-result-${item.id}`} className="subagent-execution__result" aria-busy={result?.loading ?? true}>
-            {result?.loading && !result.text ? <p role="status">{t("subagents.resultLoading")}</p> : result?.error ? <div className="subagent-execution__result-error" role="alert"><p>{t("subagents.error", { code: result.error })}</p><button type="button" onClick={() => void requestResult(item.id, 0, false)}>{t("common.retry")}</button></div> : <>
-              <pre>{result?.text ?? ""}</pre>
+            {result?.text ? <pre>{result.text}</pre> : null}
+            {result?.loading && !result.text ? <p role="status">{t("subagents.resultLoading")}</p> : result?.error ? <div className="subagent-execution__result-error" role="alert"><p>{t("subagents.error", { code: result.error })}</p><button type="button" disabled={result.loading} onClick={() => void requestResult(item.id, result.retry?.offset ?? 0, result.retry?.append ?? false)}>{t("common.retry")}</button></div> : <>
               {result?.nextOffset !== null && result?.nextOffset !== undefined ? <button type="button" disabled={result.loading} onClick={() => void requestResult(item.id, result.nextOffset!, true)}>{t("subagents.loadMore")}</button> : null}
               {!result?.text && !result?.loading ? <p>{t("subagents.noResult")}</p> : null}
             </>}
