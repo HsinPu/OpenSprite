@@ -503,6 +503,7 @@ export const jaMessages = {
   "models.connectProviderFirst": "先にモデルプロバイダーを接続してください",
   "models.noModels": "利用可能なモデルはありません",
   "models.retryModels": "モデル読み込みを再試行",
+  "models.refreshModels": "モデル一覧を更新",
   "models.responseMode": "応答モード",
   "models.response.default": "既定",
   "models.response.fast": "高速",

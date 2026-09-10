@@ -624,6 +624,7 @@ export const zhTWMessages = {
   "models.connectProviderFirst": "請先連接模型廠家",
   "models.noModels": "沒有可用模型",
   "models.retryModels": "重試讀取模型",
+  "models.refreshModels": "重新整理模型清單",
   "models.responseMode": "回應模式",
   "models.response.default": "預設",
   "models.response.fast": "快速",

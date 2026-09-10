@@ -264,3 +264,20 @@
   .workspace-mount > div:last-child .ant-btn { flex: 1; }
   .workspace-import-item .ant-btn { width: 100%; }
 }
+.settings-model-picker {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: min(350px, 52%);
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--settings-border);
+  border-radius: 9px;
+  background: var(--settings-surface);
+}
+.settings-model-picker:focus-within { border-color: var(--os-primary, #ff6347); }
+.settings-model-picker .ant-select { flex: 1; width: 0; min-width: 0; border: 0; box-shadow: none; background: transparent; }
+.settings-model-picker .ant-select-selector { border: 0 !important; box-shadow: none !important; background: transparent !important; }
+.settings-model-picker .ant-select-selection-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.settings-model-picker .settings-model-refresh { flex: 0 0 40px; width: 40px; height: 36px; border-radius: 0 8px 8px 0; border-inline-start: 1px solid var(--settings-border); }
+@media (max-width: 767px) { .settings-model-picker { width: 100%; } }

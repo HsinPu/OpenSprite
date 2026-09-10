@@ -632,6 +632,27 @@ describe("provider settings", () => {
     expect(settingsSurface.contains(modelDropdown)).toBe(true);
   });
 
+  it("refreshes cached OpenRouter models without changing the selected model", async () => {
+    let resolveRefresh!: (value: Response) => void;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast")] })))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRefresh = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast", contextBudget: "auto", outputBudget: "auto" }} />);
+    const refresh = await screen.findByRole("button", { name: "重新整理模型清單" });
+    await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("Acme Fast"));
+    await waitFor(() => expect(refresh.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(refresh);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(refresh.hasAttribute("disabled")).toBe(true);
+    await act(async () => resolveRefresh(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast"), dynamicModel("acme/new", "Acme New")] }))));
+    await waitFor(() => expect(refresh.hasAttribute("disabled")).toBe(false));
+    expect(screen.getByTestId("selected-model").textContent).toBe("Acme Fast");
+    fireEvent.mouseDown(screen.getByLabelText("模型"));
+    expect(await screen.findByText("Acme New")).toBeTruthy();
+  });
+
   it("loads connected OpenRouter models once, exposes a searchable selection, and retries an isolated catalog error", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))

@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite local backend",
     "description": "Loopback-only local desktop service foundation.",
-    "version": "0.20.3"
+    "version": "0.20.4"
   },
   "paths": {
     "/api/agents/settings": {

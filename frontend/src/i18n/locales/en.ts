@@ -503,6 +503,7 @@ export const enMessages = {
   "models.connectProviderFirst": "Connect a model provider first",
   "models.noModels": "No models available",
   "models.retryModels": "Retry loading models",
+  "models.refreshModels": "Refresh model list",
   "models.responseMode": "Response mode",
   "models.response.default": "Default",
   "models.response.fast": "Fast",
