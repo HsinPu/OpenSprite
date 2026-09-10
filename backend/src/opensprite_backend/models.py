@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, field_validator, model_validator
 
-ProviderId = Literal["openai", "anthropic", "openrouter"]
+from opensprite_backend.provider_identity import ProviderId
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
 TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
 StartupView = Literal["new", "recent"]
@@ -176,12 +176,12 @@ class ProviderSummary(ContractModel):
 
 
 class ProviderListResponse(ContractModel):
-    providers: list[ProviderSummary] = Field(min_length=3, max_length=3)
+    providers: list[ProviderSummary] = Field(min_length=3)
 
     @model_validator(mode="after")
     def require_fixed_ordered_catalog(self) -> "ProviderListResponse":
         catalog = tuple((provider.id, provider.name) for provider in self.providers)
-        if catalog != (
+        if catalog[:3] != (
             ("openai", "OpenAI"),
             ("anthropic", "Anthropic"),
             ("openrouter", "OpenRouter"),
@@ -190,6 +190,8 @@ class ProviderListResponse(ContractModel):
                 "providers must be ordered as openai/OpenAI then "
                 "anthropic/Anthropic then openrouter/OpenRouter"
             )
+        if len({provider.id for provider in self.providers}) != len(self.providers):
+            raise ValueError("duplicate provider id")
         return self
 
 

@@ -14,7 +14,7 @@ from .anthropic import AnthropicInferenceAdapter
 from .gateway import ModelGatewayError, ProviderInferenceAdapter
 from .models import InferenceFailure, ModelRequest, ModelStreamEvent
 from .openai import OpenAIInferenceAdapter
-from .openrouter import OpenRouterInferenceAdapter
+from .openrouter import OpenRouterInferenceAdapter, ChatCompletionsInferenceAdapter
 from .sse import StreamFormatError
 
 
@@ -30,6 +30,7 @@ class NativeModelGateway:
         adapters: Mapping[str, ProviderInferenceAdapter] | None = None,
     ) -> None:
         self._credentials = credentials
+        self._http_client = http_client
         self._locks = operation_locks
         self._adapters: dict[str, ProviderInferenceAdapter] = (
             dict(adapters)
@@ -47,12 +48,19 @@ class NativeModelGateway:
         self,
         request: ModelRequest,
     ) -> AsyncIterator[ModelStreamEvent]:
-        adapter = self._adapters[request.provider_id]
+        endpoint = request.provider_endpoint
+        custom = request.provider_id not in self._adapters
+        if custom:
+            if endpoint is None or endpoint.protocol != "openai_chat_completions":
+                raise ModelGatewayError(InferenceFailure.PROVIDER_NOT_CONNECTED)
+            adapter = ChatCompletionsInferenceAdapter(self._http_client, endpoint.endpoint("chat/completions"), bearer_auth=endpoint.auth_mode == "bearer")
+        else:
+            adapter = self._adapters[request.provider_id]
         async with self._locks.hold(request.provider_id):
             try:
-                api_key = await asyncio.to_thread(
+                api_key = "" if custom and endpoint.auth_mode == "none" else await asyncio.to_thread(
                     self._credentials.get,
-                    request.provider_id,
+                    f"provider:{request.provider_id}:bearer" if custom else request.provider_id,
                 )
             except CredentialStoreError as error:
                 raise ModelGatewayError(

@@ -62,7 +62,7 @@ _TERMINAL_EVENT_TYPES = {
     RunEventType.RUN_CANCELLED,
     RunEventType.RUN_INTERRUPTED,
 }
-_PROVIDER_IDS = {"openai", "anthropic", "openrouter"}
+from opensprite_backend.providers.catalog_models import valid_provider_id
 _RESPONSE_MODES = {"default", "fast", "balanced", "deep"}
 _CONTEXT_BUDGETS = {"auto", "32k", "64k", "128k", "256k", "max"}
 _OUTPUT_BUDGETS = {"auto", "8k", "16k", "32k", "64k", "max"}
@@ -355,7 +355,7 @@ class SqliteConversationRepository:
             or covers_through_sequence < 1
             or not isinstance(source_hash, str)
             or re.fullmatch(r"[0-9a-f]{64}", source_hash) is None
-            or provider_id not in _PROVIDER_IDS
+            or not valid_provider_id(provider_id)
             or not isinstance(input_tokens, int)
             or isinstance(input_tokens, bool)
             or input_tokens < 0
@@ -529,7 +529,7 @@ class SqliteConversationRepository:
             self._require_identifier(conversation_id)
         self._require_identifier(client_request_id)
         normalized_message = self._require_text(message, maximum=32768)
-        if provider_id not in _PROVIDER_IDS:
+        if not valid_provider_id(provider_id):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         normalized_model = self._require_text(model_id, maximum=256)
         if response_mode not in _RESPONSE_MODES:
@@ -975,6 +975,36 @@ class SqliteConversationRepository:
                 raise
             except (sqlite3.Error, OSError, TypeError, ValueError) as error:
                 connection.rollback()
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
+            finally:
+                connection.close()
+
+    def provider_usage(self, provider_id: str, model_id: str | None = None) -> tuple[int, int]:
+        """Return active Run and schedule references, never historical use.
+
+        The application mutation gate coordinates this read with reference creation.
+        Completed schedules remain references because manual execution is supported.
+        """
+        if not valid_provider_id(provider_id):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if model_id is not None:
+            self._require_text(model_id, maximum=256)
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return (0, 0)
+            try:
+                parameters = (provider_id,) if model_id is None else (provider_id, model_id)
+                predicate = "provider_id = ?" + (" AND model_id = ?" if model_id is not None else "")
+                active = connection.execute(
+                    "SELECT COUNT(*) FROM runs WHERE " + predicate + " AND status IN (?, ?, ?)",
+                    (*parameters, *_ACTIVE_STATUSES),
+                ).fetchone()[0]
+                schedules = connection.execute(
+                    "SELECT COUNT(*) FROM schedules WHERE " + predicate, parameters,
+                ).fetchone()[0]
+                return (int(active), int(schedules))
+            except (sqlite3.Error, TypeError, ValueError) as error:
                 raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
             finally:
                 connection.close()
@@ -1942,7 +1972,7 @@ class SqliteConversationRepository:
                 and keys != tool_context_keys
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if data["providerId"] not in _PROVIDER_IDS:
+            if not valid_provider_id(data["providerId"]):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             if not SqliteConversationRepository._is_bounded_text(
                 data["modelId"],

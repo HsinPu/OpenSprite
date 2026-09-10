@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Callable, Protocol
+from ..providers.catalog_models import BUILTIN_PROVIDER_IDS
+from ..providers.catalog_store import CatalogError
+from ..providers.custom_service import CustomProviderService
 
 from .models import CadenceType, Occurrence, OccurrencePage, OccurrenceStatus, OccurrenceTrigger, Schedule, ScheduleDraft, SchedulePage, ScheduleStatus
 from .recurrence import RecurrenceError, next_occurrence
@@ -100,12 +103,26 @@ class ScheduleService:
         workspace_mutation_gate: WorkspaceMutationGate | None = None,
         clock: Callable[[], datetime] | None = None,
         on_change: Callable[[], None] | None = None,
+        custom_providers: CustomProviderService | None = None,
     ) -> None:
         self.repository = repository
         self._workspaces = workspaces or DefaultWorkspaceResolver()
         self._workspace_mutation_gate = workspace_mutation_gate or WorkspaceMutationGate()
         self._clock = clock or (lambda: datetime.now(UTC))
         self._on_change = on_change or (lambda: None)
+        self._custom_providers = custom_providers
+
+    def _validate_custom_provider(self, draft: ScheduleDraft) -> None:
+        if draft.profile.provider_id in BUILTIN_PROVIDER_IDS:
+            return
+        try:
+            if self._custom_providers is None:
+                raise CatalogError()
+            provider = self._custom_providers.get(draft.profile.provider_id)
+            if not any(model.model_id == draft.profile.model_id for model in provider.models):
+                raise CatalogError("model_not_found")
+        except CatalogError:
+            raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST) from None
 
     async def create(self, draft: ScheduleDraft) -> Schedule:
         next_run = self._next(draft, self._now())
@@ -113,6 +130,7 @@ class ScheduleService:
             raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         async with self._workspace_mutation_gate.hold():
             self._resolve_workspace(draft.workspace_id)
+            self._validate_custom_provider(draft)
             item = await asyncio.to_thread(
                 self.repository.create,
                 draft,
@@ -145,6 +163,7 @@ class ScheduleService:
             raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         async with self._workspace_mutation_gate.hold():
             self._resolve_workspace(draft.workspace_id)
+            self._validate_custom_provider(draft)
             item = await asyncio.to_thread(
                 self.repository.update,
                 schedule_id,

@@ -14,6 +14,8 @@ from context_test_support import TestCapabilityResolver
 
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.custom_agents.models import AgentExecutionSnapshot
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunStatus, StoreFailure
 from opensprite_backend.conversations.repository import ConversationStoreError
@@ -166,7 +168,14 @@ async def test_close_marks_abandoned_running_work_interrupted(
             capability_resolver=TestCapabilityResolver(),
         ),
     )
-    assert await manager.start(run.id, DEFAULT_WORKSPACE) is True
+    child_provider_id = str(uuid4())
+    agents = AgentExecutionSnapshot(provider_endpoints=(ProviderEndpointSnapshot(
+        child_provider_id, 1, "openai_chat_completions", "https://example.com/v1", "none",
+    ),))
+    assert await manager.start(run.id, DEFAULT_WORKSPACE, agents=agents) is True
+    assert manager.provider_in_use("openrouter")
+    assert manager.provider_in_use(child_provider_id)
+    assert not manager.provider_in_use("openai")
     await asyncio.wait_for(entered.wait(), timeout=1)
 
     await manager.close()
@@ -174,6 +183,8 @@ async def test_close_marks_abandoned_running_work_interrupted(
     persisted = repository.get_run(run.id)
     assert persisted is not None
     assert persisted.status is RunStatus.INTERRUPTED
+    assert not manager.provider_in_use("openrouter")
+    assert not manager.provider_in_use(child_provider_id)
 
 
 @async_test

@@ -13,6 +13,7 @@ from opensprite_backend.inference.models import (
     ModelUsage,
 )
 from opensprite_backend.models import ProviderId
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 
 from .compactor import CompactionGeneration
 
@@ -27,9 +28,11 @@ class GatewaySummaryGenerator:
         provider_id: ProviderId,
         model_id: str,
         prompt: str,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> CompactionGeneration:
         request = ModelRequest(
             provider_id=provider_id,
+            provider_endpoint=provider_endpoint,
             model_id=model_id,
             response_mode="default",
             messages=(

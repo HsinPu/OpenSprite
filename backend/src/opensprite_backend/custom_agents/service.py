@@ -16,6 +16,9 @@ from uuid import UUID, uuid4
 
 from opensprite_backend.app_paths import AppPaths
 from opensprite_backend.atomic_file import atomic_write
+from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS
+from opensprite_backend.providers.catalog_store import CatalogError
+from opensprite_backend.providers.custom_service import CustomProviderService
 from opensprite_backend.workspaces import WorkspaceAvailability, WorkspaceRootPolicy
 from opensprite_backend.workspaces.relocation import (
     WorkspaceRelocationError,
@@ -75,11 +78,25 @@ def _json_bytes(value: object) -> bytes:
 class CustomAgentsService:
     """Thread-safe catalog and file operations for global/workspace Agents."""
 
-    def __init__(self, paths: AppPaths, workspaces) -> None:
+    def __init__(self, paths: AppPaths, workspaces, custom_providers: CustomProviderService | None = None) -> None:
         self.paths = paths
         self.workspaces = workspaces
         self.store = AgentCatalogStore(paths)
         self.lock = RLock()
+        self._custom_providers = custom_providers
+
+    def _validate_provider_reference(self, definition) -> None:
+        identifier = definition.provider_id
+        if identifier is None or identifier in BUILTIN_PROVIDER_IDS:
+            return
+        try:
+            if self._custom_providers is None:
+                raise CatalogError()
+            provider = self._custom_providers.get(identifier)
+            if not any(model.model_id == definition.model for model in provider.models):
+                raise CatalogError("model_not_found")
+        except CatalogError:
+            raise AgentError("invalid_request") from None
 
     # ----- catalog and transaction boundary ---------------------------------
 
@@ -523,6 +540,24 @@ class CustomAgentsService:
                 "nextCursor": next_cursor,
             }
 
+    def references_provider(self, provider_id: str, model_id: str | None = None) -> bool:
+        """Check registered definitions, including disabled or shadowed Agents.
+
+        An unreadable definition cannot prove that deletion is safe. The caller
+        surfaces the safe error and lets the user repair/remove that registration.
+        """
+        with self.lock:
+            catalog = self._catalog()
+            for record in catalog.agents:
+                context = self._workspace_context(record.workspaceId) if record.workspaceId else None
+                candidate, _ = self._load_candidate(record, context=context)
+                definition = candidate.definition
+                if definition is None:
+                    raise AgentError("agent_store_unavailable")
+                if definition.provider_id == provider_id and (model_id is None or definition.model == model_id):
+                    return True
+            return False
+
     def get(self, identifier: str) -> dict[str, object]:
         with self.lock:
             catalog = self._catalog()
@@ -551,6 +586,7 @@ class CustomAgentsService:
     ) -> dict[str, object]:
         self._validate_scope(scope, workspace_id)
         raw, definition = self._parse_content(content)
+        self._validate_provider_reference(definition)
         with self.lock:
             catalog = self._catalog()
             self._expected(catalog, expected_revision)
@@ -588,12 +624,14 @@ class CustomAgentsService:
             self._commit(updated, [self._write_action(record, raw)])
             item = self.get(identifier)
             item.pop("content", None)
+            item.pop("developerInstructions", None)
             return item
 
     def update(
         self, identifier: str, content: str, expected_revision: int
     ) -> dict[str, object]:
         raw, definition = self._parse_content(content)
+        self._validate_provider_reference(definition)
         with self.lock:
             catalog = self._catalog()
             self._expected(catalog, expected_revision)
@@ -628,6 +666,7 @@ class CustomAgentsService:
             self._commit(updated, [self._write_action(updated_record, raw)])
             item = self.get(identifier)
             item.pop("content", None)
+            item.pop("developerInstructions", None)
             return item
 
     def set_enabled(
@@ -654,6 +693,7 @@ class CustomAgentsService:
             self._commit(updated, [])
             item = self.get(identifier)
             item.pop("content", None)
+            item.pop("developerInstructions", None)
             return item
 
     def remove(self, identifier: str, expected_revision: int) -> None:

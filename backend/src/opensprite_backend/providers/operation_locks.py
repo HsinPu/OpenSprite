@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from ..models import ProviderId
+from .catalog_models import valid_provider_id
 
 
 _PROVIDERS = {"openai", "anthropic", "openrouter"}
@@ -24,17 +25,17 @@ class ProviderOperationLocks:
 
     @asynccontextmanager
     async def hold(self, provider_id: ProviderId) -> AsyncIterator[None]:
-        if provider_id not in _PROVIDERS:
+        if not valid_provider_id(provider_id):
             raise ValueError("unsupported provider lock")
-        async with self._locks[provider_id]:
+        async with self._locks.setdefault(provider_id, asyncio.Lock()):
             yield
 
     def generation(self, provider_id: ProviderId) -> int:
-        if provider_id not in _PROVIDERS:
+        if not valid_provider_id(provider_id):
             raise ValueError("unsupported provider lock")
-        return self._generations[provider_id]
+        return self._generations.get(provider_id, 0)
 
     def invalidate(self, provider_id: ProviderId) -> None:
-        if provider_id not in _PROVIDERS:
+        if not valid_provider_id(provider_id):
             raise ValueError("unsupported provider lock")
-        self._generations[provider_id] += 1
+        self._generations[provider_id] = self._generations.get(provider_id, 0) + 1

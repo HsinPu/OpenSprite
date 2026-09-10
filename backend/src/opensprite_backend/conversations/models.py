@@ -14,7 +14,7 @@ from opensprite_backend.workspaces.models import (
 )
 
 
-ProviderId = Literal["openai", "anthropic", "openrouter"]
+from opensprite_backend.provider_identity import ProviderId
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]

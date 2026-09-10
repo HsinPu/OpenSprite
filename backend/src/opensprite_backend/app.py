@@ -442,6 +442,8 @@ def create_app(
     app.include_router(local_path_router)
     app.include_router(tool_approval_router)
     app.include_router(provider_router)
+    from .api.custom_provider_routes import router as custom_provider_router
+    app.include_router(custom_provider_router)
     app.include_router(chat_router)
     app.include_router(schedule_router)
     app.include_router(workspace_router)

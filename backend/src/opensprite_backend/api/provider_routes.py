@@ -140,9 +140,21 @@ def _provider_connections(request: Request) -> ProviderConnections:
     tags=["provider-connections"],
 )
 async def list_providers(
+    request: Request,
     connections: ProviderConnections = Depends(_provider_connections),
 ) -> ProviderListResponse:
-    return await connections.list_providers()
+    result = await connections.list_providers()
+    custom = getattr(request.app.state, "custom_providers", None)
+    if custom is not None:
+        import asyncio
+        from opensprite_backend.models import ProviderStatus
+        catalog = await asyncio.to_thread(custom.list)
+        result = ProviderListResponse(providers=[*result.providers, *[
+            ProviderSummary(id=item.id, name=item.name, connected=False,
+                status=ProviderStatus.DISCONNECTED, credentialPreview=None, lastCheckedAt=None)
+            for item in catalog.providers
+        ]])
+    return result
 
 
 @router.post(

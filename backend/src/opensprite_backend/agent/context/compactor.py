@@ -7,6 +7,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from typing import Protocol
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 
 from opensprite_backend.conversations.models import (
     ConversationCompaction,
@@ -37,6 +38,7 @@ class SummaryGenerator(Protocol):
         provider_id: ProviderId,
         model_id: str,
         prompt: str,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> CompactionGeneration: ...
 
 
@@ -117,12 +119,14 @@ class ConversationCompactionService:
         model_id: str,
         previous: ConversationCompaction | None,
         messages: tuple[Message, ...],
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> ConversationCompaction:
         source = prepare_compaction_source(previous, messages)
         generated = await self._generator.generate(
             provider_id=provider_id,
             model_id=model_id,
             prompt=source.prompt,
+            **({"provider_endpoint": provider_endpoint} if provider_endpoint is not None else {}),
         )
         summary = generated.summary.strip()
         if (

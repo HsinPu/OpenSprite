@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.skills.models import SkillExecutionSnapshot
 from .skill_phase import handle_skill_call
 from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool, DiscoverSkillsTool
@@ -218,9 +219,10 @@ class AgentLoop:
         workspace: WorkspaceExecutionContext | None = None,
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         try:
-            return await self._execute(run_id, cancellation_event, workspace, skills, agents)
+            return await self._execute(run_id, cancellation_event, workspace, skills, agents, provider_endpoint)
         finally:
             if self._delegation is not None:
                 cleanup = asyncio.create_task(self._delegation.release(run_id))
@@ -242,6 +244,7 @@ class AgentLoop:
         workspace: WorkspaceExecutionContext | None = None,
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -300,7 +303,7 @@ class AgentLoop:
             )
             if self._delegation is not None and agents is not None and agents.available:
                 capability = await self._await_with_cancellation(
-                    self._capability_resolver.resolve(run.provider_id, run.model_id), cancellation_event)
+                    self._resolve_run_capability(run, provider_endpoint), cancellation_event)
                 if capability.supports_tools:
                     self._delegation.register(ParentDelegation(
                         run, workspace, skills or SkillExecutionSnapshot(), agents,
@@ -312,7 +315,7 @@ class AgentLoop:
             base_system_prompt = system_prompt
             system_prompt = skill_state.prompt(base_system_prompt)
             if skill_state.snapshot.available:
-                capability = await self._await_with_cancellation(self._capability_resolver.resolve(run.provider_id, run.model_id), cancellation_event)
+                capability = await self._await_with_cancellation(self._resolve_run_capability(run, provider_endpoint), cancellation_event)
                 if capability.supports_tools:
                     run_tools = run_tools.extended((LoadSkillTool(), DiscoverSkillsTool()))
                     availability = ToolAvailabilitySnapshot(availability.enabled_names | {"load_skill", "discover_skills"})
@@ -320,6 +323,7 @@ class AgentLoop:
                     system_prompt += "\nAutomatic Skill selection is unavailable for this model. Only manually selected Skills are loaded."
             prepared = await self._prepare_context(
                 run=run,
+                provider_endpoint=provider_endpoint,
                 system_prompt=system_prompt,
                 cancellation_event=cancellation_event,
                 availability=availability,
@@ -361,6 +365,7 @@ class AgentLoop:
                 )
                 request = ModelRequest(
                     provider_id=run.provider_id,
+                    provider_endpoint=provider_endpoint,
                     model_id=run.model_id,
                     response_mode=run.response_mode,
                     messages=tuple(transcript),
@@ -403,6 +408,7 @@ class AgentLoop:
                             )
                             prepared = await self._prepare_context(
                                 run=run,
+                                provider_endpoint=provider_endpoint,
                                 system_prompt=system_prompt,
                                 cancellation_event=cancellation_event,
                                 availability=availability,
@@ -502,6 +508,7 @@ class AgentLoop:
                                 tools=run_tools,
                                 prompt_log_sequence=prompt_log_sequence,
                                 delta_buffer=delta_buffer,
+                                provider_endpoint=provider_endpoint,
                             )
                     if self._delegation is not None:
                         await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
@@ -680,6 +687,7 @@ class AgentLoop:
         tools: ToolRegistry,
         prompt_log_sequence: list[int],
         delta_buffer: _AssistantDeltaBuffer,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         continuation_base = base_transcript
         configured_max = (
@@ -716,6 +724,7 @@ class AgentLoop:
                     try:
                         prepared = await self._prepare_context(
                             run=run,
+                            provider_endpoint=provider_endpoint,
                             system_prompt=system_prompt,
                             cancellation_event=cancellation_event,
                             availability=availability,
@@ -748,6 +757,7 @@ class AgentLoop:
                 )
                 request = ModelRequest(
                     provider_id=run.provider_id,
+                    provider_endpoint=provider_endpoint,
                     model_id=run.model_id,
                     response_mode=run.response_mode,
                     messages=transcript,
@@ -782,6 +792,7 @@ class AgentLoop:
                             try:
                                 prepared = await self._prepare_context(
                                     run=run,
+                                    provider_endpoint=provider_endpoint,
                                     system_prompt=system_prompt,
                                     cancellation_event=cancellation_event,
                                     availability=availability,
@@ -978,6 +989,14 @@ class AgentLoop:
             raise ContextLimitExceeded
         return result
 
+    async def _resolve_run_capability(self, run: RunSnapshot, endpoint: ProviderEndpointSnapshot | None):
+        if endpoint is None:
+            return await self._capability_resolver.resolve(run.provider_id, run.model_id)
+        for model in endpoint.models:
+            if model.provider_id == run.provider_id and model.model_id == run.model_id:
+                return model
+        raise ModelCapabilityNotFound
+
     async def _prepare_context(
         self,
         *,
@@ -987,6 +1006,7 @@ class AgentLoop:
         availability: ToolAvailabilitySnapshot | None = None,
         tools: ToolRegistry | None = None,
         force_compaction: bool = False,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
         compaction_limit: int | None = None,
         current_user_message_id: str | None = None,
     ) -> _PreparedContext:
@@ -1007,10 +1027,7 @@ class AgentLoop:
             force_compaction,
         )
         capability = await self._await_with_cancellation(
-            self._capability_resolver.resolve(
-                run.provider_id,
-                run.model_id,
-            ),
+            self._resolve_run_capability(run, provider_endpoint),
             cancellation_event,
         )
         budget = resolve_context_budget(
@@ -1125,6 +1142,7 @@ class AgentLoop:
                         model_id=run.model_id,
                         previous=summary,
                         messages=candidates,
+                        provider_endpoint=provider_endpoint,
                     ),
                     cancellation_event,
                 )

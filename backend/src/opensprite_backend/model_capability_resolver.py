@@ -20,6 +20,9 @@ from opensprite_backend.provider_connections import (
     ProviderConnections,
 )
 from opensprite_backend.providers.operation_locks import ProviderOperationLocks
+from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS
+from opensprite_backend.providers.catalog_store import CatalogError
+from opensprite_backend.providers.custom_service import CustomProviderService
 
 
 class ProviderModelCapabilityResolver:
@@ -29,6 +32,7 @@ class ProviderModelCapabilityResolver:
         *,
         cache_seconds: float = 600.0,
         operation_locks: ProviderOperationLocks | None = None,
+        custom_providers: CustomProviderService | None = None,
     ) -> None:
         if not 1 <= cache_seconds <= 3600:
             raise ValueError("invalid model capability cache lifetime")
@@ -39,12 +43,28 @@ class ProviderModelCapabilityResolver:
         self._cache_generation: int | None = None
         self._operation_locks = operation_locks
         self._lock = asyncio.Lock()
+        self._custom_providers = custom_providers
 
     async def resolve(
         self,
         provider_id: ProviderId,
         model_id: str,
     ) -> ModelCapability:
+        if provider_id not in BUILTIN_PROVIDER_IDS:
+            if self._custom_providers is None:
+                raise ModelCapabilityNotFound
+            try:
+                provider = await asyncio.to_thread(self._custom_providers.get, provider_id)
+            except CatalogError as error:
+                if error.code == "provider_not_found":
+                    raise ModelCapabilityNotFound from None
+                raise ModelCapabilityProviderError(InferenceFailure.PROVIDER_UNREACHABLE) from None
+            model = next((item for item in provider.models if item.model_id == model_id), None)
+            if model is None:
+                raise ModelCapabilityNotFound
+            return ModelCapability(provider_id=provider.id, model_id=model.model_id, name=model.name,
+                context_window_tokens=model.context_limit, max_output_tokens=model.output_limit,
+                supports_tools=model.tools)
         fixed = fixed_model_capability(provider_id, model_id)
         if fixed is not None:
             return fixed

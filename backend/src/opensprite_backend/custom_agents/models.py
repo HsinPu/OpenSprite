@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from typing import Literal
 from uuid import UUID
 import unicodedata
@@ -96,6 +97,7 @@ class AgentDecision:
 @dataclass(frozen=True, slots=True)
 class AgentExecutionSnapshot:
     available: tuple[AgentCandidate, ...] = ()
+    provider_endpoints: tuple[ProviderEndpointSnapshot, ...] = ()
 
     def get(self, identifier: str) -> AgentCandidate:
         for item in self.available:

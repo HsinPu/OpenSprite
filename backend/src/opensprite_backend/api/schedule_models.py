@@ -1,6 +1,7 @@
 """Strict public models for durable schedule management."""
 
 from __future__ import annotations
+from opensprite_backend.provider_identity import ProviderId
 
 from datetime import datetime, time
 from typing import Annotated, Literal
@@ -25,7 +26,7 @@ class ScheduleContractModel(BaseModel):
 
 
 class ExecutionProfileModel(ScheduleContractModel):
-    providerId: Literal["openai", "anthropic", "openrouter"]
+    providerId: ProviderId
     modelId: str = Field(min_length=1, max_length=200)
     responseMode: Literal["default", "fast", "balanced", "deep"]
     contextBudget: Literal["auto", "32k", "64k", "128k", "256k", "max"]

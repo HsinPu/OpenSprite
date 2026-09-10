@@ -81,8 +81,8 @@ def test_provider_catalog_schema_fixes_identity_name_and_order() -> None:
     ]["properties"]["providers"]
 
     assert providers["minItems"] == 3
-    assert providers["maxItems"] == 3
-    assert providers["items"] is False
+    assert "maxItems" not in providers
+    assert providers["items"] == {"$ref": "#/components/schemas/ProviderSummary"}
     assert [
         (
             item["allOf"][1]["properties"]["id"]["const"],
@@ -95,7 +95,7 @@ def test_provider_catalog_schema_fixes_identity_name_and_order() -> None:
         ("openrouter", "OpenRouter"),
     ]
 
-    assert load_contract()["components"]["schemas"]["ProviderId"]["enum"] == [
+    assert load_contract()["components"]["parameters"]["ProviderId"]["schema"]["enum"] == [
         "openai",
         "anthropic",
         "openrouter",

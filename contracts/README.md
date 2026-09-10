@@ -5,6 +5,11 @@ contract for the local provider-connection boundary. The frontend and backend
 must derive their request, response, and error expectations from this file; they
 must not maintain incompatible copies.
 
+`custom-providers.openapi.json` defines the authenticated UUID-based custom
+OpenAI-compatible Chat Completions catalog, write-only credentials, manual and
+discovered models, optimistic revisions, and reference-guarded mutations.
+Builtin connection operations remain in the preceding contract.
+
 `ai-settings.openapi.json` is the authoritative consumer-visible HTTP contract
 for the atomic model selection, Context/output budgets, response mode, output
 continuation, response delivery and Prompt logging settings. It is separate from

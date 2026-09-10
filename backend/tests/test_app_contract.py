@@ -146,6 +146,16 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
     }
 
     assert operations == {
+        ("/api/providers", "post", "createProvider"),
+        ("/api/providers/{provider_id}", "put", "updateProvider"),
+        ("/api/providers/{provider_id}", "delete", "deleteProvider"),
+        ("/api/providers/{provider_id}/models/{model_key}", "put", "updateProviderModel"),
+        ("/api/providers/{provider_id}/models/{model_key}", "delete", "deleteProviderModel"),
+        ("/api/providers/catalog", "get", "getProviderCatalog"),
+        ("/api/providers/{provider_id}", "get", "getProvider"),
+        ("/api/providers/{provider_id}/models", "get", "listProviderModels"),
+        ("/api/providers/{provider_id}/models", "post", "createProviderModel"),
+        ("/api/providers/{provider_id}/models/refresh", "post", "refreshProviderModels"),
         ("/api/agents/settings", "get", "getAgentsSettings"),
         ("/api/agents/settings", "put", "setAgentsSettings"),
         ("/api/agents", "get", "listAgents"),
@@ -389,7 +399,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.20.3",
+        "version": "0.21.0",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

@@ -128,9 +128,13 @@ class _SystemRuntime:
         custom_agents: CustomAgentsService,
         child_executions: ChildExecutionRepository,
         delegation: DelegationCoordinator,
+        provider_mutations=None,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
+        self.custom_providers = getattr(provider_runtime, "custom_providers", None)
+        self.provider_mutations = provider_mutations
+        self.provider_http_client = getattr(provider_runtime, "http_client", None)
         self.ai_settings = ai_settings
         self.general_settings = general_settings
         self.conversation_settings = conversation_settings
@@ -180,9 +184,12 @@ def create_system_runtime(
 
     paths = app_paths if app_paths is not None else build_app_paths()
     provider_runtime = create_provider_runtime(app_paths=paths)
+    workspace_mutation_gate = WorkspaceMutationGate()
     ai_settings = create_ai_settings_service(
         paths,
         provider_runtime.connections,
+        provider_runtime.custom_providers,
+        workspace_mutation_gate,
     )
     general_settings = create_general_settings_service(paths)
     conversation_settings = create_conversation_settings_service(paths)
@@ -191,7 +198,6 @@ def create_system_runtime(
         paths.database_file,
         event_notifier=event_notifier,
     )
-    workspace_mutation_gate = WorkspaceMutationGate()
     workspaces = WorkspaceCatalogService(
         JsonWorkspaceStore(paths.workspace_settings_file),
         WorkspaceRootPolicy(
@@ -217,6 +223,7 @@ def create_system_runtime(
     capability_resolver = ProviderModelCapabilityResolver(
         provider_runtime.connections,
         operation_locks=provider_runtime.operation_locks,
+        custom_providers=provider_runtime.custom_providers,
     )
     child_executions = ChildExecutionRepository(paths.database_file)
     delegation = DelegationCoordinator(child_executions, ChildAgentExecutor(
@@ -239,7 +246,7 @@ def create_system_runtime(
     )
     run_manager = RunManager(repository, agent_loop)
     skills = SkillsService(paths, workspaces)
-    custom_agents = CustomAgentsService(paths, workspaces)
+    custom_agents = CustomAgentsService(paths, workspaces, provider_runtime.custom_providers)
 
     def remove_workspace_registrations(workspace_id: str) -> None:
         # Called under the Workspace mutation gate. Neither cleanup removes
@@ -258,6 +265,7 @@ def create_system_runtime(
         event_notifier=event_notifier,
         skills=skills,
         custom_agents=custom_agents,
+        custom_providers=provider_runtime.custom_providers,
     )
     schedule_repository = SqliteScheduleRepository(paths.database_file)
     schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
@@ -266,7 +274,11 @@ def create_system_runtime(
         workspaces=workspaces,
         workspace_mutation_gate=workspace_mutation_gate,
         on_change=schedule_coordinator.wake,
+        custom_providers=provider_runtime.custom_providers,
     )
+    from .providers.mutations import ProviderMutations
+    provider_mutations = ProviderMutations(provider_runtime.custom_providers,
+        workspace_mutation_gate, repository, run_manager, ai_settings, custom_agents)
     return _SystemRuntime(
         provider_runtime,
         ai_settings,
@@ -283,6 +295,7 @@ def create_system_runtime(
         custom_agents,
         child_executions,
         delegation,
+        provider_mutations,
     )
 
 
@@ -338,6 +351,9 @@ def create_system_app(
             if starter is not None:
                 await starter()
             app.state.provider_connections = runtime.connections
+            app.state.custom_providers = getattr(runtime, "custom_providers", None)
+            app.state.provider_mutations = getattr(runtime, "provider_mutations", None)
+            app.state.provider_http_client = getattr(runtime, "provider_http_client", None)
             app.state.ai_settings = runtime.ai_settings
             app.state.general_settings = runtime.general_settings
             app.state.conversation_settings = runtime.conversation_settings
@@ -378,6 +394,9 @@ def create_system_app(
             yield
         finally:
             app.state.skills = None
+            app.state.custom_providers = None
+            app.state.provider_mutations = None
+            app.state.provider_http_client = None
             app.state.custom_agents = None
             app.state.child_executions = None
             app.state.delegation = None

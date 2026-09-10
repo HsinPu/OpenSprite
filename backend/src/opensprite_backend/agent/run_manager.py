@@ -15,6 +15,7 @@ from opensprite_backend.conversations.repository import (
     ConversationStoreError,
 )
 from opensprite_backend.workspaces import WorkspaceExecutionContext
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.skills.models import SkillExecutionSnapshot
 
 from .loop import AgentLoop
@@ -36,6 +37,7 @@ class RunManager:
         self._loop = loop
         self._tasks: dict[str, asyncio.Task[RunSnapshot]] = {}
         self._cancellations: dict[str, asyncio.Event] = {}
+        self._provider_references: dict[str, frozenset[str]] = {}
         self._closed = False
         self._lock = asyncio.Lock()
 
@@ -45,6 +47,7 @@ class RunManager:
         workspace: WorkspaceExecutionContext,
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> bool:
         async with self._lock:
             if self._closed:
@@ -59,11 +62,15 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace, skills, agents),
+                self._execute(run_id, cancellation, workspace, skills, agents, provider_endpoint),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
             self._cancellations[run_id] = cancellation
+            self._provider_references[run_id] = frozenset((
+                run.provider_id,
+                *(endpoint.provider_id for endpoint in agents.provider_endpoints),
+            )) if agents is not None else frozenset((run.provider_id,))
             task.add_done_callback(
                 lambda completed, owned_run_id=run_id: self._discard(
                     owned_run_id,
@@ -72,6 +79,17 @@ class RunManager:
             )
             return True
 
+    def provider_in_use(self, provider_id: str) -> bool:
+        """Include possible child providers retained by each live parent snapshot.
+
+        Called on the event-loop thread under the application mutation gate.
+        Terminal task callbacks release these references, not mutable Agent files.
+        """
+        return any(
+            provider_id in references and not self._tasks[run_id].done()
+            for run_id, references in self._provider_references.items()
+        )
+
     async def _execute(
         self,
         run_id: str,
@@ -79,8 +97,11 @@ class RunManager:
         workspace: WorkspaceExecutionContext,
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         try:
+            if provider_endpoint is not None:
+                return await self._loop.execute(run_id, cancellation, workspace, skills, agents, provider_endpoint)
             if agents is not None:
                 return await self._loop.execute(run_id, cancellation, workspace, skills, agents)
             if skills is None:
@@ -133,6 +154,7 @@ class RunManager:
         await asyncio.to_thread(self._repository.interrupt_incomplete_runs)
         self._tasks.clear()
         self._cancellations.clear()
+        self._provider_references.clear()
 
     def _discard(
         self,
@@ -142,5 +164,6 @@ class RunManager:
         if self._tasks.get(run_id) is task:
             self._tasks.pop(run_id, None)
             self._cancellations.pop(run_id, None)
+            self._provider_references.pop(run_id, None)
         if not task.cancelled():
             task.exception()

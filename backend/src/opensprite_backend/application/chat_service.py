@@ -1,6 +1,9 @@
 """Application orchestration between settings, Providers, Runs, and storage."""
 
 from __future__ import annotations
+from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS
+from opensprite_backend.providers.catalog_store import CatalogError
+from opensprite_backend.providers.custom_service import CustomProviderService
 from opensprite_backend.skills.service import SkillsService
 from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
 from opensprite_backend.custom_agents.service import CustomAgentsService
@@ -211,6 +214,7 @@ class AgentChatService:
         event_notifier: RunEventNotifier | None = None,
         skills: SkillsService | None = None,
         custom_agents: CustomAgentsService | None = None,
+        custom_providers: CustomProviderService | None = None,
         event_poll_seconds: float = 0.05,
         event_wait_seconds: float = 5.0,
     ) -> None:
@@ -225,6 +229,7 @@ class AgentChatService:
         self._workspaces = workspaces
         self._skills = skills
         self._custom_agents = custom_agents
+        self._custom_providers = custom_providers
         self._workspace_mutation_gate = workspace_mutation_gate
         self._event_poll_seconds = event_poll_seconds
         self._event_wait_seconds = event_wait_seconds
@@ -423,33 +428,47 @@ class AgentChatService:
         log_full_prompts: bool,
         skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
-        try:
-            providers = await self._provider_connections.list_providers()
-        except ProviderConnectionError as error:
-            code = (
-                ChatErrorCode.CREDENTIAL_STORE_UNAVAILABLE
-                if error.code is ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
-                else ChatErrorCode.INTERNAL_ERROR
-            )
-            raise AgentChatError(code) from error
-        selected = next(
-            (
-                provider
-                for provider in providers.providers
-                if provider.id == profile.provider_id
-            ),
-            None,
-        )
-        if selected is None or not selected.connected:
-            raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
+        is_custom = profile.provider_id not in BUILTIN_PROVIDER_IDS
+        if not is_custom:
+            try:
+                providers = await self._provider_connections.list_providers()
+            except ProviderConnectionError as error:
+                code = (
+                    ChatErrorCode.CREDENTIAL_STORE_UNAVAILABLE
+                    if error.code is ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
+                    else ChatErrorCode.INTERNAL_ERROR
+                )
+                raise AgentChatError(code) from error
+            selected = next((provider for provider in providers.providers if provider.id == profile.provider_id), None)
+            if selected is None or not selected.connected:
+                raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
         async with self._workspace_mutation_gate.hold():
             try:
+                provider_endpoint = None
+                if is_custom:
+                    if self._custom_providers is None:
+                        raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
+                    try:
+                        provider_endpoint = await asyncio.to_thread(self._custom_providers.execution_endpoint, profile.provider_id)
+                    except CatalogError:
+                        raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED) from None
                 workspace = self._workspaces.execution_context(workspace_id)
                 try:
                     agent_snapshot = self._custom_agents.snapshot(workspace_id) if self._custom_agents else AgentExecutionSnapshot()
                 except AgentError:
                     # Bad Agent configuration must not prevent ordinary chat.
                     agent_snapshot = AgentExecutionSnapshot()
+                if self._custom_providers is not None:
+                    endpoints = {provider_endpoint.provider_id: provider_endpoint} if provider_endpoint is not None else {}
+                    for candidate in agent_snapshot.available:
+                        identifier = candidate.definition.provider_id if candidate.definition is not None else None
+                        if identifier and identifier not in BUILTIN_PROVIDER_IDS and identifier not in endpoints:
+                            try:
+                                endpoints[identifier] = await asyncio.to_thread(self._custom_providers.execution_endpoint, identifier)
+                            except CatalogError:
+                                # An unavailable child provider must not prevent ordinary chat.
+                                continue
+                    agent_snapshot = AgentExecutionSnapshot(agent_snapshot.available, tuple(endpoints.values()))
                 skill_snapshot = self._skills.snapshot(workspace_id, skill_ids) if self._skills else SkillExecutionSnapshot()
                 if skill_ids and self._skills is None:
                     raise SkillError("skill_unavailable")
@@ -478,13 +497,15 @@ class AgentChatService:
                 raise _workspace_error(error) from error
             except ConversationStoreError as error:
                 raise _store_error(error) from error
-        if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
-            if self._custom_agents is not None:
-                await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot)
-            elif self._skills is None:
-                await self._run_manager.start(accepted.run.id, workspace)
-            else:
-                await self._run_manager.start(accepted.run.id, workspace, skill_snapshot)
+            if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
+                if provider_endpoint is not None:
+                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot, provider_endpoint)
+                elif self._custom_agents is not None:
+                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot)
+                elif self._skills is None:
+                    await self._run_manager.start(accepted.run.id, workspace)
+                else:
+                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot)
         return accepted
 
     async def get_run(self, run_id: str) -> RunSnapshot:

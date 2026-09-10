@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite Skills API",
-    "version": "0.20.4",
+    "version": "0.21.0",
     "description": "Strict local Skills management with automatic global inheritance and same-name workspace precedence. Workspace registrations shadow global Skills even when disabled or invalid. Mutations require catalog expectedRevision."
   },
   "paths": {

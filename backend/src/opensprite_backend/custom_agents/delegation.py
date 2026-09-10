@@ -56,11 +56,13 @@ class DelegationCoordinator:
         context = self._parents[parent_id]
         definition, task = self._inputs[child_id]
         child = await asyncio.to_thread(self._store.get, parent_id, child_id)
+        endpoint = next((item for item in context.agents.provider_endpoints if item.provider_id == child.provider_id), None)
         return await self._executor.execute(
             child=child, parent=context.run, workspace=context.workspace,
             skills=context.skills, definition=definition, task=task,
             tools=context.tools, availability=context.availability,
             base_system_prompt=context.base_system_prompt, cancellation_event=asyncio.Event(),
+            **({"provider_endpoint": endpoint} if endpoint is not None else {}),
         )
 
     async def _observe(self, parent_id, child_id):

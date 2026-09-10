@@ -9,7 +9,8 @@ from enum import Enum
 from typing import Literal, TypeAlias
 
 
-ProviderId = Literal["openai", "anthropic", "openrouter"]
+from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot, valid_provider_id
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
 ModelRole = Literal["system", "user", "assistant", "tool"]
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -110,10 +111,13 @@ class ModelRequest:
     messages: tuple[ModelMessage, ...]
     tools: tuple[ModelToolDefinition, ...]
     max_output_tokens: int = 8192
+    provider_endpoint: ProviderEndpointSnapshot | None = None
 
     def __post_init__(self) -> None:
-        if self.provider_id not in {"openai", "anthropic", "openrouter"}:
+        if not valid_provider_id(self.provider_id):
             raise ValueError("invalid request provider")
+        if self.provider_endpoint is not None and self.provider_endpoint.provider_id != self.provider_id:
+            raise ValueError("provider snapshot mismatch")
         if not isinstance(self.model_id, str) or not 1 <= len(self.model_id) <= 256:
             raise ValueError("invalid request model")
         if self.response_mode not in {"default", "fast", "balanced", "deep"}:

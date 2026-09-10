@@ -24,6 +24,7 @@ from opensprite_backend.custom_agents.child_repository import (
 )
 from opensprite_backend.custom_agents.definition import AgentDefinition
 from opensprite_backend.inference.gateway import ModelGateway
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.prompt_logging import PromptLogWriter
 from opensprite_backend.skills.models import SkillExecutionSnapshot
 from opensprite_backend.tools.availability import ToolAvailabilitySnapshot
@@ -108,6 +109,7 @@ class ChildAgentExecutor:
         availability: ToolAvailabilitySnapshot,
         base_system_prompt: str,
         cancellation_event: asyncio.Event,
+        provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         """Execute ``task`` using only the snapshots accepted by the parent.
 
@@ -139,6 +141,7 @@ class ChildAgentExecutor:
             cancellation_event,
             workspace=workspace,
             skills=child_skills,
+            provider_endpoint=provider_endpoint,
         )
 
 

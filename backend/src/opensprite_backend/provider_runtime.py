@@ -19,6 +19,9 @@ from .provider_transaction import (
     ProviderTransactionJournal,
 )
 from .providers import ProviderOperationLocks, ProviderValidator
+from .providers.catalog_store import JsonProviderCatalog
+from .providers.catalog_transaction import ProviderCatalogTransaction
+from .providers.custom_service import CustomProviderService
 
 
 @dataclass(slots=True)
@@ -31,9 +34,13 @@ class ProviderRuntime:
     credential_store: CredentialStore
     http_client: httpx.AsyncClient
     owns_http_client: bool
+    custom_providers: CustomProviderService | None = None
 
     async def astart(self) -> None:
         await self.connections.recover_pending()
+        if self.custom_providers is not None:
+            import asyncio
+            await asyncio.to_thread(self.custom_providers.transaction.recover)
 
     async def aclose(self) -> None:
         if self.owns_http_client:
@@ -98,4 +105,9 @@ def create_provider_runtime(
         credential_store=store,
         http_client=client,
         owns_http_client=owns_client,
+        custom_providers=CustomProviderService(ProviderCatalogTransaction(
+            JsonProviderCatalog(paths.provider_catalog_file),
+            store,
+            paths.provider_catalog_transaction_file,
+        )),
     )

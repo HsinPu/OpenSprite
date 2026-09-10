@@ -199,11 +199,9 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
 def test_response_mode_keeps_provider_default_as_an_explicit_value() -> None:
     schemas = load_contract()["components"]["schemas"]
 
-    assert schemas["ProviderId"]["enum"] == [
-        "openai",
-        "anthropic",
-        "openrouter",
-    ]
+    import re
+    for provider_id in ("openai", "anthropic", "openrouter", "11111111-1111-4111-8111-111111111111"):
+        assert re.fullmatch(schemas["ProviderId"]["pattern"], provider_id)
     assert schemas["ResponseMode"]["enum"] == [
         "default",
         "fast",

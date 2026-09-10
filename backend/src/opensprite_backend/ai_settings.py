@@ -10,6 +10,10 @@ from .app_paths import AppPaths
 from .atomic_file import atomic_write
 from .models import AiSettings, ErrorCode
 from .provider_connections import ProviderConnectionError, ProviderConnections
+from .providers.catalog_models import BUILTIN_PROVIDER_IDS
+from .providers.catalog_store import CatalogError
+from .providers.custom_service import CustomProviderService
+from .workspaces import WorkspaceMutationGate
 
 _SCHEMA_VERSION: Final = 8
 _PREVIOUS_CANONICAL_SCHEMA_VERSION: Final = 7
@@ -228,15 +232,32 @@ class AiSettingsService:
         self,
         store: AiSettingsStore,
         provider_connections: ProviderConnections,
+        custom_providers: CustomProviderService | None = None,
+        mutation_gate: WorkspaceMutationGate | None = None,
     ) -> None:
         self._store = store
         self._provider_connections = provider_connections
+        self._custom_providers = custom_providers
+        self._mutation_gate = mutation_gate or WorkspaceMutationGate()
 
     async def get(self) -> AiSettings:
         return self._store.get()
 
     async def put(self, payload: AiSettings) -> AiSettings:
-        if payload.model is not None:
+        async with self._mutation_gate.hold():
+            return await self._put(payload)
+
+    async def _put(self, payload: AiSettings) -> AiSettings:
+        if payload.model is not None and payload.model.provider_id not in BUILTIN_PROVIDER_IDS:
+            if self._custom_providers is None:
+                raise ProviderConnectionError(ErrorCode.NOT_CONNECTED)
+            try:
+                provider = self._custom_providers.get(payload.model.provider_id)
+            except CatalogError:
+                raise ProviderConnectionError(ErrorCode.NOT_CONNECTED) from None
+            if not any(model.model_id == payload.model.model_id for model in provider.models):
+                raise ProviderConnectionError(ErrorCode.INVALID_REQUEST)
+        elif payload.model is not None:
             providers = await self._provider_connections.list_providers()
             if not any(
                 provider.id == payload.model.provider_id and provider.connected
@@ -250,10 +271,14 @@ class AiSettingsService:
 def create_ai_settings_service(
     app_paths: AppPaths,
     provider_connections: ProviderConnections,
+    custom_providers: CustomProviderService | None = None,
+    mutation_gate: WorkspaceMutationGate | None = None,
 ) -> AiSettingsService:
     """Compose AI settings persistence from the local data root."""
 
     return AiSettingsService(
         JsonAiSettingsStore(app_paths.settings_file),
         provider_connections,
+        custom_providers,
+        mutation_gate,
     )

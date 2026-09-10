@@ -70,7 +70,7 @@
   },
   "components": {
     "schemas": {
-      "ProviderId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]},
+      "ProviderId": {"type": "string", "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"},
       "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
       "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
       "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]},

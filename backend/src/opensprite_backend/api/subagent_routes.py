@@ -30,7 +30,7 @@ SubagentStatus = Literal[
     "interrupted",
     "timed_out",
 ]
-ProviderId = Literal["openai", "anthropic", "openrouter"]
+from opensprite_backend.provider_identity import ProviderId
 
 
 class SubagentSummary(StrictModel):

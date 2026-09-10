@@ -35,9 +35,13 @@ class _ToolFragments:
     arguments: str = ""
 
 
-class OpenRouterInferenceAdapter:
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._http = NativeHttpAdapter(client, OPENROUTER_CHAT_URL)
+class ChatCompletionsInferenceAdapter:
+    """Shared wire protocol; provider-specific request extensions are opt-in."""
+
+    def __init__(self, client: httpx.AsyncClient, endpoint: str, *, openrouter_extensions: bool = False, bearer_auth: bool = True) -> None:
+        self._http = NativeHttpAdapter(client, endpoint)
+        self._openrouter_extensions = openrouter_extensions
+        self._bearer_auth = bearer_auth
 
     async def stream(
         self,
@@ -54,10 +58,10 @@ class OpenRouterInferenceAdapter:
         if request.tools:
             body["tools"] = _tools(request.tools)
             body["tool_choice"] = "auto"
-            if request.model_id != "openrouter/auto":
+            if self._openrouter_extensions and request.model_id != "openrouter/auto":
                 body["provider"] = {"require_parameters": True}
         selected_effort = effort(request.response_mode)
-        if selected_effort is not None:
+        if self._openrouter_extensions and selected_effort is not None:
             body["reasoning"] = {
                 "effort": selected_effort,
                 "exclude": True,
@@ -68,7 +72,7 @@ class OpenRouterInferenceAdapter:
         done = False
         async for raw in self._http.payloads(
             headers={
-                "Authorization": f"Bearer {api_key}",
+                **({"Authorization": f"Bearer {api_key}"} if self._bearer_auth else {}),
                 "Accept": "text/event-stream",
                 "Content-Type": "application/json",
             },
@@ -142,6 +146,11 @@ class OpenRouterInferenceAdapter:
         if finish_reason != "stop":
             raise invalid_response()
         yield ModelCompleted(ModelFinishReason.FINAL)
+
+
+class OpenRouterInferenceAdapter(ChatCompletionsInferenceAdapter):
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        super().__init__(client, OPENROUTER_CHAT_URL, openrouter_extensions=True)
 
 
 def _messages(messages: tuple[ModelMessage, ...]) -> list[dict[str, object]]:

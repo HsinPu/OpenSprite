@@ -285,6 +285,91 @@ async def test_replay_does_not_depend_on_current_configuration(tmp_path: Path, m
 
 
 @async_test
+async def test_custom_provider_acceptance_passes_endpoint_snapshot(tmp_path, monkeypatch):
+    from opensprite_backend.credentials.encrypted_json_store import EncryptedJsonCredentialStore
+    from opensprite_backend.providers.catalog_store import JsonProviderCatalog
+    from opensprite_backend.providers.catalog_transaction import ProviderCatalogTransaction
+    from opensprite_backend.providers.custom_service import CustomProviderService
+
+    chat, repository, manager, _ = service(tmp_path)
+    custom = CustomProviderService(ProviderCatalogTransaction(JsonProviderCatalog(tmp_path / "providers.json"),
+        EncryptedJsonCredentialStore(tmp_path / "auth.json", tmp_path / "key"), tmp_path / "transaction.json"))
+    provider = custom.save(provider_id=None, name="Local", base_url="https://example.com/v1", auth_mode="none",
+        allow_insecure_local=False, expected_revision=0, secret=None)
+    chat._custom_providers = custom
+    await chat._ai_settings.put(AiSettings(model=ModelSelection(providerId=provider.id, modelId="local",
+        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.DEFAULT))
+    captured = []
+
+    async def capture(*args):
+        captured.append(args)
+        return True
+
+    monkeypatch.setattr(manager, "start", capture)
+    async def unrelated_builtin_failure():
+        raise AssertionError("Custom no-auth Run must not read builtin connection metadata")
+    monkeypatch.setattr(chat._provider_connections, "list_providers", unrelated_builtin_failure)
+    accepted = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+        client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
+    assert accepted.run.provider_id == provider.id
+    assert captured[0][-1] == custom.execution_endpoint(provider.id)
+    assert repository.get_run(accepted.run.id).provider_id == provider.id
+    await chat.close()
+
+
+@pytest.mark.parametrize("scheduled", [False, True])
+@async_test
+async def test_custom_provider_run_completes_with_registered_capability(tmp_path, scheduled):
+    from uuid import uuid4
+    from opensprite_backend.credentials.encrypted_json_store import EncryptedJsonCredentialStore
+    from opensprite_backend.providers.catalog_store import CustomModel, JsonProviderCatalog
+    from opensprite_backend.providers.catalog_transaction import ProviderCatalogTransaction
+    from opensprite_backend.providers.custom_service import CustomProviderService
+    from opensprite_backend.model_capability_resolver import ProviderModelCapabilityResolver
+
+    chat, repository, old_manager, _ = service(tmp_path)
+    await old_manager.close()
+    custom = CustomProviderService(ProviderCatalogTransaction(JsonProviderCatalog(tmp_path / "providers.json"),
+        EncryptedJsonCredentialStore(tmp_path / "auth.json", tmp_path / "key"), tmp_path / "transaction.json"))
+    provider = custom.save(provider_id=None, name="Local", base_url="https://example.com/v1", auth_mode="none",
+        allow_insecure_local=False, expected_revision=0, secret=None)
+    custom.save_model(provider.id, CustomModel(key=str(uuid4()), model_id="local", name="Local",
+        context_limit=32000, output_limit=4000, tools=False), expected_revision=1)
+    requests = []
+
+    class CustomGateway:
+        async def stream(self, request):
+            requests.append(request)
+            assert request.provider_id == provider.id
+            assert request.provider_endpoint == custom.execution_endpoint(provider.id)
+            yield ModelTextDelta("custom response")
+            yield ModelCompleted(ModelFinishReason.FINAL)
+
+    loop = AgentLoop(repository=repository, gateway=CustomGateway(),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=ProviderModelCapabilityResolver(FixedConnections(set()), custom_providers=custom))
+    manager = RunManager(repository, loop)
+    chat._run_manager = manager
+    chat._custom_providers = custom
+    await chat._ai_settings.put(AiSettings(model=ModelSelection(providerId=provider.id, modelId="local",
+        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.DEFAULT))
+    try:
+        if scheduled:
+            accepted = await chat.start_scheduled_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+                occurrence_id=str(uuid4()), message="hello", profile=ExecutionProfile(provider_id=provider.id,
+                    model_id="local", response_mode="default", context_budget="auto", output_budget="auto",
+                    output_continuation="off"))
+        else:
+            accepted = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+                client_request_id=str(uuid4()), message="hello")
+        result = await manager.wait(accepted.run.id)
+        assert result.status is RunStatus.COMPLETED
+        assert requests and requests[0].max_output_tokens == 4000
+    finally:
+        await chat.close()
+
+
+@async_test
 async def test_concurrent_replays_start_only_one_agent(tmp_path: Path, monkeypatch) -> None:
     chat, repository, manager, _workspaces = service(tmp_path)
     original = manager.start

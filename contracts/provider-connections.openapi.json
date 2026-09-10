@@ -353,7 +353,7 @@
       },
       "ProviderId": {
         "type": "string",
-        "enum": ["openai", "anthropic", "openrouter"]
+        "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"
       },
       "ProviderStatus": {
         "type": "string",
@@ -385,7 +385,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Stable display name: OpenAI, Anthropic, or OpenRouter."
+            "description": "Built-in display name or the custom Provider display name."
           },
           "connected": {
             "type": "boolean",
@@ -413,7 +413,6 @@
           "providers": {
             "type": "array",
             "minItems": 3,
-            "maxItems": 3,
             "prefixItems": [
               {
                 "allOf": [
@@ -452,7 +451,7 @@
                 ]
               }
             ],
-            "items": false
+            "items": {"$ref": "#/components/schemas/ProviderSummary"}
           }
         }
       },

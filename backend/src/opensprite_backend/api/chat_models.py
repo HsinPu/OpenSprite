@@ -1,6 +1,7 @@
 """Strict consumer-visible models for Conversation and Run HTTP routes."""
 
 from __future__ import annotations
+from opensprite_backend.provider_identity import ProviderId
 
 from datetime import datetime
 from typing import Literal
@@ -108,7 +109,7 @@ class RunResponse(ChatContractModel):
     workspace_mount_manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     user_message_id: UUID
     assistant_message_id: UUID | None
-    provider_id: Literal["openai", "anthropic", "openrouter"]
+    provider_id: ProviderId
     model_id: str
     response_mode: Literal["default", "fast", "balanced", "deep"]
     status: Literal[
