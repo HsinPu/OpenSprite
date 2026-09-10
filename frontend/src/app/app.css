@@ -18,6 +18,7 @@
   --os-success-soft: #e8f7f2;
   --os-radius: 14px;
   --os-shadow: 0 12px 34px rgb(45 39 34 / 6%);
+  --execution-panel-width: 330px;
 }
 
 * {
@@ -68,14 +69,14 @@ button {
 
 .main-sidebar {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1 / -1;
   position: relative;
   z-index: 20;
   display: flex;
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  padding: 28px 16px 18px;
+  padding: 14px 16px 18px;
   overflow: hidden;
   border-right: 1px solid var(--os-border);
   background: rgba(255, 255, 255, 0.92);
@@ -83,9 +84,10 @@ button {
 
 .sidebar-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   margin-bottom: 16px;
+  min-height: 40px;
 }
 
 .workspace-switcher { display: grid; gap: 5px; }
@@ -101,9 +103,9 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 2px 8px 0;
-  font-size: 23px;
+  gap: 8px;
+  padding: 2px 0 0;
+  font-size: 21px;
   font-weight: 720;
   letter-spacing: -0.6px;
 }
@@ -347,15 +349,14 @@ button {
 }
 
 .mobile-header {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--os-border);
-  background: var(--os-surface);
+  background: transparent;
 }
 .mobile-menu-button, .app-header__new-chat.ant-btn, .mobile-execution-button.ant-btn {
   display: inline-flex;
@@ -379,7 +380,23 @@ button {
 .app-header__breadcrumb h1 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
 @media (min-width: 901px) {
   .app-shell.is-sidebar-collapsed .main-sidebar { display: none; }
+  .app-content { grid-row: 1 / -1; }
+  .mobile-header { z-index: 10; pointer-events: none; }
+  .mobile-header > * { pointer-events: auto; }
+  .app-content .chat-workspace__main { padding-top: 60px; }
+  .app-content .chat-workspace__context-heading {
+    min-height: 60px;
+    padding: 8px 22px;
+  }
+  .app-shell:has(.chat-workspace__context:not(.chat-workspace__context--collapsed)) .mobile-header {
+    margin-right: var(--execution-panel-width);
+  }
 }
+
+@media (max-width: 1023px) {
+  :root { --execution-panel-width: 280px; }
+}
+
 
 @media (max-width: 900px) {
   body {
@@ -409,7 +426,6 @@ button {
     align-items: center;
     gap: 10px;
     padding: 0 16px;
-    border-bottom: 1px solid var(--os-border);
     background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(12px);
   }

@@ -398,7 +398,7 @@ export function App() {
         >
           {(mobileNavigation ? menuOpen : !sidebarCollapsed) ? <LeftOutlined /> : <RightOutlined />}
         </button>
-        <Button className="app-header__new-chat" inert={mobileNavigation && menuOpen} icon={<PlusOutlined />} title={t("app.newConversation")} aria-label={t("app.newConversation")} onClick={startNewChat} />
+        {(mobileNavigation || sidebarCollapsed) && <Button className="app-header__new-chat" inert={mobileNavigation && menuOpen} icon={<PlusOutlined />} title={t("app.newConversation")} aria-label={t("app.newConversation")} onClick={startNewChat} />}
         <div className="app-header__breadcrumb" title={`${currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")} / ${chatTitle}`}>
           <FolderOutlined aria-hidden="true" />
           <span>{currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")}</span>

@@ -175,13 +175,15 @@ describe("Ant Design shell controls", () => {
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it("places independent panel controls in the top header and fully hides navigation", () => {
+  it("keeps both panel controls in the header while expanding and collapsing", () => {
     const { container } = render(<App />);
 
+    expect(container.querySelector(".app-header__new-chat")).toBeNull();
     const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
     const executionToggle = screen.getByRole("button", { name: "展開本次執行" });
     expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
     expect(sidebarToggle.closest("header")).toBe(container.querySelector(".mobile-header"));
+    expect(container.querySelector(".main-sidebar .mobile-menu-button")).toBeNull();
     expect(sidebarToggle.closest(".app-shell")).toBe(container.querySelector(".app-shell"));
     expect(sidebarToggle.closest(".chat-workspace__header")).toBeNull();
     expect(sidebarToggle.getAttribute("aria-controls")).toBe("main-navigation-sidebar");
@@ -196,12 +198,17 @@ describe("Ant Design shell controls", () => {
 
     fireEvent.click(sidebarToggle);
     const expandSidebar = screen.getByRole("button", { name: "展開側邊欄" });
+    expect(expandSidebar).toBe(sidebarToggle);
+    expect(container.querySelector(".app-header__new-chat")).not.toBeNull();
     expect(container.querySelector(".app-shell")?.classList.contains("is-sidebar-collapsed")).toBe(true);
     expect(expandSidebar.querySelector(".anticon-right")).toBeTruthy();
     expect(container.querySelector(".main-sidebar")?.hasAttribute("inert")).toBe(true);
     expect(screen.queryByRole("button", { name: "設定" })).toBeNull();
     fireEvent.click(executionToggle);
     expect(screen.getByRole("button", { name: "收合本次執行" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "收合本次執行" })).toBe(executionToggle);
+    expect(container.querySelector(".mobile-header-actions button")).toBe(executionToggle);
+    expect(container.querySelector(".chat-workspace__context-heading button")).toBeNull();
     expect(expandSidebar.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(expandSidebar);
     expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
