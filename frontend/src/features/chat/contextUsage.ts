@@ -1,3 +1,4 @@
+import { isProviderId } from "../../api/providerConnections";
 import type { ContextUsage, RunEvent } from "../../api/agentChat";
 
 const MAX_VISIBLE_EVENTS = 500;
@@ -7,7 +8,7 @@ export function contextUsageFromEvent(event: RunEvent): ContextUsage | null {
   if (event.type !== "model.started") return null;
   const { providerId, modelId, contextTokens, contextLimitTokens, inputBudgetTokens } = event.data;
   if (
-    (providerId !== "openai" && providerId !== "anthropic" && providerId !== "openrouter")
+    !isProviderId(providerId)
     || typeof modelId !== "string"
     || !modelId
     || !isInteger(contextTokens)

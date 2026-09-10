@@ -33,7 +33,7 @@ export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogIte
 export function modelLabel(selection: ModelSelection | null, openRouterModels: ReadonlyArray<Pick<ModelCatalogItem, "id" | "label">> = [], t: Translator = defaultTranslator): string {
   if (!selection) return t("model.none");
   const catalog = selection.providerId === "openrouter" ? openRouterModels : localModelCatalog[selection.providerId];
-  return catalog.find((model) => model.id === selection.modelId)?.label ?? selection.modelId;
+  return catalog?.find((model) => model.id === selection.modelId)?.label ?? selection.modelId;
 }
 
 export function openRouterModelCatalog(models: ReadonlyArray<OpenRouterModel>): ReadonlyArray<ModelCatalogItem> {

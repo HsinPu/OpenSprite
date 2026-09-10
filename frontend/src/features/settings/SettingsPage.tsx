@@ -35,6 +35,7 @@ import type { SettingsSection } from "./settingsState";
 import "./settings.css";
 import { SkillsSettings } from "./SkillsSettings";
 import { AgentsSettings } from "./AgentsSettings";
+import { CustomProviderCreate } from "./CustomProviderCreate";
 
 type SettingsPageProps = {
   section: SettingsSection;
@@ -325,12 +326,15 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
     }
   };
 
-  const connectedProviders = useMemo(() => providers?.filter((provider) => provider.connected) ?? [], [providers]);
+  const modelsFor = useCallback((id: ProviderId) => localModelCatalog[id] ?? providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === id).map((choice) => ({
+    id: choice.selection.modelId, label: choice.label, contextWindowTokens: choice.contextWindowTokens ?? 8192, maxOutputTokens: choice.maxOutputTokens ?? 2048,
+  })), [providerCatalog.modelChoices]);
+  const connectedProviders = useMemo(() => providers?.filter((provider) => provider.connected || (!(provider.id in localModelCatalog) && modelsFor(provider.id).length > 0)) ?? [], [providers, modelsFor]);
   const selectedProvider = modelSelection
     ? connectedProviders.find((provider) => provider.id === modelSelection.providerId)
     : connectedProviders.length === 1 ? connectedProviders[0] : undefined;
   const selectedModels = selectedProvider
-    ? selectedProvider.id === "openrouter" ? openRouterModels ?? [] : localModelCatalog[selectedProvider.id]
+    ? selectedProvider.id === "openrouter" ? openRouterModels ?? [] : modelsFor(selectedProvider.id)
     : [];
   const selectedModelIsAvailable = modelSelection !== null && selectedModels.some((model) => model.id === modelSelection.modelId);
   const openRouterModelsPending = connectedProviders.some((provider) => provider.id === "openrouter") && openRouterModels === null && (openRouterModelLoadStatus === "idle" || openRouterModelLoadStatus === "loading");
@@ -342,12 +346,13 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
 
   useEffect(() => {
     if (!aiSettingsLoaded || providers === null || aiSettingsSaving) return;
+    if (modelSelection && !["openai", "anthropic", "openrouter"].includes(modelSelection.providerId)) return;
     if (modelSelection !== null && selectedProvider?.id === "openrouter" && (openRouterModelLoadStatus !== "success" || selectedModelIsAvailable)) return;
     if (modelSelection !== null && selectedProvider && selectedModelIsAvailable) { reconciliationRef.current = null; return; }
     const key = `${modelSelection?.providerId ?? "none"}:${modelSelection?.modelId ?? "none"}:${connectedProviders.map((provider) => `${provider.id}:${provider.connected}`).join(",")}:${openRouterModelLoadStatus}:${openRouterModels?.map((model) => model.id).join(",") ?? ""}`;
     if (reconciliationRef.current === key) return;
     reconciliationRef.current = key;
-    const fallback = connectedProviders.map((provider) => ({ provider, models: provider.id === "openrouter" ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : []) : localModelCatalog[provider.id] })).find((candidate) => candidate.models.length > 0);
+    const fallback = connectedProviders.map((provider) => ({ provider, models: provider.id === "openrouter" ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : []) : modelsFor(provider.id) })).find((candidate) => candidate.models.length > 0);
     const model = fallback?.models[0];
     if (fallback && model) void requestSelection({ providerId: fallback.provider.id, modelId: model.id, contextBudget: "auto", outputBudget: "auto" });
     else if (modelSelection !== null && connectedProviders.length === 0) void requestSelection(null);
@@ -407,17 +412,18 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
     <div className="settings-form-stack">
       <SettingsCard icon="connections" title={t("models.providers")}>
         <p className="settings-card-description">{t("models.providersDescription")}</p>
+        <CustomProviderCreate onChanged={refreshProviders} container={modalContainer} onOverlayChange={onProviderModalChange} hasCustomProviders={providers?.some((provider) => provider.id !== "openai" && provider.id !== "anthropic" && provider.id !== "openrouter") ?? false} />
         {providers === null && !catalogError ? <p className="settings-provider-feedback" role="status" aria-live="polite">{t("models.loadingProviders")}</p> : null}
         {catalogError ? <div className="settings-provider-feedback settings-provider-feedback--error" role="alert"><p>{catalogError}</p><button type="button" className="settings-secondary-button" onClick={() => void refreshProviders()}>{t("common.retry")}</button></div> : null}
         {!aiSettingsLoaded && !aiSettingsError ? <p className="settings-provider-feedback" role="status">{t("models.loadingSettings")}</p> : null}
         {providers ? (
           <div className="settings-service-list">
-            {providers.map((provider) => {
+            {providers.filter((provider) => ["openai", "anthropic", "openrouter"].includes(provider.id)).map((provider) => {
               const busy = operations[provider.id] !== undefined;
               const statusClass = provider.status === "connected" ? "settings-online" : "settings-offline";
               return (
                 <div className="settings-service-card" key={provider.id} aria-label={t("models.providerConnection", { provider: provider.name })} aria-busy={busy}>
-                  <div className="settings-service-identity"><Icon name={provider.id} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{t(providerStatusKeys[provider.status])}</span>{provider.credentialPreview ? <small>{provider.credentialPreview}</small> : null}</span></div>
+                  <div className="settings-service-identity"><Icon name={provider.id === "openai" || provider.id === "anthropic" || provider.id === "openrouter" ? provider.id : "robot"} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{t(providerStatusKeys[provider.status])}</span>{provider.credentialPreview ? <small>{provider.credentialPreview}</small> : null}</span></div>
                   <div className="settings-service-actions" role="group" aria-label={t("models.providerActions", { provider: provider.name })} aria-busy={busy}>
                     <button type="button" className="settings-secondary-button" onClick={() => setModalProvider(provider)} disabled={busy}>{provider.connected ? t("models.manage") : t("models.connect")}</button>
                     {provider.connected ? <><button type="button" className="settings-secondary-button" onClick={() => void testConnection(provider)} disabled={busy}>{busy ? t("common.processing") : t("models.testConnection")}</button><Popconfirm title={t("models.removeConfirmTitle", { provider: provider.name })} description={t("models.removeConfirmDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} getPopupContainer={() => modalContainer ?? document.body} onConfirm={() => void disconnect(provider)} okButtonProps={{ loading: busy }}><button type="button" className="settings-danger-button" disabled={busy}>{t("common.remove")}</button></Popconfirm></> : null}
@@ -431,7 +437,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
       </SettingsCard>
       <SettingsCard icon="robot" title={t("models.selectModel")}>
         <div className="settings-model-selection">
-          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={!aiSettingsLoaded || providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto", outputBudget: "auto" }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={!aiSettingsLoaded || providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : modelsFor(providerId as ProviderId); const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto", outputBudget: "auto" }); }} /></div>
 <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><div className="settings-model-picker"><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto", outputBudget: "auto" }); }} />{selectedProvider?.id === "openrouter" ? <Tooltip title={t("models.refreshModels")} getPopupContainer={getSettingsPopupContainer}><Button className="settings-model-refresh" type="text" aria-label={t("models.refreshModels")} icon={<ReloadOutlined aria-hidden="true" />} loading={openRouterModelLoadStatus === "loading"} disabled={aiSettingsSaving || operations.openrouter !== undefined || openRouterModelLoadStatus === "loading"} onClick={() => void loadOpenRouterModels(true)} /></Tooltip> : null}</div></div>
           <div className="settings-select-row"><label htmlFor="settings-context-budget">{t("models.contextBudget")}</label><Select id="settings-context-budget" aria-describedby="settings-context-helper" value={modelSelection?.contextBudget ?? "auto"} options={contextOptions} getPopupContainer={getSettingsPopupContainer} disabled={!aiSettingsLoaded || !selectedModel || !modelSelection || aiSettingsSaving} onChange={(contextBudget: ContextBudget) => { if (modelSelection && selectedModel) { const contextLimit = contextBudgetLimit(contextBudget, selectedModel.contextWindowTokens); const outputBudget = outputBudgetAvailable(modelSelection.outputBudget, contextLimit, selectedModel.maxOutputTokens) ? modelSelection.outputBudget : "auto"; void requestSelection({ ...modelSelection, contextBudget, outputBudget }); } }} /></div>
           {selectedModel && effectiveContextLimit !== null ? <p id="settings-context-helper" className="settings-helper-text">{t("models.contextSummary", { maximum: formatTokenLimit(selectedModel.contextWindowTokens), effective: formatTokenLimit(effectiveContextLimit) })}</p> : null}

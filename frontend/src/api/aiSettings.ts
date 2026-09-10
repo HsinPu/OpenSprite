@@ -1,4 +1,4 @@
-import { providerIds, type ProviderId } from "./providerConnections";
+import { isProviderId, type ProviderId } from "./providerConnections";
 import { defaultTranslator, type MessageKey, type Translator } from "../i18n/catalog";
 
 export type PersistedModelSelection = {
@@ -43,7 +43,7 @@ const responseDeliveries = ["stream", "complete"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {
   if (value === null) return null;
-  if (!record(value) || !exactKeys(value, ["providerId", "modelId", "contextBudget", "outputBudget"]) || !providerIds.includes(value.providerId as ProviderId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim() || typeof value.contextBudget !== "string" || !contextBudgets.includes(value.contextBudget as ContextBudget) || typeof value.outputBudget !== "string" || !outputBudgets.includes(value.outputBudget as OutputBudget)) {
+  if (!record(value) || !exactKeys(value, ["providerId", "modelId", "contextBudget", "outputBudget"]) || !isProviderId(value.providerId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim() || typeof value.contextBudget !== "string" || !contextBudgets.includes(value.contextBudget as ContextBudget) || typeof value.outputBudget !== "string" || !outputBudgets.includes(value.outputBudget as OutputBudget)) {
     throw new AiSettingsApiError("malformed_response");
   }
   return { providerId: value.providerId as ProviderId, modelId: value.modelId, contextBudget: value.contextBudget as ContextBudget, outputBudget: value.outputBudget as OutputBudget };

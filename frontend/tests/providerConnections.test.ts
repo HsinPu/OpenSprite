@@ -29,6 +29,14 @@ const disconnectedOpenAi = {
 const capability = { contextWindowTokens: 131_072, maxOutputTokens: 8_192 };
 
 describe("provider connection client", () => {
+  it("accepts custom providers after builtins but rejects duplicate identities", async () => {
+    const custom = { id: "11111111-1111-4111-8111-111111111111", name: "Local service", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null };
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ providers: [...catalog.providers, custom] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ providers: [...catalog.providers, custom, custom] }))));
+    await expect(listProviderConnections()).resolves.toEqual([...catalog.providers, custom]);
+    await expect(listProviderConnections()).rejects.toThrow("malformed_response");
+  });
   it("validates the fixed catalog order and sends only the contracted request shapes", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(catalog)))

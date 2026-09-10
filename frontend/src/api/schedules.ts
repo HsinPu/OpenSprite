@@ -1,3 +1,4 @@
+import { isProviderId } from "./providerConnections";
 import type {
   ContextBudget,
   OutputBudget,
@@ -77,7 +78,6 @@ const responseModes = ["default", "fast", "balanced", "deep"] as const;
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
 const continuations = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const;
-const providers = ["openai", "anthropic", "openrouter"] as const;
 const statuses = ["active", "paused", "completed"] as const;
 const occurrenceStatuses = ["pending", "running", "completed", "failed", "skipped"] as const;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -94,7 +94,7 @@ function cadence(value: unknown): ScheduleCadence {
 }
 
 function profile(value: unknown): ScheduleExecutionProfile {
-  if (!record(value) || !exact(value, ["providerId", "modelId", "responseMode", "contextBudget", "outputBudget", "outputContinuation"]) || !oneOf(value.providerId, providers) || typeof value.modelId !== "string" || !value.modelId || !oneOf(value.responseMode, responseModes) || !oneOf(value.contextBudget, contextBudgets) || !oneOf(value.outputBudget, outputBudgets) || !oneOf(value.outputContinuation, continuations)) throw new ScheduleApiError("malformed_response");
+  if (!record(value) || !exact(value, ["providerId", "modelId", "responseMode", "contextBudget", "outputBudget", "outputContinuation"]) || !isProviderId(value.providerId) || typeof value.modelId !== "string" || !value.modelId || !oneOf(value.responseMode, responseModes) || !oneOf(value.contextBudget, contextBudgets) || !oneOf(value.outputBudget, outputBudgets) || !oneOf(value.outputContinuation, continuations)) throw new ScheduleApiError("malformed_response");
   return value as ScheduleExecutionProfile;
 }
 

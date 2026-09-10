@@ -1,9 +1,14 @@
-export const providerIds = ["openai", "anthropic", "openrouter"] as const;
-export type ProviderId = (typeof providerIds)[number];
+export type BuiltinProviderId = "openai" | "anthropic" | "openrouter";
+export type ProviderId = BuiltinProviderId | `${string}-${string}-${string}-${string}-${string}`;
+export const providerIds: readonly ProviderId[] = ["openai", "anthropic", "openrouter"];
+export function isProviderId(value: unknown): value is ProviderId {
+  return typeof value === "string" && (providerIds.includes(value as ProviderId)
+    || /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value));
+}
 export type ProviderStatus = "disconnected" | "connected" | "invalid_credentials" | "provider_unreachable" | "provider_timeout" | "provider_rate_limited" | "credential_store_unavailable";
 export type ServerErrorCode = "invalid_request" | "unsupported_provider" | "not_connected" | "invalid_credentials" | "provider_unreachable" | "provider_timeout" | "provider_rate_limited" | "credential_store_unavailable" | "internal_error";
 export type ProviderErrorCode = ServerErrorCode | "malformed_response" | "network_error";
-export type ProviderSummary = { id: ProviderId; name: "OpenAI" | "Anthropic" | "OpenRouter"; connected: boolean; status: ProviderStatus; credentialPreview: string | null; lastCheckedAt: string | null };
+export type ProviderSummary = { id: ProviderId; name: string; connected: boolean; status: ProviderStatus; credentialPreview: string | null; lastCheckedAt: string | null };
 export type OpenRouterModel = { id: string; name: string; contextWindowTokens: number; maxOutputTokens: number | null };
 const statuses: readonly ProviderStatus[] = ["disconnected", "connected", "invalid_credentials", "provider_unreachable", "provider_timeout", "provider_rate_limited", "credential_store_unavailable"];
 const serverCodes: readonly ServerErrorCode[] = ["invalid_request", "unsupported_provider", "not_connected", "invalid_credentials", "provider_unreachable", "provider_timeout", "provider_rate_limited", "credential_store_unavailable", "internal_error"];
@@ -16,7 +21,7 @@ function utc(v: unknown): v is string { const m = typeof v === "string" && /^(\d
 function summary(v: unknown, expectedId?: ProviderId): ProviderSummary {
   if (!record(v) || !keys(v, ["id", "name", "connected", "status", "credentialPreview", "lastCheckedAt"])) throw new ProviderApiError("malformed_response");
   const { id, name, connected, status, credentialPreview, lastCheckedAt } = v;
-  if (!providerIds.includes(id as ProviderId) || (id === "openai" && name !== "OpenAI") || (id === "anthropic" && name !== "Anthropic") || (id === "openrouter" && name !== "OpenRouter") || typeof connected !== "boolean" || !statuses.includes(status as ProviderStatus) || (credentialPreview !== null && typeof credentialPreview !== "string") || (lastCheckedAt !== null && !utc(lastCheckedAt)) || (expectedId && id !== expectedId)) throw new ProviderApiError("malformed_response");
+  if (!isProviderId(id) || typeof name !== "string" || codePointLength(name) < 1 || codePointLength(name) > 80 || (id === "openai" && name !== "OpenAI") || (id === "anthropic" && name !== "Anthropic") || (id === "openrouter" && name !== "OpenRouter") || typeof connected !== "boolean" || !statuses.includes(status as ProviderStatus) || (credentialPreview !== null && typeof credentialPreview !== "string") || (lastCheckedAt !== null && !utc(lastCheckedAt)) || (expectedId && id !== expectedId)) throw new ProviderApiError("malformed_response");
   if (!connected && (status !== "disconnected" || credentialPreview !== null || lastCheckedAt !== null)) throw new ProviderApiError("malformed_response");
   if (connected && (status === "disconnected" || lastCheckedAt === null)) throw new ProviderApiError("malformed_response");
   return { id, name, connected, status, credentialPreview, lastCheckedAt } as ProviderSummary;
@@ -27,7 +32,13 @@ function openRouterModel(v: unknown): OpenRouterModel {
 }
 function envelope(v: unknown, codes: readonly string[]): ServerErrorCode { if (!record(v)||!keys(v,["error"])||!record(v.error)||!keys(v.error,["code","message","retryable"])||typeof v.error.code!=="string"||!serverCodes.includes(v.error.code as ServerErrorCode)||!codes.includes(v.error.code)||typeof v.error.message!=="string"||typeof v.error.retryable!=="boolean") throw new ProviderApiError("malformed_response"); return v.error.code as ServerErrorCode; }
 async function call(path:string, init:RequestInit|undefined, errors:ReadonlyMap<number,readonly string[]>) { let response:Response; try { response=await apiFetch(path,init); } catch { throw new ProviderApiError("network_error"); } if (response.status !== 200) { if (response.ok) throw new ProviderApiError("malformed_response"); let errorBody:unknown; try { errorBody=await response.json(); } catch { throw new ProviderApiError("malformed_response"); } throw new ProviderApiError(envelope(errorBody, errors.get(response.status)??[])); } let body:unknown; try { body=await response.json(); } catch { throw new ProviderApiError("malformed_response"); } return body; }
-export async function listProviderConnections() { const body=await call("/api/providers",undefined,allow.list); if (!record(body)||!keys(body,["providers"])||!Array.isArray(body.providers)||body.providers.length!==3) throw new ProviderApiError("malformed_response"); return body.providers.map((item,index)=>summary(item,providerIds[index])); }
+export async function listProviderConnections() {
+  const body = await call("/api/providers", undefined, allow.list);
+  if (!record(body) || !keys(body, ["providers"]) || !Array.isArray(body.providers) || body.providers.length < 3) throw new ProviderApiError("malformed_response");
+  const providers = body.providers.map((item, index) => summary(item, providerIds[index]));
+  if (new Set(providers.map((item) => item.id)).size !== providers.length) throw new ProviderApiError("malformed_response");
+  return providers;
+}
 export async function replaceProviderConnection(id:ProviderId,key:string) { const result=summary(await call(`/api/providers/${id}/connection`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({apiKey:key})},allow.put),id); if(!result.connected||result.status!=="connected") throw new ProviderApiError("malformed_response"); return result; }
 export async function testProviderConnection(id:ProviderId) { const result=summary(await call(`/api/providers/${id}/connection/test`,{method:"POST"},allow.test),id); if(!result.connected||result.status!=="connected") throw new ProviderApiError("malformed_response"); return result; }
 export async function listOpenRouterModels(): Promise<OpenRouterModel[]> { const body=await call("/api/providers/openrouter/models",{method:"POST"},allow.openrouterModels); if(!record(body)||!keys(body,["models"])||!Array.isArray(body.models)||body.models.length<1||body.models.length>1000) throw new ProviderApiError("malformed_response"); return body.models.map(openRouterModel); }

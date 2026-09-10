@@ -8,6 +8,7 @@ import {
   type ProviderSummary,
 } from "../../api/providerConnections";
 import { useI18n } from "../../i18n/I18nProvider";
+import { listCustomProviders, type CustomProvider } from "../../api/customProviders";
 import {
   localModelCatalog,
   openRouterModelCatalog,
@@ -37,6 +38,7 @@ export function useProviderCatalog(): ProviderCatalogController {
   const { t } = useI18n();
   const [providers, setProviders] = useState<ReadonlyArray<ProviderSummary> | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [customProviders, setCustomProviders] = useState<CustomProvider[]>([]);
   const [openRouterModels, setOpenRouterModels] = useState<ReadonlyArray<ModelCatalogItem> | null>(null);
   const [openRouterModelLoadStatus, setOpenRouterModelLoadStatus] = useState<ModelLoadStatus>("idle");
   const [openRouterModelError, setOpenRouterModelError] = useState<string | null>(null);
@@ -53,6 +55,9 @@ export function useProviderCatalog(): ProviderCatalogController {
     setCatalogError(null);
     try {
       const summaries = await listProviderConnections();
+      const custom = summaries.some((item) => item.id !== "openai" && item.id !== "anthropic" && item.id !== "openrouter")
+        ? await listCustomProviders() : { providers: [] };
+      if (mountedRef.current) setCustomProviders(custom.providers);
       if (mountedRef.current) setProviders(summaries);
       return summaries;
     } catch (requestError) {
@@ -121,17 +126,19 @@ export function useProviderCatalog(): ProviderCatalogController {
   }, [loadOpenRouterModels, openRouterModelLoadStatus, openRouterModels, providers]);
 
   const modelChoices = useMemo(() => (providers ?? []).flatMap((provider) => {
-    if (!provider.connected) return [];
+    const custom = customProviders.find((item) => item.id === provider.id);
+    if (!provider.connected && !custom) return [];
     const models = provider.id === "openrouter"
       ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : [])
-      : localModelCatalog[provider.id];
+      : custom ? custom.models.map((model) => ({ id: model.model_id, label: model.name, contextWindowTokens: model.context_limit, maxOutputTokens: model.output_limit }))
+      : localModelCatalog[provider.id] ?? [];
     return models.map((model) => ({
       selection: { providerId: provider.id, modelId: model.id, contextBudget: "auto" as const, outputBudget: "auto" as const },
       label: model.label,
       contextWindowTokens: model.contextWindowTokens,
       maxOutputTokens: model.maxOutputTokens,
     }));
-  }), [openRouterModelLoadStatus, openRouterModels, providers]);
+  }), [openRouterModelLoadStatus, openRouterModels, providers, customProviders]);
 
   return {
     providers,

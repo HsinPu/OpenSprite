@@ -1,3 +1,4 @@
+import { isProviderId, type ProviderId } from "./providerConnections";
 export const runStatuses = ["queued", "running", "cancelling", "completed", "failed", "cancelled", "interrupted"] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
@@ -61,7 +62,7 @@ export type RunSnapshot = {
   workspaceMountManifestHash: string;
   userMessageId: string;
   assistantMessageId: string | null;
-  providerId: "openai" | "anthropic" | "openrouter";
+  providerId: ProviderId;
   modelId: string;
   responseMode: "default" | "fast" | "balanced" | "deep";
   status: RunStatus;
@@ -83,7 +84,7 @@ export type RunEvent = {
 };
 
 export type ContextUsage = {
-  providerId: "openai" | "anthropic" | "openrouter";
+  providerId: ProviderId;
   modelId: string;
   contextTokens: number;
   contextLimitTokens: number;
@@ -167,7 +168,7 @@ function runError(value: unknown): RunError {
 }
 
 function runSnapshot(value: unknown, expectedRunId?: string): RunSnapshot {
-  if (!record(value) || !exactKeys(value, ["id", "conversationId", "workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceMountManifestHash", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.workspaceRevision) || (value.workspaceRevision as number) < 1 || !boundedString(value.workspaceName, 1, 80) || (value.workspaceRootHash !== null && (typeof value.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceRootHash))) || typeof value.workspaceMountManifestHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceMountManifestHash) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceMountManifestHash", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.workspaceRevision) || (value.workspaceRevision as number) < 1 || !boundedString(value.workspaceName, 1, 80) || (value.workspaceRootHash !== null && (typeof value.workspaceRootHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceRootHash))) || typeof value.workspaceMountManifestHash !== "string" || !/^[0-9a-f]{64}$/.test(value.workspaceMountManifestHash) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !isProviderId(value.providerId) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
     throw new AgentChatApiError("malformed_response");
   }
   const parsedError = value.error === null ? null : runError(value.error);
@@ -307,7 +308,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
     const contextKeys = [...legacyKeys, "contextTokens", "contextLimitTokens", "inputBudgetTokens"] as const;
     const toolContextKeys = [...contextKeys, "toolNames"] as const;
     const hasContext = exactKeys(data, contextKeys) || exactKeys(data, toolContextKeys);
-    if ((!exactKeys(data, legacyKeys) && !hasContext) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072) throw new AgentChatApiError("malformed_response");
+    if ((!exactKeys(data, legacyKeys) && !hasContext) || !isProviderId(data.providerId) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072) throw new AgentChatApiError("malformed_response");
     if (hasContext && (!Number.isInteger(data.contextTokens) || (data.contextTokens as number) < 1 || !Number.isInteger(data.contextLimitTokens) || (data.contextLimitTokens as number) < 1 || (data.contextLimitTokens as number) > 4_000_000 || !Number.isInteger(data.inputBudgetTokens) || (data.inputBudgetTokens as number) < 1 || (data.inputBudgetTokens as number) > (data.contextLimitTokens as number) || (data.contextTokens as number) > (data.inputBudgetTokens as number))) throw new AgentChatApiError("malformed_response");
     if (exactKeys(data, toolContextKeys)) {
       if (!Array.isArray(data.toolNames) || data.toolNames.some((name) => !boundedString(name, 1, 64) || !/^[a-z][a-z0-9_]{0,63}$/.test(name)) || data.toolNames.join("\0") !== [...new Set(data.toolNames)].sort().join("\0")) throw new AgentChatApiError("malformed_response");
