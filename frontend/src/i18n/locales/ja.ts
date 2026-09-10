@@ -1,6 +1,8 @@
 import type { MessageKey } from "./zh-TW";
 
 export const jaMessages = {
+  "models.custom.entry": "カスタム",
+  "models.custom.entryDescription": "OpenAI 互換 API",
   "app.resizeLeftPanel": "左パネルの幅を変更",
   "app.resizeRightPanel": "右パネルの幅を変更",
   "app.resizePanelHint": "ドラッグまたは左右キーで変更。ダブルクリックまたは Home で初期幅に戻す",

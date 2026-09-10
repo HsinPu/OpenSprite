@@ -1,4 +1,6 @@
 export const zhTWMessages = {
+  "models.custom.entry": "自訂",
+  "models.custom.entryDescription": "OpenAI 相容 API",
   "app.resizeLeftPanel": "調整左側面板寬度",
   "app.resizeRightPanel": "調整右側面板寬度",
   "app.resizePanelHint": "拖曳或使用左右方向鍵調整；雙擊或 Home 還原預設寬度",

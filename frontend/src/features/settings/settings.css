@@ -89,6 +89,7 @@
 .settings-model-select::after { content: "⌄"; position: absolute; right: 14px; color: var(--settings-muted); pointer-events: none; }
 .settings-helper-text { margin-top: 10px; }
 .settings-service-list { display: grid; gap: 12px; }
+.settings-service-list + .settings-service-list { margin-top: 12px; }
 .settings-service-card { min-height: 78px; padding: 14px 16px; border: 1px solid var(--settings-border); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .settings-tool-list { display: grid; gap: 10px; padding: 2px 0 10px; }
 .settings-tool-row { min-height: 92px; padding: 14px 16px; border: 1px solid var(--settings-border); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -139,6 +140,7 @@
 .settings-mcp-command-preview { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border-radius: 8px; background: var(--settings-page-bg); }
 .settings-service-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .settings-service-identity > .settings-icon { width: 42px; height: 42px; flex: none; }
+.settings-service-identity > .anticon.settings-icon { display: inline-flex; justify-content: center; font-size: 28px; }
 .settings-service-identity > span { min-width: 0; display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 10px; row-gap: 5px; }
 .settings-service-identity strong { font-size: 18px; font-weight: 550; }
 .settings-service-identity small { grid-column: 1 / -1; color: var(--settings-muted); font-size: 14px; overflow-wrap: anywhere; }

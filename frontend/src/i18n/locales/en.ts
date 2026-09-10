@@ -1,6 +1,8 @@
 import type { MessageKey } from "./zh-TW";
 
 export const enMessages = {
+  "models.custom.entry": "Custom",
+  "models.custom.entryDescription": "OpenAI-compatible API",
   "app.resizeLeftPanel": "Resize left panel",
   "app.resizeRightPanel": "Resize right panel",
   "app.resizePanelHint": "Drag or use arrow keys to resize; double-click or press Home to reset",

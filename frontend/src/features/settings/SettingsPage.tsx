@@ -412,7 +412,6 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
     <div className="settings-form-stack">
       <SettingsCard icon="connections" title={t("models.providers")}>
         <p className="settings-card-description">{t("models.providersDescription")}</p>
-        <CustomProviderCreate onChanged={refreshProviders} container={modalContainer} onOverlayChange={onProviderModalChange} hasCustomProviders={providers?.some((provider) => provider.id !== "openai" && provider.id !== "anthropic" && provider.id !== "openrouter") ?? false} />
         {providers === null && !catalogError ? <p className="settings-provider-feedback" role="status" aria-live="polite">{t("models.loadingProviders")}</p> : null}
         {catalogError ? <div className="settings-provider-feedback settings-provider-feedback--error" role="alert"><p>{catalogError}</p><button type="button" className="settings-secondary-button" onClick={() => void refreshProviders()}>{t("common.retry")}</button></div> : null}
         {!aiSettingsLoaded && !aiSettingsError ? <p className="settings-provider-feedback" role="status">{t("models.loadingSettings")}</p> : null}
@@ -433,6 +432,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
             })}
           </div>
         ) : null}
+        <div className="settings-service-list"><CustomProviderCreate onChanged={refreshProviders} container={modalContainer} onOverlayChange={onProviderModalChange} hasCustomProviders={providers?.some((provider) => provider.id !== "openai" && provider.id !== "anthropic" && provider.id !== "openrouter") ?? false} /></div>
         <div className="settings-provider-announcement" aria-live="polite">{Object.entries(feedback).map(([providerId, item]) => item ? <p key={providerId} className={item.error ? "settings-action-error" : "settings-action-status"}>{item.error ?? item.message}</p> : null)}</div>
       </SettingsCard>
       <SettingsCard icon="robot" title={t("models.selectModel")}>

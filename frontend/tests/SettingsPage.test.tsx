@@ -176,6 +176,17 @@ function GeneralSettingsPageHarness({ saving = false, section = "general" }: { s
 }
 
 describe("provider settings", () => {
+  it("offers custom connection as the final provider row instead of an add button", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(connectedCatalog)))));
+    const { container } = render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "auto" }} />);
+    await screen.findByText("OpenAI 相容 API");
+    const rows = container.querySelectorAll(".settings-service-card");
+    const custom = rows[rows.length - 1] as HTMLElement;
+    expect(within(custom).getByText("自訂")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "新增自訂供應商" })).toBeNull();
+    fireEvent.click(within(custom).getByRole("button", { name: "連接" }));
+    expect(await screen.findByRole("dialog", { name: "新增自訂供應商" })).toBeTruthy();
+  });
   it("changes and explains the selected model context budget", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
     render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "auto" }} />);
