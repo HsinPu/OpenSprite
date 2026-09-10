@@ -131,6 +131,14 @@ class AppPaths:
         return self.state_dir / "providers.json"
 
     @property
+    def provider_catalog_file(self) -> Path:
+        return self.config_dir / "providers.json"
+
+    @property
+    def provider_catalog_transaction_file(self) -> Path:
+        return self.state_dir / "provider-catalog-transaction.json"
+
+    @property
     def provider_transaction_file(self) -> Path:
         return self.state_dir / "provider-transaction.json"
 

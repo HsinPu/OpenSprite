@@ -30,6 +30,9 @@ _KEY_BYTES: Final = 32
 _KEY_TEXT_BYTES: Final = 44
 _NONCE_BYTES: Final = 12
 _PROVIDER_IDS: Final = frozenset({"openai", "anthropic", "openrouter"})
+_CUSTOM_PROVIDER_CREDENTIAL_ID: Final = re.compile(
+    r"^provider:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:bearer$"
+)
 _MCP_CREDENTIAL_ID: Final = re.compile(
     r"^mcp:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:bearer$"
 )
@@ -48,6 +51,7 @@ def _validated_credential_id(credential_id: str) -> str:
         or (
             credential_id not in _PROVIDER_IDS
             and _MCP_CREDENTIAL_ID.fullmatch(credential_id) is None
+            and _CUSTOM_PROVIDER_CREDENTIAL_ID.fullmatch(credential_id) is None
         )
     ):
         raise UnsupportedCredentialProviderError
@@ -273,7 +277,10 @@ class EncryptedJsonCredentialStore:
                     provider_id not in _PROVIDER_IDS
                     and not (
                         version == _STORE_VERSION
-                        and _MCP_CREDENTIAL_ID.fullmatch(provider_id) is not None
+                        and (
+                            _MCP_CREDENTIAL_ID.fullmatch(provider_id) is not None
+                            or _CUSTOM_PROVIDER_CREDENTIAL_ID.fullmatch(provider_id) is not None
+                        )
                     )
                 )
             ):
