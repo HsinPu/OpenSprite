@@ -1,5 +1,16 @@
 # OpenSprite local data layout
 
+## 0.21.0 自訂 Provider 資料
+
+`AppPaths.provider_catalog_file` 對應 `.opensprite/config/providers.json`，保存自訂端點與模型，
+不是既有 `state/providers.json` 的內建連線檢查狀態。原本三家 ID 與 credential entry 保留。
+自訂金鑰使用 `auth.json` 內的 `provider:<UUID>:bearer` 加密項目；
+`state/provider-catalog-transaction.json` 只在跨 catalog／credential 交易及恢復期間存在。
+交易暫存金鑰也是加密 entry，不把原始金鑰寫入 journal。SQLite 升至 v16，保留既有資料。
+詳見 [自訂 Provider 架構](custom-providers.md)。
+
+## 使用者資料根目錄
+
 OpenSprite uses one user-data root on every supported desktop platform:
 
 ```text

@@ -1,5 +1,13 @@
 # OpenSprite architecture
 
+## 0.21.0 Provider 擴充
+
+目前已加入 UUIDv4 自訂 Provider 與 `openai_chat_completions` 協定。
+以下「第一版固定三家」與內建 credential lifecycle 描述屬原有內建連線邊界；
+自訂 catalog、CRUD、模型探索、參照保護與快照由 [自訂 Provider 架構](custom-providers.md)
+及 `contracts/custom-providers.openapi.json` 定義。
+`GET /api/providers` 保留前三筆內建順序，後面可附加自訂摘要，不再固定只有三筆。
+
 ## 目標
 
 新架構先建立清楚、淺層且可從根目錄辨識的邊界。前端先完成使用流程，後端再依實際契約補上最小能力。
@@ -253,7 +261,7 @@ Provider lifecycle 契約。未來若加入 webhook 或 WebSocket，必須以獨
 
 ## 決策與後續 handoff
 
-已拒絕：固定全域加密金鑰、plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
+內建連線第一版已拒絕：固定全域加密金鑰、plaintext fallback、先存後驗證、test request 攜帶 secret、
 過早加入 pagination/version alias，以及從 archived implementation 整批搬移。
 
 本切片已決定最小 validation request、per-provider serialization、non-secret metadata、runtime

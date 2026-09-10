@@ -1,5 +1,13 @@
 # Agent chat architecture
 
+## 自訂 Provider 快照（0.21.0）
+
+Provider ID 可為既有三家或自訂 UUIDv4。Run 接受時固定自訂端點、協定與模型能力，
+Context 壓縮、續接及子代理使用保留的快照，不重新按顯示名稱選擇服務。
+RunManager 在父任務生命週期保留可能被子代理使用的 Provider 引用，阻擋端點／金鑰變更。
+排程依自己的 execution profile 解析 Provider，不讀前端目前選項。
+詳見 [自訂 Provider 架構](custom-providers.md)。
+
 ## Custom Agents and child execution (0.20.0)
 
 New parent Runs capture enabled Agent definitions alongside their Workspace and

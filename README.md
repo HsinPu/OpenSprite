@@ -2,9 +2,30 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.20.4`。
+目前產品版本為 `0.21.0`。
 
 聊天使用的模型統一於「設定 → AI 模型」選擇；修改後供新的執行使用，既有執行及排程保存的模型設定不會被改寫。聊天輸入框不再提供模型選單。
+
+## 自訂 OpenAI-compatible 供應商
+
+`0.21.0` 保留 OpenAI、Anthropic、OpenRouter，另可在「設定 → AI 模型」新增多個自訂供應商。
+自訂項目使用 OpenAI-compatible **Chat Completions** 協定，不會把內建 OpenAI 的 Responses API 改成另一種協定。
+
+1. 新增自訂供應商，填寫顯示名稱與 API Base URL，例如 `https://example.com/v1`；不要填完整的 `/chat/completions` 路徑。
+2. 選擇無認證或 Bearer API Key。編輯時金鑰留白代表保留既有金鑰；改成無認證會移除該供應商的金鑰。
+3. 重新取得模型清單，或手動新增模型 ID、顯示名稱、Context／輸出上限及工具呼叫能力。
+4. 在模型選擇區選取這個供應商及模型。排程保存自己的模型選擇；Agent 定義可使用自訂供應商 ID，或省略以繼承父任務。
+
+模型探索使用 `<Base URL>/models`，推論使用 `<Base URL>/chat/completions`。
+有些服務不提供模型探索，可改用手動模型。探索成功不代表該模型一定支援工具、所有參數或推論；
+請依服務能力設定模型上限與工具能力。自訂相容端點不自動套用 OpenRouter 專屬參數。
+
+公開端點必須使用 HTTPS。只有明確允許時才接受本機／私人網路 HTTP；HTTP 不會加密金鑰與對話內容。
+不支援任意自訂 Header、關閉 TLS 驗證或自動跟隨重新導向。Base URL 指向的服務會收到實際送出的對話內容。
+
+執行中會固定 Provider 端點與模型能力快照，因此不能同時修改該供應商或模型。
+刪除被 AI 設定、排程或 Agent 定義引用的項目之前，必須先調整引用；不會自動換成其他供應商。
+刪除登記不刪除歷史對話與 Run。更多細節見 [自訂 Provider 架構](docs/architecture/custom-providers.md)。
 
 Skills 工具列的「批次操作」選單提供全部啟用、全部停用與移除全部，僅作用於目前全域或所選工作區的專用 Skills，不修改繼承的全域項目或總開關。啟用時略過無效項目；移除需輸入確認文字，檔案只移至封存位置。工作區全部停用仍遮蔽同名全域版本，移除登記後才恢復繼承。
 
@@ -86,7 +107,7 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 - 前端：React、TypeScript、Vite、Ant Design，透過同源 `/api` 與本機服務溝通。
 - 對話：Conversation、Message、Run 與安全語意事件保存於 `.opensprite/data/opensprite.db`，前端以 HTTP 與 SSE 消費。
 - 工作區：OpenSprite 在使用者目錄建立 managed root，並可掛載最多 20 個具唯讀／可讀寫權限的外部目錄；Conversation 與 Schedule 明確歸屬 Workspace，每次 Run 固定使用開始時的 Workspace 快照。
-- AI：固定支援 OpenAI、Anthropic、OpenRouter；模型、Context／輸出上限、推理模式、續接次數、回覆顯示方式與 Prompt log 偏好保存於 `.opensprite/config/settings.json`。
+- AI：內建 OpenAI、Anthropic、OpenRouter，並支援自訂 OpenAI-compatible Chat Completions 供應商；模型與執行偏好保存於 `.opensprite/config/settings.json`。
 - 金鑰：只以 AES-256-GCM ciphertext 保存於 `.opensprite/auth.json`，每次安裝使用獨立的 `config/credential.key`。
 - Agent：所有使用者訊息進入同一個 Token-budgeted Agent loop；舊對話只做可重建摘要，原始訊息不刪除。執行事件與 Context 用量可由前端即時／歷史查看；production Tool Registry 目前包含安全的唯讀計算器。
 - 排程：支援單次、每日與每週自動執行；每個排程使用專屬對話與固定模型設定，執行紀錄保存在 SQLite，backend 重啟後可恢復。
