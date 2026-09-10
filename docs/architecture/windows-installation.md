@@ -31,8 +31,10 @@ virtual-environment launchers contain final-path information and must not be
 moved after creation.
 
 An existing application root is held in a temporary rollback directory. Startup
-registration, launch and health failure remove the new root and restore the
-previous root. The rollback root is deleted only after success.
+registration, launch and health failure quarantine the new root and restore the
+previous root. Recovery steps continue independently; access state is restored
+before restarting the old runtime. A blocked rename retains the backup and
+withholds restart instead of pretending recovery succeeded. The rollback root is deleted only after success.
 Before replacing an existing root, the installer removes its Run entry and
 stops only a process whose command line contains both that resolved install root
 and the installed-runtime module. Process exit is idempotent when a parent stop

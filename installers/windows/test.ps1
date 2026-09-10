@@ -3,6 +3,7 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+& (Join-Path $PSScriptRoot "test-recovery.ps1")
 
 function Remove-DirectoryWithRetry([string]$Path, [int]$Attempts = 120) {
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {

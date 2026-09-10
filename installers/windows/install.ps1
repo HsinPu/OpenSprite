@@ -46,6 +46,34 @@ function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
     }
 }
 
+function Get-InstallTool([string[]]$Names, [string]$Hint) {
+    foreach ($name in $Names) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($null -ne $command) { return $command }
+    }
+    throw "Missing prerequisite: $Hint. Install it and reopen PowerShell before retrying."
+}
+
+function Invoke-RecoveryStep([string]$Name, [scriptblock]$Action) {
+    try { & $Action | Out-Null; return $true }
+    catch { Write-Warning "Rollback step failed ($Name): $($_.Exception.Message)"; return $false }
+}
+
+function Restore-ApplicationRoot([string]$Root, [string]$Previous, [string]$Parent, [bool]$NewRootInstalled) {
+    Assert-ChildPath $Root $Parent
+    Assert-ChildPath $Previous $Parent
+    if ($NewRootInstalled -and (Test-Path -LiteralPath $Root)) {
+        # Rename instead of deleting locked native binaries before restoring the old app.
+        $failedRoot = Join-Path $Parent (".app-failed-" + [Guid]::NewGuid().ToString("N"))
+        Assert-ChildPath $failedRoot $Parent
+        [IO.Directory]::Move($Root, $failedRoot)
+        Write-Warning "Failed installation retained for recovery: $failedRoot"
+    }
+    if (Test-Path -LiteralPath $Previous) {
+        [IO.Directory]::Move($Previous, $Root)
+    }
+}
+
 function Copy-RequiredItem([string]$Source, [string]$Destination) {
     if (-not (Test-Path -LiteralPath $Source)) {
         throw "Required source item is missing: $Source"
@@ -88,11 +116,28 @@ function Register-OpenSpriteStartup([string]$Root, [string]$Name, [int]$ListenPo
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $Name -Value $value
 }
 
+function Get-PreviousStartupPort([string]$StartupValue) {
+    # Read the numeric switch only; never execute registry text.
+    $match = [regex]::Match($StartupValue, '(?i)(?:^|\s)-Port\s+(\d+)(?=\s|$)')
+    if (-not $match.Success) { return 8765 }
+    $value = 0
+    if (-not [int]::TryParse($match.Groups[1].Value, [ref]$value) -or $value -lt 1024 -or $value -gt 65535) {
+        throw "Previous startup port is invalid; refusing to replace the installation."
+    }
+    return $value
+}
+
 function Stop-InstalledRuntime([string]$Root) {
     $escapedRoot = [Regex]::Escape($Root)
     Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -match $escapedRoot -and $_.CommandLine -match "opensprite_backend\.installed_runtime"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    } | ForEach-Object {
+        $runtime = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+        if ($null -ne $runtime) {
+            Stop-Process -InputObject $runtime -Force -ErrorAction Stop
+            if (-not $runtime.WaitForExit(10000)) { throw "OpenSprite runtime did not exit within 10 seconds." }
+        }
+    }
 }
 
 function Remove-DirectoryWithRetry([string]$Path, [string]$Parent, [int]$Attempts = 120) {
@@ -206,6 +251,7 @@ $stagingRoot = Join-Path $installParent (".app-staging-" + [Guid]::NewGuid().ToS
 $previousRoot = Join-Path $installParent (".app-previous-" + [Guid]::NewGuid().ToString("N"))
 $hadPreviousInstall = Test-Path -LiteralPath $installRootPath
 $previousStartupValue = Get-OpenSpriteStartup $StartupName
+$previousPort = Get-PreviousStartupPort ([string]$previousStartupValue)
 $installedNewRoot = $false
 $cutoverStarted = $false
 $previousCleanupComplete = $true
@@ -219,6 +265,14 @@ $accessMutated = $false
 if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite")) {
     return
 }
+
+# Resolve and exercise prerequisites before creating staging or stopping an existing app.
+$nodeCommand = Get-InstallTool @("node.exe", "node") "Node.js (^20.19.0 or >=22.12.0)"
+$npmCommand = Get-InstallTool @("npm.cmd", "npm") "npm (included with Node.js)"
+$uvCommand = Get-InstallTool @("uv.exe", "uv") "uv"
+Invoke-Checked $nodeCommand.Source @("-e", "const [a,b]=process.versions.node.split('.').map(Number);if(!((a===20&&b>=19)||(a===22&&b>=12)||a>22))process.exit(1)")
+Invoke-Checked $npmCommand.Source @("--version")
+Invoke-Checked $uvCommand.Source @("--version")
 
 try {
     New-Item -ItemType Directory -Path $installParent -Force | Out-Null
@@ -251,8 +305,6 @@ try {
         [Text.UTF8Encoding]::new($false)
     )
 
-    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if ($null -eq $npmCommand) { $npmCommand = Get-Command npm -ErrorAction Stop }
     Invoke-Checked $npmCommand.Source @("--prefix", (Join-Path $stagingRoot "frontend"), "ci", "--ignore-scripts")
     Invoke-Checked $npmCommand.Source @("--prefix", (Join-Path $stagingRoot "frontend"), "run", "build")
     $nodeModules = Resolve-AbsolutePath (Join-Path $stagingRoot "frontend\node_modules")
@@ -269,8 +321,8 @@ try {
     }
 
     $policyMode = if ($selectedAccessMode -eq "TrustedLocal") { "trusted_local" } else { "password_required" }
-    Set-LocalAccessPolicy $userDataRootPath $policyMode
     $policyMutated = $true
+    Set-LocalAccessPolicy $userDataRootPath $policyMode
     if ($selectedAccessMode -eq "TrustedLocal" -and (Test-Path -LiteralPath $bootstrapPath -PathType Leaf)) {
         Remove-Item -LiteralPath $bootstrapPath -Force
         $bootstrapMutated = $true
@@ -279,8 +331,6 @@ try {
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
 
-    $uvCommand = Get-Command uv.exe -ErrorAction SilentlyContinue
-    if ($null -eq $uvCommand) { $uvCommand = Get-Command uv -ErrorAction Stop }
     Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--no-dev")
     $installedPython = Join-Path $installRootPath "backend\.venv\Scripts\python.exe"
     Invoke-Checked $installedPython @("-c", "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()")
@@ -292,7 +342,7 @@ try {
     if (-not $SkipStartupRegistration) {
         Register-OpenSpriteStartup $installRootPath $StartupName $Port
         if (-not $NoStart) {
-            & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port
+            & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port -AllowCustomInstallRoot:$AllowCustomInstallRoot
             Wait-OpenSpriteHealth $Port
         }
     }
@@ -300,9 +350,9 @@ try {
     $needsBootstrap = $selectedAccessMode -eq "Password" -and ($ResetLocalAccess -or -not (Test-Path -LiteralPath $accessPath -PathType Leaf))
     if ($needsBootstrap -and -not $SkipAccessBootstrap) {
         if ($NoStart) { throw "A new local access password must be configured while OpenSprite is running. Remove -NoStart or use the isolated-test bootstrap bypass." }
-        $bootstrapToken = New-LocalAccessBootstrap $userDataRootPath -Reset:$ResetLocalAccess
         $bootstrapMutated = $true
         $accessMutated = $ResetLocalAccess
+        $bootstrapToken = New-LocalAccessBootstrap $userDataRootPath -Reset:$ResetLocalAccess
         try {
             if (-not $SkipBrowserLaunch) {
                 Start-Process -FilePath "http://localhost:$Port/#setup=$bootstrapToken"
@@ -332,38 +382,46 @@ try {
 catch {
     $failure = $_
     if (-not $SkipStartupRegistration -and $cutoverStarted) {
-        Remove-OpenSpriteStartup $StartupName
-        Stop-InstalledRuntime $installRootPath
-    }
-    if ($installedNewRoot -and (Test-Path -LiteralPath $installRootPath)) {
-        Assert-ChildPath $installRootPath $installParent
-        Remove-Item -LiteralPath $installRootPath -Recurse -Force
-    }
-    if (Test-Path -LiteralPath $previousRoot) {
-        Move-Item -LiteralPath $previousRoot -Destination $installRootPath
-    }
-    if (-not $SkipStartupRegistration -and $cutoverStarted -and $null -ne $previousStartupValue -and (Test-Path -LiteralPath $installRootPath)) {
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue
-        if (-not $NoStart) {
-            & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port
+        $null = Invoke-RecoveryStep "remove startup" { Remove-OpenSpriteStartup $StartupName }
+        $runtimeStopped = Invoke-RecoveryStep "stop failed runtime" { Stop-InstalledRuntime $installRootPath }
+        if (-not $runtimeStopped) {
+            Write-Warning "Runtime shutdown could not be confirmed. Application and access-state rollback were skipped; backups are retained for manual recovery."
+            throw $failure
         }
     }
+    $rootRestored = Invoke-RecoveryStep "restore application (backup: $previousRoot)" { Restore-ApplicationRoot $installRootPath $previousRoot $installParent $installedNewRoot }
+    $stateRestored = $true
     if ($policyMutated) {
-        if ($null -eq $previousPolicyBytes) { Remove-Item -LiteralPath $policyPath -Force -ErrorAction SilentlyContinue }
+      $ok = Invoke-RecoveryStep "restore access policy" {
+        if ($null -eq $previousPolicyBytes) { if (Test-Path -LiteralPath $policyPath) { Remove-Item -LiteralPath $policyPath -Force -ErrorAction Stop } }
         else { [IO.File]::WriteAllBytes($policyPath, $previousPolicyBytes) }
+      }
+      $stateRestored = $stateRestored -and $ok
     }
     if ($bootstrapMutated) {
-        if ($null -eq $previousBootstrapBytes) { Remove-Item -LiteralPath $bootstrapPath -Force -ErrorAction SilentlyContinue }
+      $ok = Invoke-RecoveryStep "restore bootstrap" {
+        if ($null -eq $previousBootstrapBytes) { if (Test-Path -LiteralPath $bootstrapPath) { Remove-Item -LiteralPath $bootstrapPath -Force -ErrorAction Stop } }
         else {
             New-Item -ItemType Directory -Path (Split-Path -Parent $bootstrapPath) -Force | Out-Null
             [IO.File]::WriteAllBytes($bootstrapPath, $previousBootstrapBytes)
         }
+      }
+      $stateRestored = $stateRestored -and $ok
     }
     if ($accessMutated) {
-        if ($null -eq $previousAccessBytes) { Remove-Item -LiteralPath $accessPath -Force -ErrorAction SilentlyContinue }
+      $ok = Invoke-RecoveryStep "restore access" {
+        if ($null -eq $previousAccessBytes) { if (Test-Path -LiteralPath $accessPath) { Remove-Item -LiteralPath $accessPath -Force -ErrorAction Stop } }
         else {
             New-Item -ItemType Directory -Path (Split-Path -Parent $accessPath) -Force | Out-Null
             [IO.File]::WriteAllBytes($accessPath, $previousAccessBytes)
+        }
+      }
+      $stateRestored = $stateRestored -and $ok
+    }
+    if (-not $SkipStartupRegistration -and $cutoverStarted -and $null -ne $previousStartupValue -and $rootRestored -and $stateRestored -and (Test-Path -LiteralPath $installRootPath)) {
+        $null = Invoke-RecoveryStep "restore startup" { Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue }
+        if (-not $NoStart -and $runtimeStopped) {
+            $null = Invoke-RecoveryStep "restart previous runtime" { & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $previousPort -AllowCustomInstallRoot:$AllowCustomInstallRoot }
         }
     }
     throw $failure
@@ -371,6 +429,6 @@ catch {
 finally {
     if (Test-Path -LiteralPath $stagingRoot) {
         Assert-ChildPath $stagingRoot $installParent
-        Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+        $null = Invoke-RecoveryStep "clean staging" { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
     }
 }

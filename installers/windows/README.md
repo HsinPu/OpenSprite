@@ -2,6 +2,16 @@
 
 ## Install
 
+Prerequisites: Node.js 20.19+ (20.x) or 22.12+, npm, and uv must be on PATH.
+The installer checks these before stopping an existing installation. It does not
+automatically install system tools. Reopen PowerShell after installing them.
+
+On failed upgrades, recovery restores saved access state before restarting the
+previous application. Failed program files may remain in `.app-failed-*` next
+to the application. If Windows also blocks renaming, the previous backup is
+preserved and recovery warnings identify the affected step; automatic restart
+is withheld when application or access-state recovery is incomplete.
+
 Run from the repository root in PowerShell:
 
 ```powershell
