@@ -1,6 +1,9 @@
 import type { MessageKey } from "./zh-TW";
 
 export const enMessages = {
+  "app.resizeLeftPanel": "Resize left panel",
+  "app.resizeRightPanel": "Resize right panel",
+  "app.resizePanelHint": "Drag or use arrow keys to resize; double-click or press Home to reset",
   "models.custom.error.invalid": "Check the fields, URL and credential format.",
   "models.custom.error.conflict": "The data changed. Reload before trying again.",
   "models.custom.error.busy": "This provider is in use by a running task. Wait for it to finish.",

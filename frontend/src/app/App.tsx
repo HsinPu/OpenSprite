@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
 import { FolderOutlined, LeftOutlined, MoreOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 
@@ -101,6 +102,7 @@ export function App() {
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [executionExpanded, setExecutionExpanded] = useState(false);
+  const panels = usePanelSizing(!sidebarCollapsed, executionExpanded);
   const generalSettings = useGeneralSettings();
   const conversationSettings = useConversationSettings();
   const toolSettings = useToolSettings();
@@ -384,7 +386,13 @@ export function App() {
   };
 
   return (
-    <div className={`app-shell${sidebarCollapsed && !mobileNavigation ? " is-sidebar-collapsed" : ""}`}>
+    <div className={`app-shell${sidebarCollapsed && !mobileNavigation ? " is-sidebar-collapsed" : ""}`}
+      style={!mobileNavigation ? { "--app-sidebar-width": `${panels.actual.left}px`, "--execution-panel-width": `${panels.actual.right}px` } as CSSProperties : undefined}>
+      {!mobileNavigation && (["left", "right"] as const).map(side =>
+        (side === "left" ? !sidebarCollapsed : executionExpanded) && <PanelResizeHandle key={side}
+          side={side} width={panels.actual[side]} maximum={panels.maximum(side)}
+          label={t(side === "left" ? "app.resizeLeftPanel" : "app.resizeRightPanel")} hint={t("app.resizePanelHint")}
+          onChange={width => panels.change(side, width)} onReset={() => panels.reset(side)} />)}
       <header className="mobile-header">
         <button
           ref={mobileMenuButtonRef}

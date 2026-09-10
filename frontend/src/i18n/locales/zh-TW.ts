@@ -1,4 +1,7 @@
 export const zhTWMessages = {
+  "app.resizeLeftPanel": "調整左側面板寬度",
+  "app.resizeRightPanel": "調整右側面板寬度",
+  "app.resizePanelHint": "拖曳或使用左右方向鍵調整；雙擊或 Home 還原預設寬度",
   "models.custom.error.invalid": "請檢查欄位、網址及金鑰格式。",
   "models.custom.error.conflict": "資料已更新，請重新載入後再操作。",
   "models.custom.error.busy": "此供應商仍在執行中，請等執行結束。",

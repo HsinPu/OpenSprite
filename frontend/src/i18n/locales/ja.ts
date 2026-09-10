@@ -1,6 +1,9 @@
 import type { MessageKey } from "./zh-TW";
 
 export const jaMessages = {
+  "app.resizeLeftPanel": "左パネルの幅を変更",
+  "app.resizeRightPanel": "右パネルの幅を変更",
+  "app.resizePanelHint": "ドラッグまたは左右キーで変更。ダブルクリックまたは Home で初期幅に戻す",
   "models.custom.error.invalid": "入力項目、URL、認証情報の形式を確認してください。",
   "models.custom.error.conflict": "データが更新されました。再読み込みしてから操作してください。",
   "models.custom.error.busy": "このプロバイダーは実行中です。完了するまでお待ちください。",
