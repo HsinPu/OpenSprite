@@ -54,6 +54,7 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: 60px minmax(0, 1fr);
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -61,43 +62,13 @@ button {
 }
 
 .app-shell.is-sidebar-collapsed {
-  --app-sidebar-width: 76px;
+  --app-sidebar-width: 0px;
   grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
 }
 
-.app-shell__sidebar-toggle.ant-btn {
-  position: absolute;
-  z-index: 30;
-  top: 50%;
-  inset-inline-start: var(--app-sidebar-width);
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  place-items: center;
-  padding: 0;
-  transform: translate(-50%, -50%);
-  border-color: var(--os-border);
-  border-radius: 10px;
-  background: var(--os-surface);
-  color: var(--os-muted);
-  box-shadow: 0 4px 14px rgb(45 39 34 / 7%);
-  font-size: 1rem;
-  line-height: 1;
-  transition: inset-inline-start 180ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.app-shell__sidebar-toggle.ant-btn:not(:disabled):hover {
-  border-color: var(--os-primary);
-  background: var(--os-primary-soft);
-  color: var(--os-primary-strong);
-}
-
-.app-shell__sidebar-toggle.ant-btn:active {
-  transform: translate(-50%, -50%) scale(0.96);
-}
-
 .main-sidebar {
+  grid-column: 1;
+  grid-row: 2;
   position: relative;
   z-index: 20;
   display: flex;
@@ -199,8 +170,7 @@ button {
 .workspace-switcher__button:focus-visible,
 .utility-nav button:focus-visible,
 .mobile-execution-button:focus-visible,
-.mobile-menu-button:focus-visible,
-.app-shell__sidebar-toggle:focus-visible {
+.mobile-menu-button:focus-visible {
   outline: 3px solid rgb(255 101 69 / 28%);
   outline-offset: 2px;
 }
@@ -330,65 +300,16 @@ button {
   font-size: 18px;
 }
 
-.app-shell.is-sidebar-collapsed .main-sidebar {
-  padding-right: 12px;
-  padding-left: 12px;
-}
-
-.app-shell.is-sidebar-collapsed .sidebar-header {
-  justify-content: center;
-}
-
 .conversation-nav__status--error { color: #a84335; }
 
-.app-shell.is-sidebar-collapsed .brand {
-  padding: 2px 0 0;
-}
-
-.app-shell.is-sidebar-collapsed .brand > span:last-child,
-.app-shell.is-sidebar-collapsed .workspace-switcher__name,
-.app-shell.is-sidebar-collapsed .workspace-switcher__chevron,
-.app-shell.is-sidebar-collapsed .workspace-switcher .workspace-status-dot,
-.app-shell.is-sidebar-collapsed .workspace-switcher__error,
-.app-shell.is-sidebar-collapsed .new-chat-label,
-.app-shell.is-sidebar-collapsed .utility-label {
-  display: none;
-}
-
-.app-shell.is-sidebar-collapsed .brand {
-  gap: 0;
-}
-
-.app-shell.is-sidebar-collapsed .new-chat-button {
-  width: 52px;
-  padding: 0;
-}
-
-.app-shell.is-sidebar-collapsed .utility-nav button {
-  justify-content: center;
-  padding: 0;
-}
-
-.app-shell.is-sidebar-collapsed .utility-nav button > span:first-child {
-  margin: 0;
-}
-
-.app-shell.is-sidebar-collapsed .utility-nav {
-  margin-top: auto;
-}
-
-.app-shell.is-sidebar-collapsed .conversation-nav {
-  display: none;
-}
-
 .app-content {
+  grid-column: 2;
+  grid-row: 2;
   height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
-
-.app-shell.is-sidebar-collapsed .workspace-switcher__button.ant-btn { width: 52px; grid-template-columns: 1fr; justify-items: center; padding: 0; }
 
 .settings-dialog {
   width: min(920px, calc(100vw - 48px));
@@ -421,9 +342,43 @@ button {
   height: 100%;
 }
 
-.mobile-header,
 .sidebar-backdrop {
   display: none;
+}
+
+.mobile-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--os-border);
+  background: var(--os-surface);
+}
+.mobile-menu-button, .app-header__new-chat.ant-btn, .mobile-execution-button.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--os-border);
+  border-radius: 10px;
+  background: var(--os-surface);
+  color: var(--os-muted);
+  cursor: pointer;
+}
+.mobile-header-actions { display: flex; margin-left: auto; flex: 0 0 auto; }
+.app-header__breadcrumb { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.app-header__breadcrumb > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-header__breadcrumb > span:first-child, .app-header__breadcrumb > span:nth-child(3) { flex-shrink: 0; }
+.app-header__breadcrumb > span:nth-child(2) { max-width: 30vw; color: var(--os-muted); }
+.app-header__breadcrumb h1 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
+@media (min-width: 901px) {
+  .app-shell.is-sidebar-collapsed .main-sidebar { display: none; }
 }
 
 @media (max-width: 900px) {
@@ -441,10 +396,6 @@ button {
 
   .app-shell.is-sidebar-collapsed {
     display: block;
-  }
-
-  .app-shell__sidebar-toggle.ant-btn {
-    display: none;
   }
 
   .mobile-header {
@@ -538,46 +489,7 @@ button {
     transform: translateX(0);
   }
 
-  .app-shell.is-sidebar-collapsed .main-sidebar {
-    padding: 18px 16px;
-  }
-
-  .app-shell.is-sidebar-collapsed .sidebar-header {
-    justify-content: flex-start;
-    align-items: flex-start;
-  }
-
-  .app-shell.is-sidebar-collapsed .brand {
-    gap: 11px;
-    padding: 2px 8px 0;
-  }
-
-  .app-shell.is-sidebar-collapsed .brand > span:last-child,
-  .app-shell.is-sidebar-collapsed .workspace-switcher__name,
-  .app-shell.is-sidebar-collapsed .workspace-switcher__chevron,
-  .app-shell.is-sidebar-collapsed .workspace-switcher .workspace-status-dot,
-  .app-shell.is-sidebar-collapsed .workspace-switcher__error,
-  .app-shell.is-sidebar-collapsed .new-chat-label,
-  .app-shell.is-sidebar-collapsed .utility-label {
-    display: inline;
-  }
-
-  .app-shell.is-sidebar-collapsed .workspace-switcher__button.ant-btn { width: 100%; grid-template-columns: 20px minmax(0, 1fr) auto auto; justify-items: stretch; padding: 0 11px; }
   .conversation-item__more { opacity: 1; }
-
-  .app-shell.is-sidebar-collapsed .new-chat-button {
-    width: 100%;
-    padding: 0;
-  }
-
-  .app-shell.is-sidebar-collapsed .utility-nav button {
-    justify-content: flex-start;
-    padding: 0 12px;
-  }
-
-  .app-shell.is-sidebar-collapsed .conversation-nav {
-    display: block;
-  }
 
   .sidebar-backdrop {
     position: fixed;

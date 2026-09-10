@@ -13,7 +13,7 @@ const run: RunSnapshot = {
 const noop = () => undefined;
 const asyncNoop = async () => undefined;
 export function useConversationRun() {
-  return { messages: [], activeRun: run, events: [], streamedText: "", loading: false,
+  return { messages: [], activeRun: new URLSearchParams(window.location.search).has("empty") ? null : run, events: [], streamedText: "", loading: false,
     loadingOlderMessages: false, hasOlderMessages: false, error: null, isRecovering: false, canRecover: false, recoverConnection: async () => undefined, isSending: false, isRunning: false,
     send: async () => true, cancel: asyncNoop, loadOlderMessages: asyncNoop };
 }

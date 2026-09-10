@@ -48,12 +48,14 @@ describe("mobile navigation accessibility", () => {
     const { container } = render(<App />);
     fireEvent.change(container.querySelector("textarea")!, { target: { value: "hello" } });
     await waitFor(() => expect(container.querySelector<HTMLButtonElement>("button[type=submit]")?.disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "展開本次執行" }));
     fireEvent.click(container.querySelector("button[type=submit]")!);
     fireEvent.change(container.querySelector("textarea")!, { target: { value: "unsent edit" } });
     await act(async () => accept(new Response(JSON.stringify({ conversationId: id, workspaceId: DEFAULT_WORKSPACE_ID, runId: "e7527bf5-81c9-4534-908c-a9a9bc501f26", status: "queued" }), { status: 202 })));
     await waitFor(() => expect(window.location.hash).toBe(`#chat=${id}`));
+    expect(screen.getByRole("button", { name: "收合本次執行" }).getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector("textarea")?.value).toBe("unsent edit");
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "新對話" })[0]!);
     expect(container.querySelector("textarea")?.value).toBe("");
   });
 
@@ -150,6 +152,19 @@ describe("settings dialog focus restoration", () => {
 });
 
 describe("Ant Design shell controls", () => {
+  it("preserves the composer DOM and draft through all desktop panel combinations", () => {
+    const { container } = render(<App />);
+    const input = screen.getByRole("textbox", { name: "輸入訊息" });
+    fireEvent.change(input, { target: { value: "面板切換時保留草稿" } });
+    for (const name of ["收合側邊欄", "展開本次執行", "展開側邊欄", "收合本次執行"]) {
+      fireEvent.click(screen.getByRole("button", { name }));
+      expect(container.querySelector("textarea")).toBe(input);
+      expect((input as HTMLTextAreaElement).value).toBe("面板切換時保留草稿");
+    }
+    expect(container.querySelector(".chat-workspace__header")).toBeNull();
+    expect(container.querySelector(".app-header__breadcrumb h1")?.textContent).toBe("新對話");
+  });
+
   it("places the new conversation action before the Workspace switcher", () => {
     const { container } = render(<App />);
     const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
@@ -160,22 +175,22 @@ describe("Ant Design shell controls", () => {
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it("anchors the sidebar collapse control to the app shell divider", () => {
+  it("places independent panel controls in the top header and fully hides navigation", () => {
     const { container } = render(<App />);
 
     const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
     const executionToggle = screen.getByRole("button", { name: "展開本次執行" });
     expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
-    expect(sidebarToggle.classList.contains("app-shell__sidebar-toggle")).toBe(true);
+    expect(sidebarToggle.closest("header")).toBe(container.querySelector(".mobile-header"));
     expect(sidebarToggle.closest(".app-shell")).toBe(container.querySelector(".app-shell"));
     expect(sidebarToggle.closest(".chat-workspace__header")).toBeNull();
     expect(sidebarToggle.getAttribute("aria-controls")).toBe("main-navigation-sidebar");
     expect(container.querySelector(".sidebar-header button")).toBeNull();
     expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
-    expect(executionToggle.classList.contains("chat-workspace__execution-toggle")).toBe(true);
+    expect(executionToggle.classList.contains("mobile-execution-button")).toBe(true);
     expect(executionToggle.closest(".chat-workspace__header")).toBeNull();
-    expect(executionToggle.closest(".chat-workspace")).toBeTruthy();
+    expect(executionToggle.closest("header")).toBe(container.querySelector(".mobile-header"));
     expect(executionToggle.getAttribute("aria-expanded")).toBe("false");
     expect(executionToggle.querySelector(".anticon-left")).toBeTruthy();
 
@@ -183,6 +198,13 @@ describe("Ant Design shell controls", () => {
     const expandSidebar = screen.getByRole("button", { name: "展開側邊欄" });
     expect(container.querySelector(".app-shell")?.classList.contains("is-sidebar-collapsed")).toBe(true);
     expect(expandSidebar.querySelector(".anticon-right")).toBeTruthy();
+    expect(container.querySelector(".main-sidebar")?.hasAttribute("inert")).toBe(true);
+    expect(screen.queryByRole("button", { name: "設定" })).toBeNull();
+    fireEvent.click(executionToggle);
+    expect(screen.getByRole("button", { name: "收合本次執行" }).getAttribute("aria-expanded")).toBe("true");
+    expect(expandSidebar.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(expandSidebar);
+    expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
   });
 
   it("uses only the mobile menu on narrow screens", () => {
@@ -583,7 +605,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     fireEvent.click(screen.getByRole("button", { name: "載入更多對話" }));
     expect(await screen.findByRole("button", { name: "較早的對話" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "新對話" })[0]!);
     expect(window.location.hash).toBe("#new-chat");
     expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
   });

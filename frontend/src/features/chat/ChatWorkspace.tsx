@@ -17,7 +17,7 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import { useConversationRun } from "./useConversationRun";
 import { useRunInspection } from "./useRunInspection";
 import { useConversationAutoScroll } from "./useConversationAutoScroll";
-import { pendingToolApprovalId } from "./ToolApprovalCard";
+import { ToolApprovalCard, pendingToolApprovalId } from "./ToolApprovalCard";
 
 import "./ChatWorkspace.css";
 
@@ -38,7 +38,11 @@ type ChatWorkspaceProps = {
   sendBehavior: SendBehavior;
   autoScroll: boolean;
   executionPanelDefaultExpanded: boolean;
+  executionExpanded?: boolean;
+  onExecutionExpandedChange?: (expanded: boolean) => void;
   mobileHeaderActionTarget?: HTMLElement | null;
+  navigationOpen?: boolean;
+  onExecutionOpen?: () => void;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
   title?: string;
@@ -87,7 +91,11 @@ export function ChatWorkspace({
   sendBehavior,
   autoScroll,
   executionPanelDefaultExpanded,
+  executionExpanded,
+  onExecutionExpandedChange,
   mobileHeaderActionTarget = null,
+  navigationOpen = false,
+  onExecutionOpen,
   onConversationAccepted,
   onConversationUpdated,
   title,
@@ -96,8 +104,12 @@ export function ChatWorkspace({
   const [localDraft, setLocalDraft] = useState("");
   const draft = draftValue ?? localDraft;
   const setDraft = onDraftChange ?? setLocalDraft;
-  const [executionPanelExpanded, setExecutionPanelExpanded] = useState(executionPanelDefaultExpanded);
+  const [internalExecutionExpanded, setInternalExecutionExpanded] = useState(executionPanelDefaultExpanded);
+  const executionPanelExpanded = executionExpanded ?? internalExecutionExpanded;
+  const setExecutionPanelExpanded = onExecutionExpandedChange ?? setInternalExecutionExpanded;
+  const previousPanelDefault = useRef(executionPanelDefaultExpanded);
   const [mobileExecutionOpen, setMobileExecutionOpen] = useState(false);
+  const [compactLayout, setCompactLayout] = useState(() => window.innerWidth <= 900);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const mobileExecutionTriggerRef = useRef<HTMLButtonElement>(null);
   const executionPanelId = `execution-panel-${useId()}`;
@@ -164,12 +176,16 @@ export function ChatWorkspace({
   });
 
   useEffect(() => {
-    if (!historical) setExecutionPanelExpanded(executionPanelDefaultExpanded);
-  }, [executionPanelDefaultExpanded, historical]);
+    if (previousPanelDefault.current !== executionPanelDefaultExpanded && !historical) {
+      setExecutionPanelExpanded(executionPanelDefaultExpanded);
+    }
+    previousPanelDefault.current = executionPanelDefaultExpanded;
+  }, [executionPanelDefaultExpanded, historical, setExecutionPanelExpanded]);
 
   useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth > 1200) setMobileExecutionOpen(false);
+      setCompactLayout(window.innerWidth <= 900);
+      if (window.innerWidth > 900) setMobileExecutionOpen(false);
       const input = composerInputRef.current;
       if (input) {
         input.style.height = "0px";
@@ -180,19 +196,14 @@ export function ChatWorkspace({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  useEffect(() => {
-    if (pendingApprovalId === null) return;
-    inspection.returnToLatest();
-    setExecutionPanelExpanded(true);
-    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1200px)").matches) {
-      setMobileExecutionOpen(true);
-    }
-  }, [inspection.returnToLatest, pendingApprovalId]);
+  useEffect(() => { if (navigationOpen) setMobileExecutionOpen(false); }, [navigationOpen]);
 
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;
     const openMobileExecutionIfNeeded = () => {
-      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1200px)").matches) {
+      setExecutionPanelExpanded(true);
+      if (compactLayout) {
+        onExecutionOpen?.();
         setMobileExecutionOpen(true);
       }
     };
@@ -236,7 +247,7 @@ export function ChatWorkspace({
   const handleMobileExecutionClose = () => setMobileExecutionOpen(false);
   const handleMobileExecutionAfterOpenChange = (open: boolean) => {
     if (open) return;
-    const restoreFocus = () => mobileExecutionTriggerRef.current?.focus();
+    const restoreFocus = () => { if (!navigationOpen) mobileExecutionTriggerRef.current?.focus(); };
     if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(restoreFocus);
     else restoreFocus();
   };
@@ -246,26 +257,28 @@ export function ChatWorkspace({
     setExecutionPanelExpanded(nextExpanded);
   };
 
+  const panelButton = <Button
+    ref={mobileExecutionTriggerRef}
+    className="mobile-execution-button"
+    icon={(compactLayout ? mobileExecutionOpen : executionPanelExpanded) ? <RightOutlined /> : <LeftOutlined />}
+    aria-expanded={compactLayout ? mobileExecutionOpen : executionPanelExpanded}
+    aria-controls={compactLayout ? mobileExecutionPanelId : executionPanelId}
+    aria-label={t(compactLayout ? (mobileExecutionOpen ? "chat.closeExecution" : "chat.openExecution") : (executionPanelExpanded ? (historical ? "execution.collapseDetails" : "execution.collapse") : (historical ? "execution.expandDetails" : "execution.expand")))}
+    title={t(compactLayout ? (mobileExecutionOpen ? "chat.closeExecution" : "chat.openExecution") : (executionPanelExpanded ? "execution.collapse" : "execution.expand"))}
+    onClick={() => {
+      if (compactLayout) { onExecutionOpen?.(); setMobileExecutionOpen((open) => !open); }
+      else handleExecutionPanelToggle();
+    }}
+  />;
+
   return (
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
       <div className="chat-workspace__main">
-        <header className="chat-workspace__header">
-          <h1>{title ?? t("app.newConversationTitle")}</h1>
-          <Button
-            className={`chat-workspace__compact-execution-trigger${mobileHeaderActionTarget ? " chat-workspace__compact-execution-trigger--with-mobile-header" : ""}`}
-            aria-label={t("chat.openExecution")}
-            aria-controls={mobileExecutionPanelId}
-            aria-expanded={mobileExecutionOpen}
-            onClick={(event) => {
-              if (event.currentTarget instanceof HTMLButtonElement) mobileExecutionTriggerRef.current = event.currentTarget;
-              setMobileExecutionOpen(true);
-            }}
-            icon={<LeftOutlined />}
-          />
-        </header>
+        {!mobileHeaderActionTarget ? <header className="chat-workspace__header"><span>{workspaceName ?? t("workspaces.default")} / {title ?? t("app.newConversationTitle")}</span>{panelButton}</header> : null}
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
           <div className="chat-workspace__conversation-rail">
+            {pendingApprovalId !== null && (historical || (compactLayout ? !mobileExecutionOpen : !executionPanelExpanded)) ? <ToolApprovalCard events={chat.events} /> : null}
             {chat.hasPendingSubmission ? <div role="status">{t("chat.confirmingSubmission")}</div> : null}
             {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error} {chat.canRecover ? <Button loading={chat.isRecovering || chat.isSending} onClick={() => void chat.recoverConnection()}>{t("common.retry")}</Button> : null}</div> : null}
             {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
@@ -351,10 +364,6 @@ export function ChatWorkspace({
             disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">
-            <div>
-              <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.attachmentTitle")} aria-label={t("chat.attachmentLabel")}>⌕</button>
-              <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.optionsTitle")} aria-label={t("chat.optionsLabel")}>☷</button>
-            </div>
             <div className="chat-workspace__composer-primary-actions">
               <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
               {chat.isRunning ? (
@@ -366,17 +375,6 @@ export function ChatWorkspace({
           </div>
         </form>
       </div>
-
-      <Button
-        type="default"
-        className="chat-workspace__execution-toggle"
-        icon={executionPanelExpanded ? <RightOutlined /> : <LeftOutlined />}
-        aria-expanded={executionPanelExpanded}
-        aria-controls={executionPanelId}
-        aria-label={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-        title={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-        onClick={handleExecutionPanelToggle}
-      />
 
       <ExecutionContext
         modelName={displayedModelName}
@@ -395,20 +393,7 @@ export function ChatWorkspace({
         bodyId={executionPanelId}
       />
 
-      {mobileHeaderActionTarget ? createPortal(
-        <Button
-          ref={mobileExecutionTriggerRef}
-          type="default"
-          className="mobile-execution-button"
-          icon={<LeftOutlined />}
-          aria-expanded={mobileExecutionOpen}
-          aria-controls={mobileExecutionPanelId}
-          aria-label={t("chat.openExecution")}
-          title={t("chat.openExecution")}
-          onClick={() => setMobileExecutionOpen(true)}
-        />,
-        mobileHeaderActionTarget,
-      ) : null}
+      {mobileHeaderActionTarget ? createPortal(panelButton, mobileHeaderActionTarget) : null}
 
       <Drawer
         className="chat-workspace__mobile-execution-drawer"

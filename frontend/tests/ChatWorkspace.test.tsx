@@ -77,6 +77,7 @@ function createMobileHeaderActionTarget(): HTMLDivElement {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   mockedUseConversationRun.mockReset();
   mockedUseRunInspection.mockReset();
   inspectRun.mockClear();
@@ -148,6 +149,7 @@ describe("live chat workspace", () => {
   });
 
   it("closes the compact Drawer when resized to desktop without clearing the draft", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     mockedUseConversationRun.mockReturnValue({ hasPendingSubmission: false, messages: [], activeRun: run, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRecovering: false, canRecover: false, recoverConnection: async () => undefined, isSending: false, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
     render(<ChatWorkspace conversationId={null} modelName="Original model" modelSelection={selection("openrouter", run.modelId)} modelChoices={[]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()}/>);
     const composer = screen.getByRole("textbox", { name: "輸入訊息" });
@@ -349,6 +351,7 @@ describe("live chat workspace", () => {
   });
 
   it("opens the mobile execution drawer from the global header and restores focus on close", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     mockedUseConversationRun.mockReturnValue({ hasPendingSubmission: false,
       messages: [],
       activeRun: run,
@@ -386,7 +389,7 @@ describe("live chat workspace", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("leaves sidebar navigation to the shell and places execution toggle on the divider", () => {
+  it("leaves sidebar navigation to the shell and places execution toggle in the compact header", () => {
     mockedUseConversationRun.mockReturnValue({ hasPendingSubmission: false,
       messages: [],
       activeRun: run,
@@ -404,12 +407,12 @@ describe("live chat workspace", () => {
 
     render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false}  onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
 
-    const header = screen.getByRole("heading", { level: 1, name: "整理今天的工作" }).closest("header")!;
+    const header = screen.getByText("預設工作區 / 整理今天的工作").closest("header")!;
     expect(screen.queryByRole("button", { name: "收合側邊欄" })).toBeNull();
     const expand = screen.getByRole("button", { name: "展開本次執行" });
-    expect(header.firstElementChild).toBe(screen.getByRole("heading", { level: 1, name: "整理今天的工作" }));
-    expect(expand.className).toContain("chat-workspace__execution-toggle");
-    expect(expand.closest("header")).toBeNull();
+    expect(header.querySelector("h1")).toBeNull();
+    expect(expand.className).toContain("mobile-execution-button");
+    expect(expand.closest("header")).toBe(header);
     expect(expand.closest(".chat-workspace")).toBe(header.closest(".chat-workspace"));
     const body = document.getElementById(expand.getAttribute("aria-controls")!);
     expect(body?.hidden).toBe(true);
@@ -421,6 +424,7 @@ describe("live chat workspace", () => {
   });
 
   it("opens the mobile drawer when inspecting a historical execution", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const matchMedia = vi.fn((query: string) => ({
       matches: query === "(max-width: 1200px)",
       media: query,

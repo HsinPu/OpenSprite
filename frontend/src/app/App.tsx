@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
+import { FolderOutlined, LeftOutlined, MoreOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 
 import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
@@ -100,6 +100,7 @@ export function App() {
     () => window.innerWidth <= 900,
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [executionExpanded, setExecutionExpanded] = useState(false);
   const generalSettings = useGeneralSettings();
   const conversationSettings = useConversationSettings();
   const toolSettings = useToolSettings();
@@ -272,11 +273,20 @@ export function App() {
       if (event.key === "Escape") {
         setMenuOpen(false);
       }
+      if (event.key === "Tab" && menuOpen && mobileNavigation && !settingsOpen) {
+        const sidebar = document.getElementById("main-navigation-sidebar");
+        const controls = [mobileMenuButtonRef.current, ...Array.from(sidebar?.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input, [tabindex="0"]') ?? [])]
+          .filter((item): item is HTMLElement => item !== null && item.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
+  }, [menuOpen, mobileNavigation, settingsOpen]);
 
   const openChat = (conversation: ConversationSummary) => {
     setConversationId(conversation.id);
@@ -374,23 +384,26 @@ export function App() {
   };
 
   return (
-    <div className={`app-shell${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
+    <div className={`app-shell${sidebarCollapsed && !mobileNavigation ? " is-sidebar-collapsed" : ""}`}>
       <header className="mobile-header">
         <button
           ref={mobileMenuButtonRef}
-          className="mobile-menu-button"
+          className="mobile-menu-button ant-btn"
           type="button"
-          aria-label={menuOpen ? t("app.closeMenu") : t("app.openMenu")}
-          aria-expanded={menuOpen}
+          aria-label={mobileNavigation ? t(menuOpen ? "app.closeMenu" : "app.openMenu") : t(sidebarCollapsed ? "app.expandSidebar" : "app.collapseSidebar")}
+          aria-expanded={mobileNavigation ? menuOpen : !sidebarCollapsed}
           aria-controls="main-navigation-sidebar"
-          title={menuOpen ? t("app.closeMenu") : t("app.openMenu")}
-          onClick={() => setMenuOpen((open) => !open)}
+          title={mobileNavigation ? t(menuOpen ? "app.closeMenu" : "app.openMenu") : t(sidebarCollapsed ? "app.expandSidebar" : "app.collapseSidebar")}
+          onClick={() => mobileNavigation ? setMenuOpen((open) => !open) : setSidebarCollapsed((collapsed) => !collapsed)}
         >
-          ☰
+          {(mobileNavigation ? menuOpen : !sidebarCollapsed) ? <LeftOutlined /> : <RightOutlined />}
         </button>
-        <div className="brand brand--mobile">
-          <OpenSpriteMark />
-          <span>OpenSprite</span>
+        <Button className="app-header__new-chat" inert={mobileNavigation && menuOpen} icon={<PlusOutlined />} title={t("app.newConversation")} aria-label={t("app.newConversation")} onClick={startNewChat} />
+        <div className="app-header__breadcrumb" title={`${currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")} / ${chatTitle}`}>
+          <FolderOutlined aria-hidden="true" />
+          <span>{currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")}</span>
+          <span aria-hidden="true">/</span>
+          <h1>{chatTitle}</h1>
         </div>
         <div
           ref={setMobileHeaderActionTarget}
@@ -409,25 +422,12 @@ export function App() {
         />
       ) : null}
 
-      {!mobileNavigation ? (
-        <Button
-          type="default"
-          className="app-shell__sidebar-toggle"
-          icon={sidebarCollapsed ? <RightOutlined /> : <LeftOutlined />}
-          aria-expanded={!sidebarCollapsed}
-          aria-controls="main-navigation-sidebar"
-          aria-label={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-          title={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-        />
-      ) : null}
-
       <aside
         id="main-navigation-sidebar"
         className={`main-sidebar${menuOpen ? " is-open" : ""}${sidebarCollapsed ? " is-collapsed" : ""}`}
         aria-label={t("app.mainMenu")}
-        aria-hidden={mobileNavigation && !menuOpen ? true : undefined}
-        inert={mobileNavigation && !menuOpen}
+        aria-hidden={(mobileNavigation ? !menuOpen : sidebarCollapsed) ? true : undefined}
+        inert={mobileNavigation ? !menuOpen : sidebarCollapsed}
       >
         <div className="sidebar-header">
           <div className="brand">
@@ -549,7 +549,11 @@ export function App() {
           sendBehavior={conversationSettings.settings.sendBehavior}
           autoScroll={conversationSettings.settings.autoScroll}
           executionPanelDefaultExpanded={conversationSettings.settings.executionPanelDefaultExpanded}
+          executionExpanded={executionExpanded}
+          onExecutionExpandedChange={setExecutionExpanded}
           mobileHeaderActionTarget={mobileHeaderActionTarget}
+          navigationOpen={mobileNavigation && menuOpen}
+          onExecutionOpen={() => setMenuOpen(false)}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
         />
