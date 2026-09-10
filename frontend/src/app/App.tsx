@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
-import { FolderOutlined, LeftOutlined, MoreOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
+import { FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 
 import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
@@ -406,7 +406,6 @@ export function App() {
         >
           {(mobileNavigation ? menuOpen : !sidebarCollapsed) ? <LeftOutlined /> : <RightOutlined />}
         </button>
-        {(mobileNavigation || sidebarCollapsed) && <Button className="app-header__new-chat" inert={mobileNavigation && menuOpen} icon={<PlusOutlined />} title={t("app.newConversation")} aria-label={t("app.newConversation")} onClick={startNewChat} />}
         <div className="app-header__breadcrumb" title={`${currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")} / ${chatTitle}`}>
           <FolderOutlined aria-hidden="true" />
           <span>{currentWorkspace ? workspaceName(currentWorkspace.kind, currentWorkspace.name, t("workspaces.default")) : t("workspaces.default")}</span>

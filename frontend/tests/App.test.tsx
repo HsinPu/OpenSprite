@@ -199,7 +199,7 @@ describe("Ant Design shell controls", () => {
     fireEvent.click(sidebarToggle);
     const expandSidebar = screen.getByRole("button", { name: "展開側邊欄" });
     expect(expandSidebar).toBe(sidebarToggle);
-    expect(container.querySelector(".app-header__new-chat")).not.toBeNull();
+    expect(container.querySelector(".app-header__new-chat")).toBeNull();
     expect(container.querySelector(".app-shell")?.classList.contains("is-sidebar-collapsed")).toBe(true);
     expect(expandSidebar.querySelector(".anticon-right")).toBeTruthy();
     expect(container.querySelector(".main-sidebar")?.hasAttribute("inert")).toBe(true);

@@ -369,7 +369,7 @@ button {
   padding: 8px 12px;
   background: transparent;
 }
-.mobile-menu-button, .app-header__new-chat.ant-btn, .mobile-execution-button.ant-btn {
+.mobile-menu-button, .mobile-execution-button.ant-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
