@@ -37,7 +37,11 @@ describe("compact custom provider operations", () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: "Local AI 操作" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "模型管理" }));
+    expect(screen.queryByLabelText("Model ID")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
     expect(screen.getByLabelText("Model ID")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
+    expect(screen.queryByLabelText("Model ID")).toBeNull();
     expect(controller.remove).not.toHaveBeenCalled();
   });
 
@@ -50,5 +54,24 @@ describe("compact custom provider operations", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /移\s*除/ }));
     await waitFor(() => expect(controller.remove).toHaveBeenCalledWith(provider));
     await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+  });
+
+  it("searches models and saves explicit capacity without changing the provider", async () => {
+    const populated = { ...provider, models: [{ key: "model-1", model_id: "glm-5.3", name: "GLM", context_limit: 8192, output_limit: 2048, tools: false, source: "discovered" as const }] };
+    vi.mocked(useCustomProviders).mockReturnValue({ ...controller, catalog: { revision: 1, providers: [populated] } });
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Local AI 操作" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "模型管理" }));
+    expect(screen.getByText("暫用預設容量，尚未確認")).toBeTruthy();
+    const search = screen.getByLabelText("搜尋名稱或 Model ID");
+    fireEvent.change(search, { target: { value: "missing" } });
+    expect(screen.getByText("沒有符合的模型")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "GLM" } });
+    fireEvent.click(screen.getByRole("button", { name: /編\s*輯/ }));
+    fireEvent.change(screen.getByLabelText("Context 上限"), { target: { value: "1000000" } });
+    fireEvent.click(screen.getByRole("button", { name: /儲\s*存/ }));
+    await waitFor(() => expect(controller.editModel).toHaveBeenCalledWith(populated, "model-1", expect.objectContaining({ contextLimit: 1000000, outputLimit: 2048 })));
+    expect(controller.update).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByLabelText("Model ID")).toBeNull());
   });
 });

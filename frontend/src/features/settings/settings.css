@@ -71,6 +71,22 @@
 .settings-models-layout .settings-service-actions > button { min-height: 36px; }
 .settings-models-layout .settings-provider-row-feedback { grid-column: 1 / -1; margin: 0; white-space: normal; overflow-wrap: anywhere; }
 .settings-custom-model-editor { grid-column: 1 / -1; width: 100%; min-width: 0; }
+.settings-custom-model-editor { padding-top: 16px; }
+.custom-model-toolbar, .custom-model-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.custom-model-toolbar > .ant-input-search { flex: 1; min-width: 0; }
+.custom-model-list { max-height: 55vh; overflow-y: auto; margin-top: 16px; }
+.custom-model-row { padding: 16px 0; border-bottom: 1px solid var(--ant-color-border-secondary, #eee); }
+.custom-model-row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.custom-model-id, .custom-model-source { font-size: 12px; margin-top: 4px; color: var(--ant-color-text-secondary, #666); }
+.custom-model-actions { display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+.custom-model-capacities { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.custom-model-capacities .ant-input-number { width: 100%; }
+.settings-custom-model-editor .ant-alert { margin-bottom: 20px; }
+@media (max-width: 575px) {
+  .custom-model-capacities { grid-template-columns: 1fr; gap: 0; }
+  .custom-model-row, .custom-model-toolbar { align-items: stretch; flex-direction: column; }
+  .custom-model-actions .ant-btn { min-height: 40px; }
+}
 .settings-models-layout .settings-select-row { padding: 16px 0; }
 .settings-models-layout .settings-select-row > .ant-select, .settings-models-layout .settings-model-picker, .settings-models-layout .settings-segmented { flex: 0 0 52%; width: 52%; min-width: 0; }
 .settings-models-layout .settings-helper-text { margin-bottom: 12px; }

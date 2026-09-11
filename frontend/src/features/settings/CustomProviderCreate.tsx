@@ -22,16 +22,18 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
   const [key, setKey] = useState("");
   const [allowHttp, setAllowHttp] = useState(false);
   const [editingModels, setEditingModels] = useState<string | null>(null);
+  const [modelFormOpen, setModelFormOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
   const [modelId, setModelId] = useState("");
   const [modelName, setModelName] = useState("");
   const [contextLimit, setContextLimit] = useState(8192);
   const [outputLimit, setOutputLimit] = useState(2048);
   const [tools, setTools] = useState(false);
   useEffect(() => {
-    if (!open && !removingProvider) return;
+    if (!open && !removingProvider && !editingModels) return;
     onOverlayChange?.(true);
     return () => onOverlayChange?.(false);
-  }, [open, removingProvider, onOverlayChange]);
+  }, [open, removingProvider, editingModels, onOverlayChange]);
   const close = () => { if (!controller.saving) { setOpen(false); setKey(""); } };
   const content = <Form layout="vertical" onFinish={async () => {
     const draft = { name, baseUrl: url, protocol: "openai_chat_completions" as const, authMode: auth,
@@ -57,30 +59,39 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
         <Button disabled={controller.saving} onClick={() => { setEditingProvider(provider); setName(provider.name); setUrl(provider.base_url); setAuth(provider.auth_mode); setKey(""); setAllowHttp(provider.allow_insecure_local); setOpen(true); }}>{t("models.manage")}</Button>
         <Dropdown trigger={["click"]} getPopupContainer={() => container ?? document.body} menu={{ items: [
           { key: "refresh", label: t("models.custom.refresh"), onClick: async () => { if (await controller.refreshModels(provider)) await onChanged(); } },
-          { key: "models", label: t("models.custom.models"), onClick: () => { setEditingModelKey(null); setModelId(""); setModelName(""); setContextLimit(8192); setOutputLimit(2048); setTools(false); setEditingModels(editingModels === provider.id ? null : provider.id); } },
+          { key: "models", label: t("models.custom.models"), onClick: () => { setModelFormOpen(false); setModelSearch(""); setEditingModels(provider.id); } },
           { type: "divider" },
           { key: "remove", danger: true, label: t("models.custom.remove"), onClick: () => setRemovingProvider(provider) },
         ] }}><Button type="text" icon={<EllipsisOutlined aria-hidden="true" />} aria-label={t("models.providerActions", { provider: provider.name })} disabled={controller.saving} onClick={(event) => { menuOpener.current = event.currentTarget; }} /></Dropdown>
       </div>
-      {editingModels === provider.id ? <div className="settings-custom-model-editor">
-        {provider.models.map((model) => <div key={model.key}><p>{model.name} · {model.model_id} · {model.context_limit} / {model.output_limit}</p>
-          <Button disabled={controller.saving} onClick={() => { setEditingModelKey(model.key); setModelId(model.model_id); setModelName(model.name); setContextLimit(model.context_limit); setOutputLimit(model.output_limit); setTools(model.tools); }}>{t("models.custom.edit")}</Button>
+      {editingModels === provider.id ? <Modal open title={`${t(modelFormOpen ? (editingModelKey ? "models.custom.edit" : "models.custom.addModel") : "models.custom.models")} · ${provider.name}`} width={720} footer={null} getContainer={container ?? undefined} onCancel={() => { if (!controller.saving) { if (modelFormOpen) setModelFormOpen(false); else setEditingModels(null); } }} mask={{ closable: !controller.saving }} keyboard={!controller.saving} afterClose={() => menuOpener.current?.focus()}>
+        <div className="settings-custom-model-editor">
+        {controller.error ? <Alert type="error" title={customProviderErrorText(controller.error, t)} /> : null}
+        {!modelFormOpen ? <>
+        <div className="custom-model-toolbar"><Input.Search allowClear aria-label={t("models.custom.search")} placeholder={t("models.custom.search")} value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} /><Button type="primary" disabled={controller.saving} onClick={() => { setEditingModelKey(null); setModelId(""); setModelName(""); setContextLimit(8192); setOutputLimit(2048); setTools(false); setModelFormOpen(true); }}>{t("models.custom.addModel")}</Button></div>
+        <div className="custom-model-list">
+        {!provider.models.some((model) => `${model.name} ${model.model_id}`.normalize("NFC").toLowerCase().includes(modelSearch.trim().normalize("NFC").toLowerCase())) ? <p role="status">{t("models.custom.noResults")}</p> : null}
+        {provider.models.filter((model) => `${model.name} ${model.model_id}`.normalize("NFC").toLowerCase().includes(modelSearch.trim().normalize("NFC").toLowerCase())).map((model) => <div className="custom-model-row" key={model.key}><div><strong>{model.name}</strong><div className="custom-model-id">{model.model_id}</div><small>{t("models.custom.context")}: {model.context_limit.toLocaleString()} · {t("models.custom.output")}: {model.output_limit.toLocaleString()}</small><div className="custom-model-source">{t(model.source === "manual" ? "models.custom.manualCapacity" : "models.custom.fallbackCapacity")}</div></div>
+          <div className="custom-model-actions"><Button disabled={controller.saving} onClick={() => { setModelFormOpen(true); setEditingModelKey(model.key); setModelId(model.model_id); setModelName(model.name); setContextLimit(model.context_limit); setOutputLimit(model.output_limit); setTools(model.tools); }}>{t("models.custom.edit")}</Button>
           <Popconfirm title={t("models.custom.removeConfirm")} getPopupContainer={() => container ?? document.body} onConfirm={async () => { if (await controller.removeModel(provider, model.key)) { setEditingModelKey(null); setModelId(""); setModelName(""); await onChanged(); } }}>
             <Button danger disabled={controller.saving}>{t("models.custom.remove")}</Button>
-          </Popconfirm></div>)}
+          </Popconfirm></div></div>)}
+        </div></> : <>
+        <Alert type="info" title={t("models.custom.capacityHelp")} />
         <Form layout="vertical" onFinish={async () => {
           const draft = { modelId, name: modelName.trim() || modelId, contextLimit, outputLimit, tools };
           const saved = editingModelKey ? await controller.editModel(provider, editingModelKey, draft) : await controller.addModel(provider, draft);
-          if (saved) { setEditingModelKey(null); setModelId(""); setModelName(""); await onChanged(); }
+          if (saved) { setModelFormOpen(false); setEditingModelKey(null); setModelId(""); setModelName(""); await onChanged(); }
         }}>
           <Form.Item label="Model ID" htmlFor={`${formId}-model-id`}><Input id={`${formId}-model-id`} value={modelId} onChange={(event) => setModelId(event.target.value)} disabled={controller.saving} /></Form.Item>
           <Form.Item label={t("models.custom.name")} htmlFor={`${formId}-model-name`}><Input id={`${formId}-model-name`} value={modelName} onChange={(event) => setModelName(event.target.value)} disabled={controller.saving} /></Form.Item>
-          <Form.Item label={t("models.custom.context")} htmlFor={`${formId}-context`}><InputNumber id={`${formId}-context`} min={1024} value={contextLimit} onChange={(value) => value !== null && setContextLimit(value)} disabled={controller.saving} /></Form.Item>
+          <div className="custom-model-capacities"><Form.Item label={t("models.custom.context")} htmlFor={`${formId}-context`}><InputNumber id={`${formId}-context`} min={1024} max={4000000} precision={0} value={contextLimit} onChange={(value) => value !== null && setContextLimit(value)} disabled={controller.saving} /></Form.Item>
           <Form.Item label={t("models.custom.output")} htmlFor={`${formId}-output`}><InputNumber id={`${formId}-output`} min={1} max={contextLimit} value={outputLimit} onChange={(value) => value !== null && setOutputLimit(value)} disabled={controller.saving} /></Form.Item>
-          <Form.Item><Checkbox checked={tools} onChange={(event) => setTools(event.target.checked)} disabled={controller.saving}>{t("models.custom.tools")}</Checkbox></Form.Item>
-          <Button htmlType="submit" loading={controller.saving} disabled={!modelId.trim() || outputLimit > contextLimit}>{t("common.save")}</Button>
+          </div><Form.Item><Checkbox checked={tools} onChange={(event) => setTools(event.target.checked)} disabled={controller.saving}>{t("models.custom.tools")}</Checkbox></Form.Item>
+          <div className="custom-model-actions"><Button disabled={controller.saving} onClick={() => setModelFormOpen(false)}>{t("common.cancel")}</Button><Button type="primary" htmlType="submit" loading={controller.saving} disabled={!modelId.trim() || outputLimit > contextLimit}>{t("common.save")}</Button></div>
         </Form>
-      </div> : null}
+        </>}
+      </div></Modal> : null}
     </section>)}
     <section className="settings-service-card" aria-label={t("models.providerConnection", { provider: t("models.custom.entry") })}>
       <div className="settings-service-identity"><ApiOutlined className="settings-icon" aria-hidden="true" /><span><strong>{t("models.custom.entry")}</strong><small>{t("models.custom.entryDescription")}</small></span></div>
