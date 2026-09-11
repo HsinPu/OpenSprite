@@ -49,7 +49,7 @@ export function WorkspaceSwitcher({
   };
 
   return <div className="workspace-switcher">
-    <Dropdown menu={{ items, onClick: select, selectedKeys: active ? [`workspace:${active.id}`] : [] }} trigger={["click"]} disabled={!controller.catalog || controller.saving}>
+    <Dropdown placement="bottomLeft" classNames={{ root: "workspace-switcher-popup" }} getPopupContainer={(node) => node.parentElement ?? document.body} menu={{ items, onClick: select, selectedKeys: active ? [`workspace:${active.id}`] : [] }} trigger={["click"]} disabled={!controller.catalog || controller.saving}>
       <Button className="workspace-switcher__button" aria-label={t("workspaces.switchLabel", { name: displayName })} title={active?.rootPath ?? displayName}>
         <FolderOutlined />
         <span className="workspace-switcher__name">{displayName}</span>

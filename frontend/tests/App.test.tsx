@@ -398,7 +398,10 @@ describe("conversation navigation", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "切換工作區，目前是 預設工作區" }));
+    const switcher = await screen.findByRole("button", { name: "切換工作區，目前是 預設工作區" });
+    fireEvent.click(switcher);
+    const menu = await screen.findByRole("menu");
+    expect(switcher.parentElement?.contains(menu)).toBe(true);
     fireEvent.click(await screen.findByText("新增工作區"));
 
     expect(await screen.findByRole("heading", { level: 2, name: "工作區" })).toBeTruthy();

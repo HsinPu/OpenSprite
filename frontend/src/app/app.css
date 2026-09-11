@@ -90,7 +90,17 @@ button {
   min-height: 40px;
 }
 
-.workspace-switcher { display: grid; gap: 5px; }
+.workspace-switcher { position: relative; display: grid; gap: 5px; }
+.workspace-switcher-popup.ant-dropdown {
+  left: 0 !important;
+  right: auto !important;
+  top: calc(100% + 4px) !important;
+  bottom: auto !important;
+  width: 100%;
+  min-width: 0 !important;
+  max-height: calc(100dvh - 200px);
+  overflow-y: auto;
+}
 .workspace-switcher__button.ant-btn { display: grid; width: 100%; min-height: 44px; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 0 11px; border-color: var(--os-border); border-radius: 10px; background: var(--os-surface); text-align: left; }
 .workspace-switcher__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-switcher__chevron { color: var(--os-muted); font-size: 11px; }
