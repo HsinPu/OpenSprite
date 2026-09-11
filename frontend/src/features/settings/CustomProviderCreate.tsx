@@ -6,10 +6,11 @@ import { useCustomProviders } from "../ai-settings/useCustomProviders";
 import type { CustomProvider } from "../../api/customProviders";
 import { customProviderErrorText } from "../ai-settings/customProviderErrors";
 
-export function CustomProviderCreate({ onChanged, container, hasCustomProviders, onOverlayChange }: { onChanged: () => Promise<unknown>; container: HTMLElement | null; hasCustomProviders: boolean; onOverlayChange?: (open: boolean) => void }) {
+export function CustomProviderCreate({ onChanged, container, hasCustomProviders, onOverlayChange, refreshRevision = 0 }: { onChanged: () => Promise<unknown>; container: HTMLElement | null; hasCustomProviders: boolean; onOverlayChange?: (open: boolean) => void; refreshRevision?: number }) {
   const { t } = useI18n();
   const formId = useId();
   const controller = useCustomProviders(hasCustomProviders);
+  useEffect(() => { if (refreshRevision > 0) void controller.reload(); }, [refreshRevision, controller.reload]);
   const screens = Grid.useBreakpoint();
   const [open, setOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<CustomProvider | null>(null);
@@ -58,7 +59,6 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
       <div className="settings-service-actions">
         <Button disabled={controller.saving} onClick={() => { setEditingProvider(provider); setName(provider.name); setUrl(provider.base_url); setAuth(provider.auth_mode); setKey(""); setAllowHttp(provider.allow_insecure_local); setOpen(true); }}>{t("models.manage")}</Button>
         <Dropdown trigger={["click"]} getPopupContainer={() => container ?? document.body} menu={{ items: [
-          { key: "refresh", label: t("models.custom.refresh"), onClick: async () => { if (await controller.refreshModels(provider)) await onChanged(); } },
           { key: "models", label: t("models.custom.models"), onClick: () => { setModelFormOpen(false); setModelSearch(""); setEditingModels(provider.id); } },
           { type: "divider" },
           { key: "remove", danger: true, label: t("models.custom.remove"), onClick: () => setRemovingProvider(provider) },

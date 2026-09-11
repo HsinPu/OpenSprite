@@ -62,7 +62,6 @@ export function useProviderCatalog(): ProviderCatalogController {
       return summaries;
     } catch (requestError) {
       if (mountedRef.current) {
-        setProviders(null);
         setCatalogError(providerErrorText(requestError, t));
       }
       return null;

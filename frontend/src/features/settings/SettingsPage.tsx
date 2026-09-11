@@ -36,6 +36,8 @@ import "./settings.css";
 import { SkillsSettings } from "./SkillsSettings";
 import { AgentsSettings } from "./AgentsSettings";
 import { CustomProviderCreate } from "./CustomProviderCreate";
+import { getCustomProvider, refreshCustomModels, CustomProviderApiError } from "../../api/customProviders";
+import { customProviderErrorText } from "../ai-settings/customProviderErrors";
 
 type SettingsPageProps = {
   section: SettingsSection;
@@ -236,6 +238,11 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   const [removingProvider, setRemovingProvider] = useState<ProviderSummary | null>(null);
   const providerMenuOpener = useRef<HTMLElement | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [customRefreshBusy, setCustomRefreshBusy] = useState(false);
+  const [customRefreshError, setCustomRefreshError] = useState<string | null>(null);
+  const [customCatalogRevision, setCustomCatalogRevision] = useState(0);
+  const customRefreshGeneration = useRef(0);
+  const customRefreshActive = useRef(false);
   const generationsRef = useRef<Record<ProviderId, number>>({ openai: 0, anthropic: 0, openrouter: 0 });
   const activeOperationsRef = useRef<ProviderOperation>({});
   const reconciliationRef = useRef<string | null>(null);
@@ -332,10 +339,40 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   const modelsFor = useCallback((id: ProviderId) => localModelCatalog[id] ?? providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === id).map((choice) => ({
     id: choice.selection.modelId, label: choice.label, contextWindowTokens: choice.contextWindowTokens ?? 8192, maxOutputTokens: choice.maxOutputTokens ?? 2048,
   })), [providerCatalog.modelChoices]);
-  const connectedProviders = useMemo(() => providers?.filter((provider) => provider.connected || (!(provider.id in localModelCatalog) && modelsFor(provider.id).length > 0)) ?? [], [providers, modelsFor]);
+  const connectedProviders = useMemo(() => providers?.filter((provider) => provider.connected || !(provider.id in localModelCatalog)) ?? [], [providers]);
   const selectedProvider = modelSelection
     ? connectedProviders.find((provider) => provider.id === modelSelection.providerId)
     : connectedProviders.length === 1 ? connectedProviders[0] : undefined;
+  useEffect(() => {
+    customRefreshGeneration.current += 1;
+    customRefreshActive.current = false;
+    setCustomRefreshBusy(false);
+    setCustomRefreshError(null);
+    return () => { customRefreshGeneration.current += 1; };
+  }, [selectedProvider?.id]);
+  const refreshSelectedCustomModels = async () => {
+    if (!selectedProvider || selectedProvider.id in localModelCatalog || customRefreshActive.current) return;
+    const id = selectedProvider.id;
+    const generation = customRefreshGeneration.current;
+    customRefreshActive.current = true;
+    setCustomRefreshBusy(true);
+    setCustomRefreshError(null);
+    try {
+      const provider = await getCustomProvider(id);
+      if (generation !== customRefreshGeneration.current) return;
+      await refreshCustomModels(id, provider.revision);
+      if (generation !== customRefreshGeneration.current) return;
+      setCustomCatalogRevision((current) => current + 1);
+      await refreshProviders();
+    } catch (error) {
+      if (generation === customRefreshGeneration.current) setCustomRefreshError(customProviderErrorText(error instanceof CustomProviderApiError ? error.code : "network_error", t));
+    } finally {
+      if (generation === customRefreshGeneration.current) {
+        customRefreshActive.current = false;
+        setCustomRefreshBusy(false);
+      }
+    }
+  };
   const selectedModels = selectedProvider
     ? selectedProvider.id === "openrouter" ? openRouterModels ?? [] : modelsFor(selectedProvider.id)
     : [];
@@ -442,12 +479,13 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
             })}
           </div>
         ) : null}
-        <div className="settings-service-list"><CustomProviderCreate onChanged={refreshProviders} container={modalContainer} onOverlayChange={onProviderModalChange} hasCustomProviders={providers?.some((provider) => provider.id !== "openai" && provider.id !== "anthropic" && provider.id !== "openrouter") ?? false} /></div>
+        <div className="settings-service-list"><CustomProviderCreate refreshRevision={customCatalogRevision} onChanged={refreshProviders} container={modalContainer} onOverlayChange={onProviderModalChange} hasCustomProviders={providers?.some((provider) => provider.id !== "openai" && provider.id !== "anthropic" && provider.id !== "openrouter") ?? false} /></div>
       </SettingsCard>
       <SettingsCard icon="robot" title={t("models.selectModel")}>
         <div className="settings-model-selection">
           <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={!aiSettingsLoaded || providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : modelsFor(providerId as ProviderId); const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto", outputBudget: "auto" }); }} /></div>
-<div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><div className="settings-model-picker"><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto", outputBudget: "auto" }); }} />{selectedProvider?.id === "openrouter" ? <Tooltip title={t("models.refreshModels")} getPopupContainer={getSettingsPopupContainer}><Button className="settings-model-refresh" type="text" aria-label={t("models.refreshModels")} icon={<ReloadOutlined aria-hidden="true" />} loading={openRouterModelLoadStatus === "loading"} disabled={aiSettingsSaving || operations.openrouter !== undefined || openRouterModelLoadStatus === "loading"} onClick={() => void loadOpenRouterModels(true)} /></Tooltip> : null}</div></div>
+<div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><div className="settings-model-picker"><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto", outputBudget: "auto" }); }} />{selectedProvider?.id === "openrouter" ? <Tooltip title={t("models.refreshModels")} getPopupContainer={getSettingsPopupContainer}><Button className="settings-model-refresh" type="text" aria-label={t("models.refreshModels")} icon={<ReloadOutlined aria-hidden="true" />} loading={openRouterModelLoadStatus === "loading"} disabled={aiSettingsSaving || operations.openrouter !== undefined || openRouterModelLoadStatus === "loading"} onClick={() => void loadOpenRouterModels(true)} /></Tooltip> : null}{selectedProvider && !(selectedProvider.id in localModelCatalog) ? <Tooltip title={t("models.refreshModels")} getPopupContainer={getSettingsPopupContainer}><Button className="settings-model-refresh" type="text" aria-label={t("models.refreshModels")} icon={<ReloadOutlined aria-hidden="true" />} loading={customRefreshBusy} disabled={aiSettingsSaving || customRefreshBusy} onClick={() => void refreshSelectedCustomModels()} /></Tooltip> : null}</div></div>
+          {customRefreshError ? <div className="settings-model-load-error" role="alert"><p>{customRefreshError}</p><button type="button" className="settings-secondary-button settings-model-retry" disabled={customRefreshBusy} onClick={() => void refreshSelectedCustomModels()}>{t("models.retryModels")}</button></div> : null}
           {openRouterConnected && openRouterModelLoadStatus === "error" ? <div className="settings-model-load-error" role="alert"><p>{openRouterModelError}</p><button type="button" className="settings-secondary-button settings-model-retry" onClick={() => void loadOpenRouterModels(true)}>{t("models.retryModels")}</button></div> : null}
           {selectionError ? <p className="settings-model-load-error" role="alert">{selectionError}</p> : null}
           {aiSettingsError ? <div className="settings-model-load-error" role="alert"><p>{aiSettingsError}</p><button type="button" className="settings-secondary-button" onClick={() => void onAiSettingsReload()}>{t("common.retry")}</button></div> : null}

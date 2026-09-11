@@ -699,6 +699,39 @@ describe("provider settings", () => {
     expect(settingsSurface.contains(modelDropdown)).toBe(true);
   });
 
+  it.each([false, true])("refreshes LiteLLM without changing selection (failure=%s)", async (fails) => {
+    const id = "00000000-0000-4000-8000-000000000001";
+    const model = { key: "00000000-0000-4000-8000-000000000002", model_id: "glm-5.3", name: "GLM", context_limit: 1_000_000, output_limit: 8192, tools: true, source: "manual" };
+    const provider = { id, name: "LiteLLM", revision: 9, protocol: "openai_chat_completions", base_url: "https://example.com/v1", auth_mode: "none", allow_insecure_local: false, created_at: "2026-09-10T00:00:00Z", updated_at: "2026-09-10T00:00:00Z", models: [model] };
+    const pending = deferred<Response>();
+    const fetchMock = vi.fn(async (path: string, options?: RequestInit) => {
+      if (path === "/api/providers") return new Response(JSON.stringify({ providers: [...disconnectedCatalog.providers, { id, name: "LiteLLM", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null }] }));
+      if (path === "/api/providers/catalog") return new Response(JSON.stringify({ revision: 9, providers: [provider], nextCursor: null }));
+      if (path === `/api/providers/${id}`) return new Response(JSON.stringify(provider));
+      if (path === `/api/providers/${id}/models/refresh`) {
+        expect(JSON.parse(String(options?.body))).toEqual({ expectedRevision: 9 });
+        return pending.promise;
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSelection={{ providerId: id, modelId: "glm-5.3", contextBudget: "auto", outputBudget: "auto" }} />);
+    const refresh = await screen.findByRole("button", { name: "重新整理模型清單" });
+    expect(refresh.closest(".settings-model-picker")).not.toBeNull();
+    fireEvent.click(refresh);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => path.endsWith("/models/refresh"))).toBe(true));
+    expect(refresh.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("selected-model").textContent).toBe("glm-5.3");
+    await act(async () => {
+      if (fails) pending.reject(new Error("offline"));
+      else pending.resolve(new Response(JSON.stringify({ revision: 10, models: [model] })));
+    });
+    await waitFor(() => expect(refresh.hasAttribute("disabled")).toBe(false));
+    expect(screen.getByTestId("selected-model").textContent).toBe("glm-5.3");
+    expect(screen.getByTestId("selected-output").textContent).toBe("auto");
+    if (fails) expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
   it("refreshes cached OpenRouter models without changing the selected model", async () => {
     let resolveRefresh!: (value: Response) => void;
     const fetchMock = vi.fn()

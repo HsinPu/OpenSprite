@@ -23,14 +23,14 @@ const setup = () => render(<CustomProviderCreate onChanged={changed} container={
 describe("compact custom provider operations", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(useCustomProviders).mockReturnValue(controller); });
 
-  it("keeps management visible and places refresh in the provider menu", async () => {
+  it("keeps management visible without a duplicate refresh menu entry", async () => {
     setup();
     expect(screen.getByRole("button", { name: /管\s*理/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "重新抓取模型" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Local AI 操作" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "重新抓取模型" }));
-    await waitFor(() => expect(controller.refreshModels).toHaveBeenCalledWith(provider));
-    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    await screen.findByRole("menuitem", { name: "模型管理" });
+    expect(screen.queryByRole("menuitem", { name: "重新抓取模型" })).toBeNull();
+    expect(controller.refreshModels).not.toHaveBeenCalled();
   });
 
   it("retains model editing from the menu", async () => {
