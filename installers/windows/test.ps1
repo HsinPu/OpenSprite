@@ -4,6 +4,8 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 & (Join-Path $PSScriptRoot "test-recovery.ps1")
+& (Join-Path $PSScriptRoot "test-bootstrap.ps1")
+& (Join-Path $PSScriptRoot "test-package.ps1")
 
 function Remove-DirectoryWithRetry([string]$Path, [int]$Attempts = 120) {
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
@@ -70,7 +72,7 @@ if ($startupValue.Contains(" -InstallRoot ") -or $startupValue.Contains(" -Port 
 }
 
 $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd("\")
-$testRoot = [System.IO.Path]::GetFullPath((Join-Path $tempRoot ("opensprite-installer-test-" + [Guid]::NewGuid().ToString("N"))))
+$testRoot = [System.IO.Path]::GetFullPath((Join-Path $tempRoot ("opensprite-installer-test-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))))
 if (-not $testRoot.StartsWith($tempRoot + "\", [System.StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $testRoot) -notlike "opensprite-installer-test-*") {
     throw "Unsafe installer test root: $testRoot"
 }
@@ -137,11 +139,8 @@ try {
         throw "Installed build metadata is malformed."
     }
 
-    $nativeRuntimeBinaries = @(Get-ChildItem -LiteralPath (Join-Path $installRoot "backend\.venv") -File -Recurse -Filter "*.pyd")
-    $pywin32System32 = Join-Path $installRoot "backend\.venv\Lib\site-packages\pywin32_system32"
-    if (Test-Path -LiteralPath $pywin32System32 -PathType Container) {
-        $nativeRuntimeBinaries += @(Get-ChildItem -LiteralPath $pywin32System32 -File -Filter "*.dll")
-    }
+    # Include preflight environments retained after Windows locked their binaries.
+    $nativeRuntimeBinaries = @(Get-ChildItem -LiteralPath $testRoot -File -Recurse | Where-Object { $_.Extension -in @('.pyd', '.dll') })
     foreach ($nativeRuntimeBinary in $nativeRuntimeBinaries) {
         $quarantinedRuntime = Join-Path $tempRoot ("OpenSprite-installer-quarantine-" + [Guid]::NewGuid().ToString("N") + $nativeRuntimeBinary.Extension)
         Move-FileWithRetry $nativeRuntimeBinary.FullName $quarantinedRuntime

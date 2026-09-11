@@ -1,0 +1,66 @@
+name: Windows release package
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable tag (vX.Y.Z)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Validate tag input
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid stable tag' }
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - name: Verify tag version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $text = Get-Content backend/pyproject.toml -Raw
+          $version = [regex]::Match($text, '(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+)"').Groups[1].Value
+          if ("v$version" -ne $env:RELEASE_TAG) { throw 'Tag and package version differ' }
+      - name: Bootstrap safety tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./installers/windows/test-bootstrap.ps1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@v6
+      - name: Existing installer isolation tests
+        shell: powershell
+        run: ./installers/windows/test.ps1
+      - name: Build release package
+        shell: powershell
+        run: ./installers/windows/package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: dist/release/*
+          if-no-files-found: error
+  publish-draft:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release
+      - name: Create draft release for human review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release create "$RELEASE_TAG" release/* --verify-tag --draft --title "OpenSprite $RELEASE_TAG" --notes "Windows installer package. Verify installation before publishing."

@@ -4,7 +4,7 @@ $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "install.ps1"), [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "Installer parse failed: $errors" }
 # Load only functions: never execute the installer or touch the real installation.
-foreach ($name in @("Assert-ChildPath", "Get-InstallTool", "Invoke-RecoveryStep", "Restore-ApplicationRoot", "Get-PreviousStartupPort", "Stop-InstalledRuntime")) {
+foreach ($name in @("Assert-ChildPath", "Get-InstallTool", "Invoke-RecoveryStep", "Restore-ApplicationRoot", "Get-PreviousStartupPort", "Stop-InstalledRuntime", "Remove-DirectoryWithRetry", "Clear-PreviousInstallations")) {
     $definition = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false) | Where-Object Name -eq $name
     . ([scriptblock]::Create($definition.Extent.Text))
 }
@@ -12,6 +12,15 @@ $parent = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ("openspr
 $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 Assert-ChildPath $parent $temp
 try {
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    $retired = Join-Path $parent ('.app-previous-' + ('a' * 32))
+    $unrecognized = Join-Path $parent ('.app-previous-' + ('b' * 32))
+    New-Item -ItemType Directory -Path (Join-Path $retired 'installers/windows'), $unrecognized -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $retired 'build-info.json'), '{"version":"1.2.3","installedAt":"2026-01-01"}')
+    [IO.File]::WriteAllText((Join-Path $retired 'installers/windows/launch.ps1'), 'fixture')
+    Clear-PreviousInstallations $parent ''
+    if (Test-Path -LiteralPath $retired) { throw 'Recognized old backup was not cleaned.' }
+    if (-not (Test-Path -LiteralPath $unrecognized)) { throw 'Unrecognized directory was removed.' }
     $root = Join-Path $parent "app"; $previous = Join-Path $parent "previous"
     New-Item -ItemType Directory -Path $root, $previous -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $previous "old.txt"), "previous")

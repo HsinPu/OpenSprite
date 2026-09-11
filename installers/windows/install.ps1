@@ -149,7 +149,7 @@ function Remove-DirectoryWithRetry([string]$Path, [string]$Parent, [int]$Attempt
         }
         catch {
             if ($attempt -eq $Attempts) {
-                Write-Warning "Installed successfully, but a temporary rollback directory remains locked: $Path"
+                Write-Warning "A temporary installation directory remains locked: $Path"
                 return $false
             }
             Start-Sleep -Milliseconds 250
@@ -176,6 +176,27 @@ function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 300) {
     throw "OpenSprite did not become healthy before the timeout."
 }
 
+function Clear-PreviousInstallations([string]$Parent, [string]$CurrentPrevious) {
+    foreach ($item in Get-ChildItem -LiteralPath $Parent -Directory -Force) {
+        if ($item.Name -notmatch '^\.app-previous-[a-f0-9]{32}$' -or $item.FullName -eq $CurrentPrevious) { continue }
+        Assert-ChildPath $item.FullName $Parent
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+        $info = Join-Path $item.FullName 'build-info.json'
+        if (-not (Test-Path -LiteralPath $info -PathType Leaf)) { continue }
+        try {
+            if (@(Get-ChildItem -LiteralPath $item.FullName -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { continue }
+            $record = Get-Content -LiteralPath $info -Raw | ConvertFrom-Json
+            if ($record.version -notmatch '^\d+\.\d+\.\d+$' -or -not $record.installedAt -or -not (Test-Path -LiteralPath (Join-Path $item.FullName 'installers\windows\launch.ps1'))) { continue }
+            $null = Remove-DirectoryWithRetry $item.FullName $Parent -Attempts 4
+        } catch { Write-Warning "Previous installation retained: $($item.FullName)" }
+    }
+}
+
+$installMutex = [Threading.Mutex]::new($false, 'Local\OpenSprite.Windows.Install')
+$installLockHeld = $false
+try {
+try { $installLockHeld = $installMutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $installLockHeld = $true }
+if (-not $installLockHeld) { throw 'Another OpenSprite installation is running.' }
 $sourceRootPath = Resolve-AbsolutePath $SourceRoot
 $installRootPath = Resolve-AbsolutePath $InstallRoot
 $userDataRootPath = Resolve-AbsolutePath $UserDataRoot
@@ -227,9 +248,16 @@ if (-not $versionMatch.Success) { throw "Unable to resolve the OpenSprite produc
 $productVersion = $versionMatch.Groups[1].Value
 $revision = "unknown"
 $dirty = $true
+$releaseSourcePath = Join-Path $sourceRootPath 'release-source.json'
+if (Test-Path -LiteralPath $releaseSourcePath -PathType Leaf) {
+    $releaseSource = Get-Content -LiteralPath $releaseSourcePath -Raw | ConvertFrom-Json
+    if ($releaseSource.version -ne $productVersion -or $releaseSource.revision -notmatch '^[a-f0-9]{40}$') { throw 'Invalid release source metadata.' }
+    $revision = $releaseSource.revision.Substring(0, 8)
+    $dirty = $false
+}
 $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
 if ($null -eq $gitCommand) { $gitCommand = Get-Command git -ErrorAction SilentlyContinue }
-if ($null -ne $gitCommand) {
+if ($null -ne $gitCommand -and -not (Test-Path -LiteralPath $releaseSourcePath)) {
     $gitSafeDirectory = $sourceRootPath.Replace("\", "/")
     $resolvedRevision = (& $gitCommand.Source -c "safe.directory=$gitSafeDirectory" -C $sourceRootPath rev-parse --short=8 HEAD 2>$null)
     if ($LASTEXITCODE -eq 0 -and -not [String]::IsNullOrWhiteSpace($resolvedRevision)) {
@@ -248,6 +276,7 @@ if (-not $AllowCustomInstallRoot) {
     Assert-ChildPath $installRootPath (Resolve-AbsolutePath (Join-Path $env:LOCALAPPDATA "OpenSprite"))
 }
 $stagingRoot = Join-Path $installParent (".app-staging-" + [Guid]::NewGuid().ToString("N"))
+$preparedEnvironment = Join-Path $installParent (".app-prepared-" + [Guid]::NewGuid().ToString("N"))
 $previousRoot = Join-Path $installParent (".app-previous-" + [Guid]::NewGuid().ToString("N"))
 $hadPreviousInstall = Test-Path -LiteralPath $installRootPath
 $previousStartupValue = Get-OpenSpriteStartup $StartupName
@@ -314,6 +343,15 @@ try {
         throw "Frontend build did not produce dist/index.html."
     }
 
+    # Resolve/download/build Python dependencies before stopping the old service.
+    # Virtual environments embed absolute paths, so recreate at the final path
+    # using the warmed cache instead of moving the staging environment.
+    $previousProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
+    try {
+        $env:UV_PROJECT_ENVIRONMENT = $preparedEnvironment
+        Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $stagingRoot "backend"), "--no-dev", "--frozen")
+    } finally { $env:UV_PROJECT_ENVIRONMENT = $previousProjectEnvironment }
+
     if (-not $SkipStartupRegistration) {
         $cutoverStarted = $true
         Remove-OpenSpriteStartup $StartupName
@@ -331,7 +369,7 @@ try {
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
 
-    Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--no-dev")
+    Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--no-dev", "--frozen")
     $installedPython = Join-Path $installRootPath "backend\.venv\Scripts\python.exe"
     Invoke-Checked $installedPython @("-c", "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()")
     $installedVersion = (& $installedPython -c "from importlib.metadata import version; print(version('opensprite-backend'))").Trim()
@@ -366,6 +404,10 @@ try {
 
     if (Test-Path -LiteralPath $previousRoot) {
         $previousCleanupComplete = Remove-DirectoryWithRetry $previousRoot $installParent
+    }
+    if (-not $NoStart) {
+        try { Clear-PreviousInstallations $installParent $previousRoot }
+        catch { Write-Warning 'Installation is healthy; older backup cleanup could not be completed.' }
     }
     [pscustomobject]@{
         InstallRoot = $installRootPath
@@ -427,8 +469,15 @@ catch {
     throw $failure
 }
 finally {
+    if (Test-Path -LiteralPath $preparedEnvironment) {
+        $null = Remove-DirectoryWithRetry $preparedEnvironment $installParent -Attempts 4
+    }
     if (Test-Path -LiteralPath $stagingRoot) {
         Assert-ChildPath $stagingRoot $installParent
         $null = Invoke-RecoveryStep "clean staging" { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
     }
+}
+} finally {
+    if ($installLockHeld) { $installMutex.ReleaseMutex() }
+    $installMutex.Dispose()
 }
