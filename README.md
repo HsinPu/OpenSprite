@@ -4,6 +4,46 @@ OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可
 
 目前產品版本為 `0.21.13`。
 
+## Windows 安裝與更新
+
+### 從本機原始碼安裝（目前可用）
+
+先安裝 Node.js 20.19+（20.x）或 22.12+、npm 與 uv，確認它們已加入 PATH；安裝工具後請重新開啟 PowerShell。
+在下載或 clone 的 OpenSprite 專案根目錄執行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installers\windows\install.ps1
+```
+
+更新時，先取得新版原始碼，再執行同一條指令。安裝完成後會啟動程式並開啟瀏覽器；之後可透過 `http://localhost:8765/` 使用。
+
+### 從 GitHub 一鍵下載安裝（需先發布 Release）
+
+**此入口需要含安裝資產的正式 Release；只有原始碼 commit／push 還不夠，尚未發布時請使用上方本機安裝方式。**
+
+正式 Release 發布後，可在 PowerShell 執行：
+
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://github.com/HsinPu/OpenSprite/releases/latest/download/OpenSprite-install.ps1').Content))
+```
+
+這條指令會直接執行 GitHub 上的安裝腳本，僅在信任 `HsinPu/OpenSprite` 來源時使用。
+也可以先下載 Release 的 `OpenSprite-install.ps1`，檢查內容後執行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\OpenSprite-install.ps1
+```
+
+- 不需要 Git；會下載正式版安裝包、檢查 SHA-256，並在本機建置安裝。
+- 缺少必要工具時會先詢問，取得同意後才透過 winget 安裝；沒有 winget 時需手動安裝工具。
+- 更新使用相同指令；下載的腳本可加上 `-Version X.Y.Z` 指定版本。
+- 成功後清理下載暫存與安裝中的建置依賴；不移除 Node.js、uv 或共用快取。Windows 鎖定的暫存／備份目錄會保留並提示。
+- 程式安裝於 `%LOCALAPPDATA%\OpenSprite\app`；個人資料保存於 `%USERPROFILE%\.opensprite`，更新不清除對話、設定、金鑰或既有存取模式。
+
+完整參數、解除安裝、失敗處理及 Release 發布流程見 [Windows 安裝說明](installers/windows/README.md)。
+
+## 近期調整
+
 `0.21.13` 整理排程設定頁，加入名稱搜尋、工作區與狀態篩選、精簡清單及分頁，集中操作並將表單分區；明確標示時區，補齊紀錄載入與重試狀態，保留既有排程執行規則。
 
 `0.21.4` 移除聊天頂部重複的「＋ 新對話」快捷按鈕；保留側欄新對話、面板收合與工作區／對話標題。
