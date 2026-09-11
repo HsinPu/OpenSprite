@@ -129,7 +129,7 @@ export function useProviderCatalog(): ProviderCatalogController {
     const custom = customProviders.find((item) => item.id === provider.id);
     if (!provider.connected && !custom) return [];
     const models = provider.id === "openrouter"
-      ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : [])
+      ? openRouterModels ?? []
       : custom ? custom.models.map((model) => ({ id: model.model_id, label: model.name, contextWindowTokens: model.context_limit, maxOutputTokens: model.output_limit }))
       : localModelCatalog[provider.id] ?? [];
     return models.map((model) => ({
@@ -138,7 +138,7 @@ export function useProviderCatalog(): ProviderCatalogController {
       contextWindowTokens: model.contextWindowTokens,
       maxOutputTokens: model.maxOutputTokens,
     }));
-  }), [openRouterModelLoadStatus, openRouterModels, providers, customProviders]);
+  }), [openRouterModels, providers, customProviders]);
 
   return {
     providers,

@@ -350,7 +350,9 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   useEffect(() => {
     if (!aiSettingsLoaded || providers === null || aiSettingsSaving) return;
     if (modelSelection && !["openai", "anthropic", "openrouter"].includes(modelSelection.providerId)) return;
-    if (modelSelection !== null && selectedProvider?.id === "openrouter" && (openRouterModelLoadStatus !== "success" || selectedModelIsAvailable)) return;
+    // Discovery is not permission to replace a user's persisted selection.
+    // A missing model remains selected until the user explicitly chooses another.
+    if (modelSelection !== null && selectedProvider?.id === "openrouter") return;
     if (modelSelection !== null && selectedProvider && selectedModelIsAvailable) { reconciliationRef.current = null; return; }
     const key = `${modelSelection?.providerId ?? "none"}:${modelSelection?.modelId ?? "none"}:${connectedProviders.map((provider) => `${provider.id}:${provider.connected}`).join(",")}:${openRouterModelLoadStatus}:${openRouterModels?.map((model) => model.id).join(",") ?? ""}`;
     if (reconciliationRef.current === key) return;

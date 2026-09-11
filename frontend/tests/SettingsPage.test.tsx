@@ -734,7 +734,8 @@ describe("provider settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "重試讀取模型" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
-    await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("Acme Fast"));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.getByTestId("selected-model").textContent).toBe("missing");
     const modelSelect = screen.getByLabelText("模型");
     fireEvent.mouseDown(modelSelect);
     fireEvent.change(modelSelect, { target: { value: "Reasoning" } });
