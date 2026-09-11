@@ -413,7 +413,7 @@ describe("provider settings", () => {
     expect(screen.getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
     expect(screen.getByText("設定 OpenSprite 自動執行工作的時間與模型。")).toBeTruthy();
     expect(screen.queryByRole("heading", { level: 1, name: "排程" })).toBeNull();
-    expect(await screen.findByRole("heading", { name: "還沒有排程" })).toBeTruthy();
+    expect(await screen.findByText("還沒有排程")).toBeTruthy();
   });
 
   it("shows the real tool controls and keeps external tools as future items", () => {

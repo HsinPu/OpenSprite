@@ -522,7 +522,8 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
     await screen.findByRole("heading", { name: "晨間整理" });
-    fireEvent.click(screen.getByRole("button", { name: "開啟對話" }));
+    fireEvent.click(screen.getByRole("button", { name: "更多操作 晨間整理" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "開啟對話" }));
 
     await waitFor(() => expect(dialog.hidden).toBe(true));
     expect(window.location.hash).toBe(`#chat=${conversationId}`);

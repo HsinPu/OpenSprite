@@ -58,6 +58,13 @@ const occurrence = {
 } as const;
 
 describe("schedule API", () => {
+  it("encodes pagination cursors", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ schedules: [], nextCursor: null })));
+    vi.stubGlobal("fetch", fetchMock);
+    await listSchedules("next/+cursor=");
+    expect(fetchMock).toHaveBeenCalledWith("/api/schedules?limit=100&before=next%2F%2Bcursor%3D", undefined);
+  });
+
   it("uses the approved CRUD and action requests", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ schedules: [schedule], nextCursor: null })))

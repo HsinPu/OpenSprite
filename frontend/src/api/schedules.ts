@@ -125,8 +125,8 @@ async function response(request: Promise<Response>): Promise<unknown> {
   return body;
 }
 
-export async function listSchedules(): Promise<SchedulePage> {
-  const body = await response(apiFetch("/api/schedules?limit=100"));
+export async function listSchedules(before?: string): Promise<SchedulePage> {
+  const body = await response(apiFetch(`/api/schedules?limit=100${before ? `&before=${encodeURIComponent(before)}` : ""}`));
   if (!record(body) || !exact(body, ["schedules", "nextCursor"]) || !Array.isArray(body.schedules) || !(body.nextCursor === null || typeof body.nextCursor === "string")) throw new ScheduleApiError("malformed_response");
   return { schedules: body.schedules.map(schedule), nextCursor: body.nextCursor };
 }
