@@ -3,7 +3,6 @@ import {
   Button,
   Drawer,
   Dropdown,
-  Empty,
   Grid,
   Input,
   Modal,
@@ -17,6 +16,7 @@ import {
   Upload,
 } from "antd";
 import {
+  CloseCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   MoreOutlined,
@@ -24,7 +24,7 @@ import {
   ReloadOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AgentApiError,
@@ -60,6 +60,7 @@ type AgentsSettingsProps = {
 };
 
 type DraftMode = "create" | "edit" | "import";
+type StatusFilter = "all" | "enabled" | "disabled" | "abnormal";
 type Draft = {
   mode: DraftMode;
   item: CustomAgent | null;
@@ -164,6 +165,9 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [batch, setBatch] = useState<BatchState | null>(null);
   const [batchError, setBatchError] = useState<string | null>(null);
@@ -180,11 +184,21 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
 
   const workspace = workspaces.catalog?.workspaces.find((item) => item.id === workspaceId);
   const workspaceUnavailable = scope === "workspace" && (!workspace || workspace.availability !== "available");
-  const currentItems = (data?.items ?? []).filter((item) => item.scope === scope && (scope === "global" || item.workspaceId === workspaceId));
-  const inheritedItems = scope === "workspace" ? (data?.items ?? []).filter((item) => item.scope === "global") : [];
-  const currentPageNumber = Math.min(page, Math.max(1, Math.ceil(currentItems.length / 20)));
-  const globalPageNumber = Math.min(globalPage, Math.max(1, Math.ceil(inheritedItems.length / 20)));
-  const visibleItems = currentItems.slice((currentPageNumber - 1) * 20, currentPageNumber * 20);
+  const currentItems = useMemo(() => (data?.items ?? []).filter((item) => item.scope === scope && (scope === "global" || item.workspaceId === workspaceId)), [data, scope, workspaceId]);
+  const inheritedItems = useMemo(() => scope === "workspace" ? (data?.items ?? []).filter((item) => item.scope === "global") : [], [data, scope]);
+  const filterItems = useCallback((items: CustomAgent[]) => {
+    const search = query.trim().normalize("NFC").toLowerCase();
+    return items.filter((item) => item.name.normalize("NFC").toLowerCase().includes(search)
+      && (statusFilter === "all" || (statusFilter === "enabled" && item.enabled)
+        || (statusFilter === "disabled" && !item.enabled)
+        || (statusFilter === "abnormal" && !["effective", "disabled", "master_disabled", "shadowed_by_workspace"].includes(item.reason))));
+  }, [query, statusFilter]);
+  const filteredItems = useMemo(() => filterItems(currentItems), [currentItems, filterItems]);
+  const filteredInherited = useMemo(() => filterItems(inheritedItems), [inheritedItems, filterItems]);
+  const currentPageNumber = Math.min(page, Math.max(1, Math.ceil(filteredItems.length / 20)));
+  const globalPageNumber = Math.min(globalPage, Math.max(1, Math.ceil(filteredInherited.length / 20)));
+  const visibleItems = filteredItems.slice((currentPageNumber - 1) * 20, currentPageNumber * 20);
+  const writesBlocked = busy || loading || refreshFailed || !data || workspaceUnavailable;
 
   useEffect(() => {
     onOverlayChange?.(draft !== null || batch !== null);
@@ -224,9 +238,10 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
       setSettings(nextSettings);
       setData(next);
       setError(null);
+      setRefreshFailed(false);
       return true;
     } catch (reason) {
-      if (current === generation.current) setError(errorCode(reason));
+      if (current === generation.current) { setError(errorCode(reason)); setRefreshFailed(true); }
       return false;
     } finally {
       if (current === generation.current) setLoading(false);
@@ -234,13 +249,13 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   }, [scope, workspaceId]);
 
   useEffect(() => {
-    setPage(1); setGlobalPage(1); setData(null); setError(null);
+    setPage(1); setGlobalPage(1); setData(null); setError(null); setRefreshFailed(false);
     void reload();
     return () => { generation.current += 1; };
   }, [reload]);
 
   const mutate = async (operation: () => Promise<unknown>): Promise<"refreshed" | "refresh_failed" | "failed"> => {
-    if (busy) return "failed";
+    if (busy || loading || refreshFailed || !data) return "failed";
     setBusy(true); setError(null);
     try {
       await operation();
@@ -286,7 +301,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   };
 
   const saveDraft = async () => {
-    if (!draft || draft.loading || draft.committed || busy) return;
+    if (!draft || draft.loading || draft.committed || writesBlocked) return;
     const content = draft.mode === "import" ? draft.rawContent : serialiseDraft(draft);
     const expectedRevision = data?.revision ?? draft.item?.revision;
     if (expectedRevision === undefined || (draft.mode !== "import" && (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim()))))) {
@@ -306,7 +321,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   };
 
   const beginImport = async (file: File) => {
-    if (busy || loading || workspaceUnavailable || data === null) return Upload.LIST_IGNORE;
+    if (writesBlocked) return Upload.LIST_IGNORE;
     editorRequest.current += 1;
     setBusy(true); setError(null);
     try {
@@ -319,7 +334,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   };
 
   const openBatch = (action: AgentBatchAction, target: HTMLButtonElement) => {
-    if (busy || loading || !data || !currentItems.length) return;
+    if (writesBlocked || !data || !currentItems.length) return;
     batchOpener.current = target;
     const label = scope === "global" ? t("agents.global") : workspace?.name ?? workspaceId;
     setBatchError(null);
@@ -327,7 +342,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   };
 
   const submitBatch = async () => {
-    if (!batch || batchInFlight.current || busy) return;
+    if (!batch || batchInFlight.current || writesBlocked) return;
     batchInFlight.current = true; setBusy(true); setBatchError(null);
     try {
       await batchAgents({ scope: batch.scope, workspaceId: batch.workspaceId, ids: batch.ids, action: batch.action, expectedRevision: batch.revision });
@@ -361,13 +376,13 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
     const reason = REASON_VALUES.has(item.reason) ? item.reason : "invalid_format";
     const noFallback = scope === "workspace" && !readonly && reason !== "effective" && inheritedItems.some((global) => global.reason === "shadowed_by_workspace" && global.shadowedByAgentId === item.id);
     return <article className="agents-row" key={item.id}>
-      <div className="agents-row-main"><strong>{item.name}</strong><Tag>{t(reasonKeys[reason as AgentReason])}</Tag>{noFallback ? <span className="agents-warning">{t("agents.noFallback")}</span> : null}</div>
+      <div className="agents-row-main"><strong>{item.name}</strong>{reason !== "effective" ? <Tag>{t(reasonKeys[reason as AgentReason])}</Tag> : null}{noFallback ? <span className="agents-warning">{t("agents.noFallback")}</span> : null}</div>
       <div className="agents-row-actions">
-        {readonly ? <Tag>{t("agents.readonly")}</Tag> : <>
-          <Switch checked={item.enabled} disabled={busy || loading || workspaceUnavailable} aria-label={t("agents.toggle", { name: item.name })} onChange={(enabled) => void toggleAgent(item, enabled)} />
-          <Tooltip title={t("common.edit")}><Button type="text" icon={<EditOutlined aria-hidden="true" />} aria-label={`${t("common.edit")} ${item.name}`} disabled={busy || loading || workspaceUnavailable} onClick={(event) => void openEdit(item, event.currentTarget)} /></Tooltip>
+        {readonly ? null : <>
+          <Switch checked={item.enabled} disabled={writesBlocked} aria-label={t("agents.toggle", { name: item.name })} onChange={(enabled) => void toggleAgent(item, enabled)} />
+          <Tooltip title={t("common.edit")}><Button type="text" icon={<EditOutlined aria-hidden="true" />} aria-label={`${t("common.edit")} ${item.name}`} disabled={writesBlocked} onClick={(event) => void openEdit(item, event.currentTarget)} /></Tooltip>
           <Popconfirm title={t("agents.removeConfirm", { name: item.name })} description={scope === "workspace" ? t("agents.removeInheritance") : undefined} okText={t("common.remove")} cancelText={t("common.cancel")} okButtonProps={{ danger: true }} onConfirm={() => void removeOne(item)}>
-            <Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={`${t("common.remove")} ${item.name}`} disabled={busy || loading || workspaceUnavailable} />
+            <Tooltip title={t("common.remove")}><Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={`${t("common.remove")} ${item.name}`} disabled={writesBlocked} /></Tooltip>
           </Popconfirm>
         </>}
       </div>
@@ -391,7 +406,7 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
       </> : null}
     </>}
     {error ? <Alert type="error" role="alert" title={t("agents.error", { code: error })} /> : null}
-    <div className="agents-editor-actions"><Button onClick={() => { if (!busy) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }} disabled={busy}>{t("common.cancel")}</Button><Button type="primary" loading={busy} disabled={draft.loading || draft.committed || (draft.mode !== "import" && (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim())))) || workspaceUnavailable} onClick={() => void saveDraft()}>{t("agents.save")}</Button></div>
+    <div className="agents-editor-actions"><Button onClick={() => { if (!busy) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }} disabled={busy}>{t("common.cancel")}</Button><Button type="primary" loading={busy} disabled={draft.loading || draft.committed || writesBlocked || (draft.mode !== "import" && (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim() || (draft.providerMode === "specified" && (!draft.providerId.trim() || !draft.model.trim()))))} onClick={() => void saveDraft()}>{t("agents.save")}</Button></div>
     {draft.committed ? <Button loading={loading} onClick={async () => { if (await reload()) { setDraft(null); requestAnimationFrame(() => opener.current?.focus()); } }}>{t("common.retry")}</Button> : null}
   </div> : null;
 
@@ -404,24 +419,38 @@ export function AgentsSettings({ workspaces, providerCatalog, container, onOverl
   ];
 
   return <section className="agents-settings" aria-label={t("settings.category.agents")}>
-    <div className="agents-heading"><div><h2>{t("settings.category.agents")}</h2><p>{t("agents.intro")}</p></div><label className="agents-master">{t("agents.master")} <Switch aria-label={t("agents.master")} checked={settings?.enabled ?? false} disabled={!settings || busy || loading} onChange={(enabled) => void toggleMaster(enabled)} /></label></div>
+    <div className="agents-heading"><div><h2>{t("settings.category.agents")}</h2><p>{t("agents.shortIntro")}</p></div><label className="agents-master">{t("agents.master")} <Switch aria-label={t("agents.master")} checked={settings?.enabled ?? false} disabled={!settings || busy || loading || refreshFailed} onChange={(enabled) => void toggleMaster(enabled)} /></label></div>
+    {settings && !settings.enabled ? <p className="agents-muted">{t("agents.paused")}</p> : null}
+    <details className="agents-help"><summary>{t("agents.help")}</summary><p>{t("agents.intro")}</p></details>
     <Tabs activeKey={scope} onChange={(key) => { if (!busy) { generation.current += 1; setScope(key as AgentScope); } }} items={[{ key: "global", label: t("agents.global"), disabled: busy }, { key: "workspace", label: t("agents.workspace"), disabled: busy }]} />
     {scope === "workspace" ? <div className="agents-workspace-select"><label htmlFor="agents-workspace">{t("agents.workspaceSelect")}</label><Select id="agents-workspace" getPopupContainer={getPopupContainer} aria-label={t("agents.workspaceSelect")} value={workspaceId || undefined} disabled={busy || loading} options={workspaces.catalog?.workspaces.map((item) => ({ value: item.id, label: item.kind === "default" ? t("workspaces.default") : item.name }))} onChange={(value) => { generation.current += 1; setData(null); setWorkspaceId(value); }} /></div> : null}
     {workspaceUnavailable ? <Alert type="warning" title={t("agents.workspaceUnavailable")} /> : null}
-    {error ? <Alert type="error" title={t("agents.error", { code: error })} action={<Button loading={loading} disabled={busy} onClick={() => void reload()}>{t("common.retry")}</Button>} /> : null}
+    {error ? <Alert type="error" title={t("agents.error", { code: error })} description={refreshFailed && data ? t("agents.stale") : undefined} action={<Button loading={loading} disabled={busy} onClick={() => void reload()}>{t("common.retry")}</Button>} /> : null}
     <div className="agents-toolbar"><h3>{t(scope === "global" ? "agents.global" : "agents.workspace")} <span>· {data ? currentItems.length : "—"}</span></h3><div className="agents-toolbar-actions">
-      <Tooltip title={t("agents.scan")} getPopupContainer={getPopupContainer}><Button aria-label={t("agents.scan")} icon={<ReloadOutlined />} disabled={busy || loading || !data || workspaceUnavailable} onClick={() => { if (data) void mutate(() => scanAgents({ scope, workspaceId: scope === "workspace" ? workspaceId : null, expectedRevision: data.revision })); }} /></Tooltip>
-      <Upload accept=".toml,text/plain" multiple={false} showUploadList={false} beforeUpload={beginImport} disabled={busy || loading || !data || workspaceUnavailable}><Button icon={<UploadOutlined aria-hidden="true" />} disabled={busy || loading || !data || workspaceUnavailable}>{t("agents.import")}</Button></Upload>
-      <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} disabled={busy || loading || !data || workspaceUnavailable} onClick={(event) => openCreate(event.currentTarget)}>{t("agents.create")}</Button>
-      <Dropdown trigger={["click"]} getPopupContainer={getPopupContainer} menu={{ items: actionItems, onClick: ({ key, domEvent }) => openBatch(key as AgentBatchAction, domEvent.currentTarget as HTMLButtonElement) }}><Button aria-label={t("agents.batchMenu")} icon={<MoreOutlined aria-hidden="true" />} disabled={busy || loading || !data || !currentItems.length} /></Dropdown>
+      <Tooltip title={t("agents.scan")} getPopupContainer={getPopupContainer}><Button aria-label={t("agents.scan")} icon={<ReloadOutlined />} disabled={writesBlocked} onClick={() => { if (data) void mutate(() => scanAgents({ scope, workspaceId: scope === "workspace" ? workspaceId : null, expectedRevision: data.revision })); }} /></Tooltip>
+      <Upload accept=".toml,text/plain" multiple={false} showUploadList={false} beforeUpload={beginImport} disabled={writesBlocked}><Button icon={<UploadOutlined aria-hidden="true" />} disabled={writesBlocked}>{t("agents.import")}</Button></Upload>
+      <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} disabled={writesBlocked} onClick={(event) => openCreate(event.currentTarget)}>{t("agents.create")}</Button>
+      <Dropdown trigger={["click"]} getPopupContainer={getPopupContainer} menu={{ items: actionItems, onClick: ({ key }) => { if (batchOpener.current) openBatch(key as AgentBatchAction, batchOpener.current); } }}><Button ref={(node) => { batchOpener.current = node as HTMLButtonElement | null; }} aria-label={t("agents.batchMenu")} icon={<MoreOutlined aria-hidden="true" />} disabled={writesBlocked || !currentItems.length} /></Dropdown>
     </div></div>
-    {loading && !data ? <p className="agents-loading">{t("common.processing")}</p> : data && currentItems.length ? <>
+    <div className="agents-filters">
+      <Input allowClear={{ clearIcon: <CloseCircleOutlined aria-label={t("agents.clearSearch")} /> }} aria-label={t("agents.search")} placeholder={t("agents.search")} value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); setGlobalPage(1); }} />
+      <Select aria-label={t("agents.filter")} getPopupContainer={getPopupContainer} value={statusFilter} onChange={(value: StatusFilter) => { setStatusFilter(value); setPage(1); setGlobalPage(1); }} options={[
+        { value: "all", label: t("agents.filterAll") }, { value: "enabled", label: t("agents.filterEnabled") },
+        { value: "disabled", label: t("agents.reason.disabled") }, { value: "abnormal", label: t("agents.filterAbnormal") },
+      ]} />
+    </div>
+    {data ? <p className="agents-muted" role="status">{t("agents.results", { count: filteredItems.length, total: currentItems.length })}</p> : null}
+    {loading && !data ? <p className="agents-loading">{t("common.processing")}</p> : data && filteredItems.length ? <>
       <div className="agents-list">{visibleItems.map((item) => row(item))}</div>
-      <Pagination current={currentPageNumber} pageSize={20} total={currentItems.length} hideOnSinglePage onChange={setPage} />
-    </> : <Empty description={t("agents.empty")} />}
-    {scope === "workspace" ? <div className="agents-inherited"><h3>{t("agents.inheritedSection")}</h3><p>{t("agents.inheritanceHint")}</p>{inheritedItems.length ? <><div className="agents-list">{inheritedItems.slice((globalPageNumber - 1) * 20, globalPageNumber * 20).map((item) => row(item, true))}</div><Pagination current={globalPageNumber} pageSize={20} total={inheritedItems.length} hideOnSinglePage onChange={setGlobalPage} /></> : <Empty description={t("agents.empty")} />}</div> : null}
+      <Pagination current={currentPageNumber} pageSize={20} total={filteredItems.length} hideOnSinglePage showSizeChanger={false} onChange={setPage} />
+    </> : data ? <p className="agents-empty">{t(currentItems.length ? "agents.noMatches" : scope === "workspace" ? "agents.workspaceEmpty" : "agents.empty")}</p> : null}
+    {scope === "workspace" && data ? <div className="agents-inherited">
+      <div className="agents-inherited-heading"><h3>{t("agents.inheritedSection")} · {inheritedItems.length}</h3><span className="agents-muted">{t("agents.readonly")}</span><Button type="link" disabled={busy} onClick={() => { generation.current += 1; setData(null); setScope("global"); }}>{t("agents.manageGlobal")}</Button></div>
+      <p>{t("agents.inheritanceHint")}</p><p className="agents-muted" role="status">{t("agents.results", { count: filteredInherited.length, total: inheritedItems.length })}</p>
+      {filteredInherited.length ? <><div className="agents-list">{filteredInherited.slice((globalPageNumber - 1) * 20, globalPageNumber * 20).map((item) => row(item, true))}</div><Pagination current={globalPageNumber} pageSize={20} total={filteredInherited.length} hideOnSinglePage showSizeChanger={false} onChange={setGlobalPage} /></> : <p className="agents-empty">{t(inheritedItems.length ? "agents.noMatches" : "agents.empty")}</p>}
+    </div> : null}
     {editorOverlay}
-    <Modal open={batch !== null} title={t("agents.batchConfirm")} okText={t("agents.batchConfirm")} cancelText={t("common.cancel")} okButtonProps={{ danger: batch?.action === "remove" }} confirmLoading={busy} getContainer={container ?? undefined} onCancel={() => { if (!busy) { setBatch(null); requestAnimationFrame(() => batchOpener.current?.focus()); } }} onOk={() => void submitBatch()}>{batch ? <div className="agents-batch-confirm"><p>{t("agents.batchScope", { scope: batch.label, count: batch.ids.length })}</p><p>{t(batch.action === "enable" ? "agents.batchEnableHint" : batch.action === "disable" ? "agents.batchDisableHint" : "agents.batchRemoveHint")}</p>{batchError ? <Alert type="error" title={t("agents.error", { code: batchError })} /> : null}</div> : null}</Modal>
+    <Modal open={batch !== null} title={t("agents.batchConfirm")} okText={t("agents.batchConfirm")} cancelText={t("common.cancel")} okButtonProps={{ danger: batch?.action === "remove", disabled: writesBlocked }} confirmLoading={busy} getContainer={container ?? undefined} onCancel={() => { if (!busy) { setBatch(null); requestAnimationFrame(() => batchOpener.current?.focus()); } }} onOk={() => void submitBatch()}>{batch ? <div className="agents-batch-confirm"><p>{t("agents.batchScope", { scope: batch.label, count: batch.ids.length })}</p><p>{t("agents.batchUnfiltered")}</p><p>{t(batch.action === "enable" ? "agents.batchEnableHint" : batch.action === "disable" ? "agents.batchDisableHint" : "agents.batchRemoveHint")}</p>{batchError ? <Alert type="error" title={t("agents.error", { code: batchError })} /> : null}</div> : null}</Modal>
   </section>;
 }
 

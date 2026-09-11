@@ -1,17 +1,20 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import {
   batchAgents,
   createAgent,
+  deleteAgent,
   getAgent,
   updateAgent,
   getAgentSettings,
   listAgents,
   setAgentEnabled,
+  scanAgents,
   type CustomAgent,
 } from "../src/api/customAgents";
 import { AgentsSettings } from "../src/features/settings/AgentsSettings";
+import { createTranslator } from "../src/i18n/catalog";
 
 vi.mock("../src/api/customAgents", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/api/customAgents")>(),
@@ -100,6 +103,125 @@ beforeEach(() => {
   vi.mocked(setAgentEnabled).mockReset().mockResolvedValue(agent({ enabled: false, revision: 2 }));
   vi.mocked(batchAgents).mockReset().mockResolvedValue({ revision: 2, affected: 1 });
   vi.mocked(createAgent).mockReset().mockResolvedValue(agent({ revision: 2 }));
+  vi.mocked(scanAgents).mockReset().mockResolvedValue({ revision: 1, added: 0 });
+});
+
+it("searches all cursor pages by normalized name and keeps batches unfiltered", async () => {
+  const items = Array.from({ length: 121 }, (_, index) => agent({ id: `agent-${index}`, name: index === 120 ? "Café-Review" : `worker-${index}` }));
+  vi.mocked(listAgents).mockImplementation(async (_scope, _workspace, cursor) => ({ revision: 1, items: cursor ? items.slice(100) : items.slice(0, 100), nextCursor: cursor ? null : "next" }));
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText("worker-0");
+  expect(screen.queryByText("Café-Review")).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Agent 名稱" }), { target: { value: "CAFE\u0301" } });
+  expect(screen.getByText("Café-Review")).toBeTruthy();
+  expect(screen.getByText("符合 1 個／共 121 個")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "批次操作" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "全部啟用" }));
+  expect(await screen.findByText(/共 121 個 Agents/)).toBeTruthy();
+  expect(screen.getByText(/不受搜尋、篩選或分頁影響/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "確認操作" }));
+  await waitFor(() => expect(batchAgents).toHaveBeenCalledWith(expect.objectContaining({ ids: items.map((item) => item.id) })));
+});
+
+it("filters individual enabled state independently of master state and separates issues", async () => {
+  vi.mocked(getAgentSettings).mockResolvedValue({ enabled: false, revision: 1 });
+  vi.mocked(listAgents).mockResolvedValue({ revision: 1, nextCursor: null, items: [
+    agent({ name: "paused", reason: "master_disabled" }),
+    agent({ id: "two", name: "broken", reason: "missing" }),
+    agent({ id: "three", name: "off", reason: "disabled", enabled: false }),
+    agent({ id: "four", name: "shadowed", reason: "shadowed_by_workspace" }),
+  ] });
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText("paused");
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "篩選狀態" }));
+  fireEvent.click(screen.getByText("已啟用", { selector: ".ant-select-item-option-content" }));
+  expect(screen.getByText("符合 3 個／共 4 個")).toBeTruthy();
+  expect(screen.queryByText("off")).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "篩選狀態" }));
+  fireEvent.click(screen.getByText("異常", { selector: ".ant-select-item-option-content" }));
+  expect(screen.getByText("broken")).toBeTruthy();
+  expect(screen.queryByText("paused")).toBeNull();
+  expect(screen.queryByText("shadowed")).toBeNull();
+  expect(screen.getByText("符合 1 個／共 4 個")).toBeTruthy();
+});
+
+it("shows distinct no-match state and clears the search", async () => {
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText("review");
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Agent 名稱" }), { target: { value: "unknown" } });
+  expect(screen.getByText("找不到符合條件的 Agents。")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "清除搜尋" }));
+  expect(screen.getByText("review")).toBeTruthy();
+});
+
+it("resets pagination on search and does not mistake initial load failure for an empty list", async () => {
+  const items = Array.from({ length: 25 }, (_, index) => agent({ id: `agent-${index}`, name: `worker-${index}` }));
+  vi.mocked(listAgents).mockRejectedValueOnce(new Error("network_error")).mockResolvedValue({ revision: 1, items, nextCursor: null });
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText(/network_error/);
+  expect(screen.queryByText("尚無 Agents")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /重\s*試/ }));
+  await screen.findByText("worker-0");
+  fireEvent.click(screen.getByTitle("2"));
+  expect(screen.getByText("worker-24")).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Agent 名稱" }), { target: { value: "worker-0" } });
+  expect(screen.getByText("worker-0")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "清除搜尋" }));
+  expect(screen.getByText("worker-0")).toBeTruthy();
+  expect(screen.queryByText("worker-24")).toBeNull();
+});
+
+it("keeps workspace removal confirmation and returns batch cancel focus to its trigger", async () => {
+  vi.mocked(listAgents).mockImplementation(async (scope) => ({ revision: 1, nextCursor: null, items: [agent(scope === "workspace" ? { scope, workspaceId } : {})] }));
+  render(<AgentsSettings workspaces={{ catalog: workspaceCatalog }} providerCatalog={providerCatalog} container={null} />);
+  fireEvent.click(screen.getByRole("tab", { name: "工作區" }));
+  fireEvent.click(await screen.findByRole("button", { name: "移除 review" }));
+  expect(await screen.findByText(createTranslator("zh-TW")("agents.removeInheritance"))).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
+  expect(deleteAgent).not.toHaveBeenCalled();
+  const trigger = screen.getByRole("button", { name: "批次操作" });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole("menuitem", { name: "全部啟用" }));
+  await screen.findByRole("button", { name: "確認操作" });
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+
+it("preserves rows after refresh failure and blocks writes until retry succeeds", async () => {
+  render(<AgentsSettings workspaces={{ catalog: null }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText("review");
+  vi.mocked(listAgents).mockRejectedValueOnce(new Error("network_error"));
+  fireEvent.click(screen.getByRole("button", { name: "重新掃描" }));
+  await screen.findByText("清單尚未更新，目前僅供查看。請重試成功後再進行修改。");
+  expect(screen.getByText("review")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "新增 Agent" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("button", { name: "編輯 review" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("button", { name: "批次操作" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("switch", { name: "啟用 review" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: /重\s*試/ }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "新增 Agent" }).hasAttribute("disabled")).toBe(false));
+});
+
+it("shares search with readonly inheritance and links to global management", async () => {
+  render(<AgentsSettings workspaces={{ catalog: workspaceCatalog }} providerCatalog={providerCatalog} container={null} />);
+  await screen.findByText("review");
+  fireEvent.change(screen.getByRole("textbox", { name: "搜尋 Agent 名稱" }), { target: { value: "REVIEW" } });
+  fireEvent.click(screen.getByRole("tab", { name: "工作區" }));
+  await screen.findByText("唯讀");
+  const inherited = screen.getByRole("heading", { name: /繼承自全域/ }).closest(".agents-inherited") as HTMLElement;
+  expect(within(inherited).getByText("review")).toBeTruthy();
+  expect(within(inherited).queryByRole("switch")).toBeNull();
+  expect(within(inherited).queryByRole("button", { name: "編輯 review" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "管理全域 Agents" }));
+  expect(await screen.findByRole("button", { name: "編輯 review" })).toBeTruthy();
+});
+
+it.each(["zh-TW", "en", "ja"] as const)("provides Agents discovery messages in %s", (locale) => {
+  const t = createTranslator(locale);
+  for (const key of ["agents.search", "agents.filter", "agents.results", "agents.noMatches", "agents.workspaceEmpty", "agents.manageGlobal", "agents.batchUnfiltered", "agents.stale", "agents.paused", "agents.help"] as const) {
+    expect(t(key, { count: 1, total: 2 })).not.toBe(key);
+    expect(t(key, { count: 1, total: 2 })).not.toMatch(/\{(?:count|total)\}/);
+  }
 });
 
 it("loads settings and toggles an Agent through the strict adapter", async () => {
