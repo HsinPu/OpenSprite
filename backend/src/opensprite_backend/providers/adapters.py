@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Final, Protocol
+from typing import Final, Literal, Protocol
 
 import httpx
 
 from ..models import ErrorCode, OpenRouterModelListResponse, ProviderId
+from ..inference.capabilities import ModelCapability
 
 PROVIDER_TIMEOUT_SECONDS: Final = 30.0
 MAX_PROVIDER_RESPONSE_BYTES: Final = 1024 * 1024
@@ -111,6 +112,7 @@ class ProviderValidator:
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         from .openrouter_models import OpenRouterModelDiscovery
+        from .direct_models import DirectModelDiscovery
 
         self._adapters: dict[ProviderId, ProviderAdapter] = {
             "openai": _HttpProviderAdapter(
@@ -134,6 +136,10 @@ class ProviderValidator:
             ),
         }
         self._openrouter_models = OpenRouterModelDiscovery(client)
+        self._direct_models = DirectModelDiscovery(client)
+
+    async def list_direct_models(self, provider_id: Literal["openai", "anthropic"], api_key: str) -> tuple[ModelCapability, ...]:
+        return await self._direct_models.list_models(provider_id, api_key)
 
     async def validate(self, provider_id: ProviderId, api_key: str) -> None:
         adapter = self._adapters.get(provider_id)

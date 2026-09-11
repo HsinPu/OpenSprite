@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 import hashlib
 import hmac
 from typing import Protocol
+from typing import Literal
+from .inference.capabilities import ModelCapability
 
 from .credentials import CredentialStore
 from .models import (
@@ -54,6 +56,8 @@ class ProviderConnectionError(Exception):
 
 
 class ProviderConnections(Protocol):
+    async def list_direct_models(self, provider_id: Literal["openai", "anthropic"]) -> tuple[ModelCapability, ...]: ...
+
     async def recover_pending(self) -> None: ...
 
     async def list_providers(self) -> ProviderListResponse: ...
@@ -72,6 +76,8 @@ class ProviderConnections(Protocol):
 
 
 class ProviderValidatorOperations(Protocol):
+    async def list_direct_models(self, provider_id: Literal["openai", "anthropic"], api_key: str) -> tuple[ModelCapability, ...]: ...
+
     async def validate(self, provider_id: ProviderId, api_key: str) -> None: ...
 
     async def list_openrouter_models(
@@ -94,6 +100,9 @@ class UnavailableProviderConnections:
         raise self._unavailable()
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        raise self._unavailable()
+
+    async def list_direct_models(self, provider_id: Literal["openai", "anthropic"]) -> tuple[ModelCapability, ...]:
         raise self._unavailable()
 
     async def connect(
@@ -195,6 +204,27 @@ class ProviderConnectionService:
             if models is None:
                 raise ProviderConnectionError(ErrorCode.PROVIDER_UNREACHABLE)
             return models
+
+    async def list_direct_models(self, provider_id: Literal["openai", "anthropic"]) -> tuple[ModelCapability, ...]:
+        if provider_id not in {"openai", "anthropic"}:
+            raise ProviderConnectionError(ErrorCode.UNSUPPORTED_PROVIDER)
+        await self.recover_pending()
+        async with self._operation_locks.hold(provider_id):
+            snapshot = self._snapshot(provider_id)
+            if snapshot is None:
+                raise self._store_unavailable()
+            if snapshot.credential is None:
+                raise ProviderConnectionError(ErrorCode.NOT_CONNECTED)
+            if snapshot.state is None or not self._state_matches_credential(snapshot.state, snapshot.credential):
+                raise self._store_unavailable()
+            failure: ErrorCode | None = None
+            try:
+                return await self._validator.list_direct_models(provider_id, snapshot.credential)
+            except ProviderValidationError as error:
+                failure = error.code
+            except Exception:
+                failure = ErrorCode.PROVIDER_UNREACHABLE
+            raise ProviderConnectionError(failure)
 
     async def connect(
         self,

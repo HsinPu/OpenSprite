@@ -142,6 +142,15 @@ class FakeValidator:
         if self.failure is not None:
             raise ProviderValidationError(self.failure)
 
+    async def list_direct_models(self, provider_id, api_key):
+        self.models_seen.append(api_key)
+        if self.failure is not None:
+            raise ProviderValidationError(self.failure)
+        from opensprite_backend.inference.capabilities import ModelCapability
+        return (ModelCapability(provider_id=provider_id, model_id="future", name="Future",
+                                context_window_tokens=8192, max_output_tokens=2048,
+                                supports_tools=False),)
+
     async def list_openrouter_models(
         self,
         api_key: str,
@@ -366,6 +375,44 @@ def test_openrouter_model_discovery_requires_coherent_connected_state() -> None:
     assert raised.value.code is ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
     assert validator.models_seen == []
     assert_no_credential_mutations(credentials)
+
+
+@pytest.mark.parametrize("provider_id", ["openai", "anthropic"])
+@pytest.mark.parametrize("failure", [None, ErrorCode.INVALID_CREDENTIALS, ErrorCode.PROVIDER_TIMEOUT])
+def test_direct_discovery_uses_connected_credentials_without_mutation(provider_id, failure):
+    credentials = FakeCredentialStore()
+    credentials.values[provider_id] = OLD_SECRET
+    states = FakeStateRepository(credentials)
+    states.values[provider_id] = old_state(provider_id=provider_id)
+    before = states.values.copy()
+    validator = FakeValidator(failure)
+    runtime = service(credentials, states, validator)
+    if failure is None:
+        result = run(runtime.list_direct_models(provider_id))
+        assert result[0].provider_id == provider_id
+    else:
+        with pytest.raises(ProviderConnectionError) as raised:
+            run(runtime.list_direct_models(provider_id))
+        assert raised.value.code == failure
+    assert validator.models_seen == [OLD_SECRET]
+    assert states.values == before
+    assert_no_credential_mutations(credentials)
+
+
+@pytest.mark.parametrize("provider_id", ["openai", "anthropic"])
+def test_direct_discovery_rejects_missing_or_incoherent_credentials(provider_id):
+    credentials = FakeCredentialStore()
+    states = FakeStateRepository(credentials)
+    validator = FakeValidator()
+    runtime = service(credentials, states, validator)
+    with pytest.raises(ProviderConnectionError) as raised:
+        run(runtime.list_direct_models(provider_id))
+    assert raised.value.code == ErrorCode.NOT_CONNECTED
+    credentials.values[provider_id] = OLD_SECRET
+    with pytest.raises(ProviderConnectionError) as raised:
+        run(runtime.list_direct_models(provider_id))
+    assert raised.value.code == ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
+    assert validator.models_seen == []
 
 
 def test_openrouter_model_discovery_serializes_with_disconnect() -> None:
