@@ -184,7 +184,7 @@ describe("live chat workspace", () => {
 
     const indicator = screen.getByTestId("context-usage");
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(indicator.textContent).toContain("Context 4K / 256K");
+    expect(indicator.getAttribute("aria-label")).toContain("4K，上限 256K");
   });
 
   it("uses the inspected historical Run Context usage instead of the live chat events", () => {
@@ -195,7 +195,7 @@ describe("live chat workspace", () => {
 
     render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "目前模型", contextWindowTokens: 262_144 }, { selection: selection("openrouter", historicalRun.modelId), label: "歷史模型", contextWindowTokens: 262_144 }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false}  onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
-    expect(screen.getByTestId("context-usage").textContent).toContain("Context 4K / 256K");
+    expect(screen.getByTestId("context-usage").getAttribute("aria-label")).toContain("4K，上限 256K");
   });
 
   it("renders persisted assistant Markdown while keeping user messages as plain text", () => {
