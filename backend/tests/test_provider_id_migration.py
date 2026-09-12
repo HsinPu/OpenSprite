@@ -10,7 +10,7 @@ from uuid import uuid4
 
 def test_provider_migration_preserves_schema_and_rolls_back(tmp_path):
     connection = sqlite3.connect(tmp_path / "db", isolation_level=None)
-    connection.executescript(SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("user_version = 16", "user_version = 15"))
+    connection.executescript(SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("user_version = 18", "user_version = 15"))
     connection.execute("PRAGMA foreign_keys = ON")
     before = connection.execute("SELECT name, sql FROM sqlite_master ORDER BY name").fetchall()
     connection.set_authorizer(lambda action, arg1, arg2, db, source:
@@ -37,7 +37,7 @@ def test_provider_migration_keeps_existing_conversation_and_run_rows(tmp_path):
     repository.interrupt_incomplete_runs()
     source = sqlite3.connect(source_path)
     legacy = sqlite3.connect(tmp_path / "legacy.db", isolation_level=None)
-    legacy.executescript(SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("user_version = 16", "user_version = 15"))
+    legacy.executescript(SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("user_version = 18", "user_version = 15"))
     tables = [row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
     before = {}
     for table in tables:

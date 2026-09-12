@@ -43,6 +43,7 @@ def test_contract_has_only_the_approved_agent_chat_operations() -> None:
         ("/api/runs", "post"),
         ("/api/runs/{run_id}", "get"),
         ("/api/runs/{run_id}/events", "get"),
+        ("/api/runs/{run_id}/event-history", "get"),
         ("/api/runs/{run_id}/cancel", "post"),
     }
 
@@ -139,7 +140,11 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
     assert event_types == [
         "run.started",
         "context.compaction.started",
+        "context.compaction.completed",
+        "context.compaction.failed",
+        "context.compaction.cancelled",
         "model.started",
+        "model.attempt",
         "response.continuation.started",
         "assistant.delta",
         "tool.approval_requested",

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from dataclasses import asdict
+import hashlib
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -133,12 +136,23 @@ class FilePromptLogWriter:
         messages: tuple[ModelMessage, ...],
         tools: tuple[ModelToolDefinition, ...],
     ) -> bytes:
+        normalized = {
+            "providerId": provider_id, "modelId": model_id,
+            "responseMode": response_mode, "maxOutputTokens": max_output_tokens,
+            "messages": [asdict(message) for message in messages],
+            "tools": [asdict(tool) for tool in tools],
+        }
+        request_hash = hashlib.sha256(json.dumps(
+            normalized, sort_keys=True, ensure_ascii=False, allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
         parts = [
             "# OpenSprite Full Model Request Log",
             "",
             f"- Request sequence: {request_sequence}",
             f"- Request kind: {request_kind}",
             f"- Run ID: {run_id}",
+            f"- Normalized request SHA-256: {request_hash}",
             f"- Created at: {created_at.isoformat(timespec='milliseconds')}",
             f"- Provider ID: {provider_id}",
             f"- Model ID: {model_id}",
@@ -169,5 +183,6 @@ class FilePromptLogWriter:
             parts.append("(none)")
         else:
             for tool in tools:
-                parts.extend([f"- {tool.name}: {tool.description}", ""])
+                parts.extend([f"- {tool.name}: {tool.description}", "",
+                              json.dumps(asdict(tool), ensure_ascii=False, sort_keys=True), ""])
         return "\n".join(parts).encode("utf-8")

@@ -43,6 +43,10 @@ class CompletionReason(str, Enum):
 class RunEventType(str, Enum):
     RUN_STARTED = "run.started"
     CONTEXT_COMPACTION_STARTED = "context.compaction.started"
+    CONTEXT_COMPACTION_COMPLETED = "context.compaction.completed"
+    CONTEXT_COMPACTION_FAILED = "context.compaction.failed"
+    CONTEXT_COMPACTION_CANCELLED = "context.compaction.cancelled"
+    MODEL_ATTEMPT = "model.attempt"
     MODEL_STARTED = "model.started"
     RESPONSE_CONTINUATION_STARTED = "response.continuation.started"
     ASSISTANT_DELTA = "assistant.delta"

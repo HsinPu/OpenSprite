@@ -221,6 +221,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/runs", "post", "startRun"),
         ("/api/runs/{run_id}", "get", "getRun"),
         ("/api/runs/{run_id}/events", "get", "streamRunEvents"),
+        ("/api/runs/{run_id}/event-history", "get", "listRunEventHistory"),
         ("/api/runs/{run_id}/cancel", "post", "cancelRun"),
         ("/api/runs/{parent_id}/agents", "get", "listSubagents"),
         ("/api/runs/{parent_id}/agents/{child_id}", "get", "getSubagentResult"),

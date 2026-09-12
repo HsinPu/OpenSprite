@@ -8,7 +8,10 @@ export type CompletionReason = (typeof completionReasons)[number];
 export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000000";
 const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 
-export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+import { validCompactionPayload } from "./compactionEvents";
+import { validAttemptPayload } from "./attemptEvents";
+
+export const runEventTypes = ["run.started", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
 export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
@@ -252,6 +255,23 @@ export async function getRun(runId: string): Promise<RunSnapshot> {
   return runSnapshot(await jsonRequest(`/api/runs/${runId}`, undefined, 200, new Map([[404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]])), runId);
 }
 
+export type RunEventPage = { events: RunEvent[]; nextAfterSequence: number | null };
+
+export async function listRunEventHistory(runId: string, afterSequence = 0): Promise<RunEventPage> {
+  if (!isIdentifier(runId) || !Number.isSafeInteger(afterSequence) || afterSequence < 0) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest(`/api/runs/${runId}/event-history?afterSequence=${afterSequence}&limit=100`, undefined, 200,
+    new Map([[400, ["invalid_request"]], [404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["events", "nextAfterSequence"]) || !Array.isArray(body.events) || body.events.length > 100) throw new AgentChatApiError("malformed_response");
+  const events = body.events.map(value => {
+    if (!record(value) || !runEventTypes.includes(value.type as RunEventType)) throw new AgentChatApiError("malformed_response");
+    return parseEvent(value, value.type as RunEventType, runId);
+  });
+  if (events.some((event, index) => event.sequence <= (index === 0 ? afterSequence : events[index - 1]!.sequence))) throw new AgentChatApiError("malformed_response");
+  const next = body.nextAfterSequence;
+  if (next !== null && (!Number.isSafeInteger(next) || next !== events.at(-1)?.sequence || Number(next) <= afterSequence)) throw new AgentChatApiError("malformed_response");
+  return { events, nextAfterSequence: next as number | null };
+}
+
 export async function cancelRun(runId: string): Promise<CancelRunResult> {
   if (!isIdentifier(runId)) throw new AgentChatApiError("malformed_response");
   const body = await jsonRequest(`/api/runs/${runId}/cancel`, { method: "POST" }, 202, new Map([[400, ["invalid_request"]], [404, ["not_found"]], [409, ["run_not_active"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
@@ -302,7 +322,9 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
       };
     }
   }
-  if (["context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
+  if (expectedType.startsWith("context.compaction.") && !validCompactionPayload(expectedType, data)) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "model.attempt" && !validAttemptPayload(data)) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "run.cancelled" && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {
     const legacyKeys = ["providerId", "modelId", "responseMode", "maxOutputTokens"] as const;
     const contextKeys = [...legacyKeys, "contextTokens", "contextLimitTokens", "inputBudgetTokens"] as const;

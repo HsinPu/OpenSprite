@@ -1951,10 +1951,17 @@ class SqliteConversationRepository:
             except ConversationStoreError:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST) from None
             return
-        if event_type in {
-            RunEventType.CONTEXT_COMPACTION_STARTED,
-            RunEventType.RUN_CANCELLED,
-        }:
+        if event_type is RunEventType.MODEL_ATTEMPT:
+            from .attempt_events import valid_attempt_payload
+            if not valid_attempt_payload(data):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
+        if event_type.value.startswith("context.compaction."):
+            from .compaction_events import valid_compaction_payload
+            if not valid_compaction_payload(event_type.value, data):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
+        if event_type is RunEventType.RUN_CANCELLED:
             if keys:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

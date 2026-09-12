@@ -229,6 +229,7 @@ class PagedContextRepository:
             for sequence in range(1, count + 1)
         )
         self.event_count = 0
+        self.events: list[tuple[RunEventType, dict[str, object]]] = []
 
     def list_messages(
         self,
@@ -271,7 +272,8 @@ class PagedContextRepository:
         event_type: RunEventType,
         data: dict[str, object],
     ) -> None:
-        del run_id, event_type, data
+        del run_id
+        self.events.append((event_type, data))
         self.event_count += 1
 
 
@@ -337,7 +339,14 @@ async def test_context_compaction_pages_until_recent_history_is_covered() -> Non
     )
 
     assert compaction.coverages == [*range(200, 3_801, 200), 3_989]
-    assert repository.event_count == len(compaction.coverages)
+    assert repository.event_count == 2 * len(compaction.coverages)
+    identifiers = set()
+    for started, completed in zip(repository.events[::2], repository.events[1::2]):
+        assert started[0] is RunEventType.CONTEXT_COMPACTION_STARTED
+        assert completed[0] is RunEventType.CONTEXT_COMPACTION_COMPLETED
+        assert started[1]["compactionId"] == completed[1]["compactionId"]
+        identifiers.add(started[1]["compactionId"])
+    assert len(identifiers) == len(compaction.coverages)
     assert "Summary through 3989" in prepared.messages[1].content
     assert prepared.messages[-1].content == "message 4001"
 
@@ -389,6 +398,7 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
             after_sequence=0,
             limit=100,
         )
+        if event.type is not RunEventType.MODEL_ATTEMPT
     ] == [
         RunEventType.RUN_STARTED,
         RunEventType.MODEL_STARTED,
@@ -570,6 +580,10 @@ async def test_enabled_prompt_logging_records_the_exact_model_messages(
     assert "system prompt for test" in content
     assert "請檢查這次送出的內容" in content
     assert "收到" not in content
+    attempts = [event for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+                if event.type is RunEventType.MODEL_ATTEMPT and event.data["status"] == "started"]
+    assert len(attempts) == 1
+    assert attempts[0].data["context"]["requestHash"] in content
 
 
 @async_test
@@ -679,7 +693,7 @@ async def test_output_limit_uses_the_snapshotted_continuation_limit(
     assert result.status is RunStatus.COMPLETED
     assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
     assert len(gateway.requests) == maximum + 1
-    events = list(repository.list_run_events(run.id, after_sequence=0, limit=100))
+    events = list(repository.list_run_events(run.id, after_sequence=0, limit=500))
     if events:
         events.extend(repository.list_run_events(
             run.id,
@@ -977,7 +991,11 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     assert tool_result.tool_call_id == "call-1"
     assert tool_result.content == "今天有 3 項工作"
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
-    assert [event.type for event in events] == [
+    starts = [event.data for event in events if event.type is RunEventType.MODEL_ATTEMPT and event.data["status"] == "started"]
+    assert len(starts) == 2
+    assert starts[0]["requestId"] != starts[1]["requestId"]
+    assert all(data["attemptNumber"] == 1 and data["retryOfAttemptId"] is None for data in starts)
+    assert [event.type for event in events if event.type is not RunEventType.MODEL_ATTEMPT] == [
         RunEventType.RUN_STARTED,
         RunEventType.MODEL_STARTED,
         RunEventType.ASSISTANT_DELTA,
@@ -987,7 +1005,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         RunEventType.ASSISTANT_DELTA,
         RunEventType.RUN_COMPLETED,
     ]
-    assert events[4].data == {
+    assert next(event for event in events if event.type is RunEventType.TOOL_COMPLETED).data == {
         "callId": "call-1",
         "toolName": "lookup_note",
         "summary": "找到 3 項工作",
@@ -1220,7 +1238,7 @@ async def test_production_calculator_returns_result_to_the_model(
     assert gateway.requests[1].messages[-1].tool_name == "calculator"
     assert gateway.requests[1].messages[-1].content == "14"
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
-    assert [event.type for event in events] == [
+    assert [event.type for event in events if event.type is not RunEventType.MODEL_ATTEMPT] == [
         RunEventType.RUN_STARTED,
         RunEventType.MODEL_STARTED,
         RunEventType.TOOL_STARTED,
@@ -1229,7 +1247,7 @@ async def test_production_calculator_returns_result_to_the_model(
         RunEventType.ASSISTANT_DELTA,
         RunEventType.RUN_COMPLETED,
     ]
-    assert events[3].data == {
+    assert next(event for event in events if event.type is RunEventType.TOOL_COMPLETED).data == {
         "callId": "calculator-call",
         "toolName": "calculator",
         "summary": "Calculator result: 14",
@@ -1426,6 +1444,7 @@ async def test_long_history_is_compacted_without_deleting_raw_messages(
             after_sequence=0,
             limit=100,
         )
+        if event.type is not RunEventType.MODEL_ATTEMPT
     ]
     assert event_types.count(RunEventType.CONTEXT_COMPACTION_STARTED) == 1
     assert event_types.index(RunEventType.CONTEXT_COMPACTION_STARTED) < (
@@ -1520,6 +1539,26 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
     assert len(gateway.requests) == 3
     assert gateway.requests[1].max_output_tokens == 2_048
     assert repository.get_latest_compaction(conversation_id) is not None
+    attempts = [event.data for event in repository.list_run_events(current.id, after_sequence=0, limit=100)
+                if event.type is RunEventType.MODEL_ATTEMPT]
+    starts = [data for data in attempts if data["status"] == "started"]
+    assert [data["purpose"] for data in starts] == ["main", "compaction", "main"]
+    first, compact, retry = starts
+    from opensprite_backend.agent.context.receipt import request_receipt
+    from opensprite_backend.agent.context.counter import ConservativeTokenCounter
+    for data, request in zip(starts, gateway.requests):
+        assert data["context"]["requestHash"] == request_receipt(request, None, data["purpose"])["requestHash"]
+        assert data["context"]["estimatedInputTokens"] == ConservativeTokenCounter().request(request.messages, request.tools)
+    assert compact["context"]["historyMessageIds"]
+    assert retry["context"]["summary"]["id"] == repository.get_latest_compaction(conversation_id).id
+    assert first["requestId"] == retry["requestId"]
+    assert retry["attemptNumber"] == 2
+    assert retry["retryOfAttemptId"] == first["attemptId"]
+    assert retry["retryCause"] == "provider_context_limit"
+    assert compact["parentRequestId"] == first["requestId"]
+    assert compact["compactionId"] == retry["compactionId"]
+    assert len({data["attemptId"] for data in starts}) == 3
+    assert [data["status"] for data in attempts] == ["started", "failed", "started", "completed", "started", "completed"]
     event_types = [
         event.type
         for event in repository.list_run_events(
@@ -1528,10 +1567,11 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
             limit=100,
         )
     ]
-    assert event_types == [
+    assert [kind for kind in event_types if kind is not RunEventType.MODEL_ATTEMPT] == [
         RunEventType.RUN_STARTED,
         RunEventType.MODEL_STARTED,
         RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.CONTEXT_COMPACTION_COMPLETED,
         RunEventType.MODEL_STARTED,
         RunEventType.ASSISTANT_DELTA,
         RunEventType.RUN_COMPLETED,
@@ -1740,11 +1780,39 @@ async def test_cancellation_interrupts_context_compaction_request(
             after_sequence=0,
             limit=100,
         )
+        if event.type is not RunEventType.MODEL_ATTEMPT
     ] == [
         RunEventType.RUN_STARTED,
         RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.CONTEXT_COMPACTION_CANCELLED,
         RunEventType.RUN_CANCELLED,
     ]
+
+
+@async_test
+async def test_failed_compaction_has_one_safe_terminal_event(tmp_path: Path) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(repository, 14, assistant_size=30_000)
+    run = repository.start_run(
+        conversation_id=conversation_id, client_request_id=str(uuid4()),
+        message="current request", provider_id="openrouter", model_id="openrouter/auto",
+        response_mode="default", context_budget="auto",
+    ).run
+    gateway = ScriptedGateway([[ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]])
+    result = await AgentLoop(
+        repository=repository, gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    compactions = [event for event in events if event.type.value.startswith("context.compaction.")]
+    assert result.status is RunStatus.FAILED
+    assert [event.type for event in compactions] == [
+        RunEventType.CONTEXT_COMPACTION_STARTED, RunEventType.CONTEXT_COMPACTION_FAILED,
+    ]
+    assert compactions[0].data["compactionId"] == compactions[1].data["compactionId"]
+    assert set(compactions[1].data) == {"schemaVersion", "compactionId", "errorCode"}
+    assert len(gateway.requests) == 1
 
 
 @async_test

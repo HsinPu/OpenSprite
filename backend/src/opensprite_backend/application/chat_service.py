@@ -122,6 +122,8 @@ class AgentChatOperations(Protocol):
 
     async def get_run(self, run_id: str) -> RunSnapshot: ...
 
+    async def event_history(self, run_id: str, *, after_sequence: int, limit: int) -> tuple[RunEvent, ...]: ...
+
     async def cancel_run(self, run_id: str) -> RunSnapshot: ...
 
     def stream_events(
@@ -181,6 +183,9 @@ class UnavailableAgentChat:
 
     async def get_run(self, run_id: str):
         del run_id
+        raise self._unavailable()
+
+    async def event_history(self, run_id: str, *, after_sequence: int, limit: int):
         raise self._unavailable()
 
     async def cancel_run(self, run_id: str):
@@ -520,6 +525,16 @@ class AgentChatService:
     async def cancel_run(self, run_id: str) -> RunSnapshot:
         try:
             return await self._run_manager.cancel(run_id)
+        except ConversationStoreError as error:
+            raise _store_error(error) from error
+
+    async def event_history(self, run_id: str, *, after_sequence: int, limit: int) -> tuple[RunEvent, ...]:
+        if type(after_sequence) is not int or not 0 <= after_sequence <= 2**53 - 1 or type(limit) is not int or not 1 <= limit <= 100:
+            raise AgentChatError(ChatErrorCode.INVALID_REQUEST)
+        await self.get_run(run_id)
+        try:
+            return await asyncio.to_thread(self._repository.list_run_events, run_id,
+                                           after_sequence=after_sequence, limit=limit + 1)
         except ConversationStoreError as error:
             raise _store_error(error) from error
 

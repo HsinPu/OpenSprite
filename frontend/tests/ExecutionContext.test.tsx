@@ -55,6 +55,7 @@ const compactionEvent: RunEvent = {
   ...event,
   sequence: 2,
   type: "context.compaction.started",
+  data: { schemaVersion: 1, compactionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", reason: "local_budget", fromSequence: 1, throughSequence: 10, estimatedBeforeTokens: 9000, inputBudgetTokens: 8000 },
   createdAt: "2026-08-29T08:00:02Z",
 };
 
@@ -189,13 +190,34 @@ describe("execution context disclosure", () => {
     expect(screen.getByText("準備對話內容")).toBeTruthy();
   });
 
-  it("shows repeated Context compactions as one execution step", () => {
-    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, compactionEvent, modelEvent, { ...compactionEvent, sequence: 5, createdAt: "2026-08-29T08:00:05Z" }]} timeZone="system" defaultExpanded />);
+  it("keeps each Context compaction as a distinct execution step", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, compactionEvent, modelEvent, { ...compactionEvent, sequence: 5, data: { ...compactionEvent.data, compactionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, createdAt: "2026-08-29T08:00:05Z" }]} timeZone="system" defaultExpanded />);
 
-    expect(screen.getAllByText("整理較早的對話內容")).toHaveLength(1);
+    expect(screen.getAllByText("整理較早的對話內容")).toHaveLength(2);
     expect(screen.getByText("請求模型 gpt-5.6")).toBeTruthy();
     expect(screen.getByText("32K")).toBeTruthy();
     expect(document.querySelector(".chat-workspace__process-item--active")?.textContent).toContain("整理較早的對話內容");
+  });
+
+  it.each([
+    ["context.compaction.completed", "對話摘要已產生", "complete"],
+    ["context.compaction.failed", "對話摘要產生失敗", "error"],
+    ["context.compaction.cancelled", "對話摘要已取消", "unknown"],
+  ] as const)("renders the explicit %s outcome", (type, label, state) => {
+    const terminal: RunEvent = { ...compactionEvent, sequence: 3, type };
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[compactionEvent, terminal]} timeZone="system" defaultExpanded />);
+    expect(screen.getByText(label).closest("li")?.classList.contains(`chat-workspace__process-item--${state}`)).toBe(true);
+    expect(screen.queryByText("整理較早的對話內容")).toBeNull();
+  });
+
+  it("does not claim success for a missing terminal event after interruption", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={{ ...run, status: "interrupted" }} events={[compactionEvent]} timeZone="system" defaultExpanded />);
+    expect(screen.getByText("對話摘要結果未知（缺少結束紀錄）").closest("li")?.classList.contains("chat-workspace__process-item--unknown")).toBe(true);
+  });
+
+  it("does not infer a legacy summary outcome from a later model request", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[{ ...compactionEvent, data: {} }, modelEvent]} timeZone="system" defaultExpanded />);
+    expect(screen.getByText("對話摘要結果未知（缺少結束紀錄）").closest("li")?.classList.contains("chat-workspace__process-item--unknown")).toBe(true);
   });
 
   it("shows the localized production calculator in tool events", () => {

@@ -10,6 +10,7 @@ import { formatTime } from "../general-settings/dateTime";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
 import { ToolApprovalCard } from "./ToolApprovalCard";
 import { SubagentExecution } from "./SubagentExecution";
+import { RunDiagnostics } from "./RunDiagnostics";
 
 
 function OpenSpriteMark() {
@@ -53,9 +54,13 @@ function eventLabel(event: RunEvent, t: Translator, displayNames: ReadonlyMap<st
   switch (event.type) {
     case "run.started": return t("execution.event.runStarted");
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
+    case "context.compaction.completed": return t("execution.event.contextCompactionCompleted");
+    case "context.compaction.failed": return t("execution.event.contextCompactionFailed");
+    case "context.compaction.cancelled": return t("execution.event.contextCompactionCancelled");
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
+    case "model.attempt": return null;
     case "skill.loaded": return `${skillName(event, t)} · ${t(event.data.source === "manual" ? "skills.manual" : "skills.automatic")}`;
     case "skill.load_failed": return t("skills.error", { code: String(event.data.errorCode) });
     case "tool.approval_requested": return t("execution.event.approvalRequested", { tool: String(event.data.toolDisplayName ?? "") }).trim();
@@ -76,11 +81,12 @@ function eventLabel(event: RunEvent, t: Translator, displayNames: ReadonlyMap<st
   }
 }
 
-function processEvents(events: RunEvent[], t: Translator, locale: string, timeZone: TimeZoneSetting): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> {
-  const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> = [];
+function processEvents(events: RunEvent[], t: Translator, locale: string, timeZone: TimeZoneSetting, runStatus?: RunSnapshot["status"]): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" | "unknown" }> {
+  const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" | "unknown" }> = [];
   const displayNames = new Map<string, string>();
   let addedTextStep = false;
-  let compactionStepIndex: number | null = null;
+  const compactions = new Map<string, number>();
+  const terminal = (runStatus !== undefined && ["completed", "failed", "cancelled", "interrupted"].includes(runStatus)) || events.some((event) => ["run.completed", "run.failed", "run.cancelled", "run.interrupted"].includes(event.type));
   for (const event of events) {
     if (event.type === "tool.approval_requested") {
       displayNames.set(String(event.data.toolName ?? ""), String(event.data.toolDisplayName ?? ""));
@@ -93,10 +99,16 @@ function processEvents(events: RunEvent[], t: Translator, locale: string, timeZo
       continue;
     }
     if (event.type === "context.compaction.started") {
-      const step = { key: "context-compaction", label: eventLabel(event, t)!, time: formatTime(event.createdAt, locale, timeZone), state: "complete" as const };
-      if (compactionStepIndex !== null) steps.splice(compactionStepIndex, 1);
-      steps.push(step);
-      compactionStepIndex = steps.length - 1;
+      const id = String(event.data.compactionId ?? `legacy-${event.sequence}`);
+      compactions.set(id, steps.length);
+      steps.push({ key: `compaction-${id}`, label: t(terminal || !event.data.compactionId ? "execution.event.contextCompactionUnknown" : "execution.event.contextCompactionStarted"), time: formatTime(event.createdAt, locale, timeZone), state: terminal || !event.data.compactionId ? "unknown" : "active" });
+      continue;
+    }
+    if (event.type.startsWith("context.compaction.")) {
+      const index = compactions.get(String(event.data.compactionId));
+      const step = { key: `compaction-${String(event.data.compactionId)}`, label: eventLabel(event, t)!, time: formatTime(event.createdAt, locale, timeZone), state: event.type === "context.compaction.completed" ? "complete" as const : event.type === "context.compaction.failed" ? "error" as const : "unknown" as const };
+      if (index !== undefined) steps[index] = step;
+      else steps.push(step);
       continue;
     }
     const label = eventLabel(event, t, displayNames);
@@ -104,7 +116,7 @@ function processEvents(events: RunEvent[], t: Translator, locale: string, timeZo
     const terminalError = event.type === "run.failed" || event.type === "run.interrupted" || event.type === "tool.failed";
     steps.push({ key: `${event.sequence}-${event.type}`, label, time: formatTime(event.createdAt, locale, timeZone), state: terminalError ? "error" : "complete" });
   }
-  if (steps.length > 0 && !events.some((event) => ["run.completed", "run.failed", "run.cancelled", "run.interrupted"].includes(event.type))) {
+  if (steps.length > 0 && !terminal && !steps[steps.length - 1]!.key.startsWith("compaction-")) {
     steps[steps.length - 1] = { ...steps[steps.length - 1]!, state: "active" };
   }
   return steps;
@@ -142,7 +154,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
   const executionBodyId = bodyId ?? `${contextId}-execution-body`;
-  const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
+  const steps = useMemo(() => processEvents(events, t, locale, timeZone, run?.status), [events, locale, t, timeZone, run?.status]);
   const toolNames = useMemo(() => {
     const displayNames = new Map<string, string>(events.filter((event) => event.type === "tool.approval_requested").map((event) => [String(event.data.toolName ?? ""), String(event.data.toolDisplayName ?? "")] as const));
     return Array.from(new Set(events.filter((event) => event.type === "tool.started" || event.type === "tool.completed").map((event) => {
@@ -253,7 +265,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <ol className="chat-workspace__process-list" aria-label={t("execution.eventList")}>
                   {steps.map((step) => (
                     <li key={step.key} className={`chat-workspace__process-item chat-workspace__process-item--${step.state}`}>
-                      <span className="chat-workspace__step-icon" aria-hidden="true">{step.state === "complete" ? "✓" : step.state === "error" ? "!" : ""}</span>
+                      <span className="chat-workspace__step-icon" aria-hidden="true">{step.state === "complete" ? "✓" : step.state === "error" ? "!" : step.state === "unknown" ? "—" : ""}</span>
                       <span>{step.label}</span>
                       <time>{step.time}</time>
                     </li>
@@ -262,6 +274,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
               ) : <p>{t("execution.waitingEvents")}</p>}
               {run.error ? <p className="chat-workspace__record-error">{agentChatErrorText(new AgentChatApiError(run.error.code), t)}</p> : null}
             </details>
+            <RunDiagnostics key={run.id} runId={run.id} conversationId={run.conversationId} />
           </>
         ) : (
           <div className="chat-workspace__context-empty">

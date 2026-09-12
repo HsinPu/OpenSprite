@@ -174,7 +174,7 @@ def test_schema_v11_migrates_workspace_identity_without_absolute_paths(
     assert run_snapshot.workspace_revision == 1
     assert run_snapshot.workspace_root_hash is None
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_schema_v11_workspace_migration_rolls_back_every_partial_change(
@@ -241,7 +241,7 @@ def test_schema_v12_adds_empty_mount_manifest_without_losing_runs(
         "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     )
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_construction_and_empty_reads_have_no_filesystem_side_effects(
@@ -735,7 +735,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -803,7 +803,7 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
@@ -844,7 +844,7 @@ def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
         "completionReason": "stop",
     }
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_schema_v4_output_budget_and_model_event_are_upgraded(
@@ -883,7 +883,7 @@ def test_schema_v4_output_budget_and_model_event_are_upgraded(
     model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
     assert model_event.data["maxOutputTokens"] == 8_192
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_schema_v5_adds_default_continuation_policy_without_losing_run(
@@ -906,7 +906,7 @@ def test_schema_v5_adds_default_continuation_policy_without_losing_run(
     assert run is not None
     assert run.output_continuation == "2"
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 @pytest.mark.parametrize(("enabled", "expected"), [(0, "off"), (1, "2")])
@@ -941,7 +941,7 @@ def test_schema_v7_converts_boolean_continuation_without_losing_run(
         }
         assert "output_continuation" in columns
         assert "auto_continue_output" not in columns
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
 
 
 def test_schema_v9_expands_continuation_values_without_losing_run(
@@ -972,7 +972,7 @@ def test_schema_v9_expands_continuation_values_without_losing_run(
     expanded = start(upgraded, output_continuation="50")
     assert expanded.run.output_continuation == "50"
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
         runs_sql = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
         ).fetchone()[0]

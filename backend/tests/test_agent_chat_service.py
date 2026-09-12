@@ -440,7 +440,10 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
         )
     ]
 
-    assert [event.sequence for event in events] == [2, 3, 4]
+    assert [event.sequence for event in events] == [2, 3, 4, 5, 6]
+    assert [event.data["status"] for event in events if event.type.value == "model.attempt"] == ["started", "completed"]
+    history = await chat.event_history(accepted.run.id, after_sequence=1, limit=2)
+    assert [event.sequence for event in history] == [2, 3, 4]
     assert events[-1].type.value == "run.completed"
     await chat.close()
 

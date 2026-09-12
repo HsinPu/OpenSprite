@@ -166,6 +166,14 @@ class RecordingChat:
         self.cancelled = run_id
         return run_snapshot(RunStatus.CANCELLED)
 
+    async def event_history(self, run_id: str, *, after_sequence: int, limit: int):
+        self.fail_if_requested()
+        assert run_id == RUN_ID
+        return tuple(RunEvent(
+            sequence=sequence, type=RunEventType.RUN_CANCELLED,
+            run_id=RUN_ID, conversation_id=CONVERSATION_ID, created_at=NOW, data={},
+        ) for sequence in range(after_sequence + 1, min(after_sequence + limit + 2, 608)))
+
     async def stream_events(self, run_id: str, *, after_sequence: int):
         self.fail_if_requested()
         assert run_id == RUN_ID
@@ -188,6 +196,46 @@ class RecordingChat:
 
 def client(chat: RecordingChat) -> TestClient:
     return TestClient(create_app(agent_chat=chat))
+
+
+def test_event_history_pages_beyond_live_window_and_validates_bounds() -> None:
+    with client(RecordingChat()) as browser:
+        cursor = 0
+        sequences = []
+        while True:
+            response = browser.get(f"/api/runs/{RUN_ID}/event-history?afterSequence={cursor}&limit=100")
+            assert response.status_code == 200
+            page = response.json()
+            assert len(page["events"]) <= 100
+            sequences.extend(event["sequence"] for event in page["events"])
+            if page["nextAfterSequence"] is None:
+                break
+            assert page["nextAfterSequence"] > cursor
+            cursor = page["nextAfterSequence"]
+        assert sequences == list(range(1, 608))
+        for query in ("limit=101", "limit=0", "afterSequence=-1", "afterSequence=9007199254740992"):
+            assert browser.get(f"/api/runs/{RUN_ID}/event-history?{query}").status_code == 400
+
+
+def test_event_history_errors_are_safe() -> None:
+    chat = RecordingChat()
+    chat.failure = ChatErrorCode.NOT_FOUND
+    with client(chat) as browser:
+        assert browser.get(f"/api/runs/{RUN_ID}/event-history").status_code == 404
+
+
+def test_event_history_requires_authentication_when_enabled() -> None:
+    class RejectAuthentication:
+        async def authenticate(self, token):
+            return None
+
+    app = create_app(agent_chat=RecordingChat(), enforce_authentication=True,
+                     local_authentication=RejectAuthentication())
+    with TestClient(app) as browser:
+        response = browser.get(f"/api/runs/{RUN_ID}/event-history")
+        assert response.status_code == 401
+        assert response.headers["cache-control"] == "no-store"
+        assert "events" not in response.json()
 
 
 def test_conversation_and_run_json_shapes_match_contract() -> None:

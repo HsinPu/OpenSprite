@@ -32,7 +32,7 @@ from opensprite_backend.application import (
     AgentChatOperations,
     ChatErrorCode,
 )
-from .sse import run_event_frame
+from .sse import run_event_frame, run_event_data
 
 
 router = APIRouter(tags=["agent-chat"])
@@ -190,6 +190,19 @@ async def get_run(
     chat: AgentChatOperations = Depends(_agent_chat),
 ) -> RunResponse:
     return run_response(await chat.get_run(str(run_id)))
+
+
+@router.get("/api/runs/{run_id}/event-history", operation_id="listRunEventHistory", responses=_errors(400, 404, 500, 503))
+async def event_history(
+    run_id: UUID,
+    after_sequence: Annotated[int, Query(alias="afterSequence", ge=0, le=9007199254740991)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    chat: AgentChatOperations = Depends(_agent_chat),
+) -> dict[str, object]:
+    events = await chat.event_history(str(run_id), after_sequence=after_sequence, limit=limit)
+    page = events[:limit]
+    return {"events": [run_event_data(event) for event in page],
+            "nextAfterSequence": page[-1].sequence if len(events) > limit else None}
 
 
 @router.get(

@@ -1,0 +1,16 @@
+.run-diagnostics,
+.run-diagnostics__details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.run-diagnostics__wrap {
+  overflow-wrap: anywhere;
+}
+.run-diagnostics__receipt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin: 0;
+}

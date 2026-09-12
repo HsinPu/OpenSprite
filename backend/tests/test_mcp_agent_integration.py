@@ -178,7 +178,7 @@ async def test_approved_mcp_tool_runs_inside_agent_loop(tmp_path: Path) -> None:
         assert gateway.requests[0].tools[0].name == echo_id
         assert gateway.requests[1].messages[-1].content == "hello"
         events = repository.list_run_events(run.id, after_sequence=0, limit=100)
-        assert [event.type for event in events] == [
+        assert [event.type for event in events if event.type is not RunEventType.MODEL_ATTEMPT] == [
             RunEventType.RUN_STARTED,
             RunEventType.MODEL_STARTED,
             RunEventType.TOOL_APPROVAL_REQUESTED,

@@ -13,8 +13,9 @@ from datetime import UTC, datetime
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, TypeVar
+from uuid import uuid4
 
 from opensprite_backend.conversations.models import (
     CompletionReason,
@@ -82,6 +83,8 @@ from .context import (
 )
 from .prompt import StaticSystemPromptProvider, SystemPromptProvider
 from ..prompt_logging import PromptLogError, PromptLogWriter
+from .request_trace import Attempt, TracedGateway
+from .context.receipt import ReceiptSources
 
 
 class _RunCancelled(Exception):
@@ -119,6 +122,8 @@ class _PreparedContext:
     messages: tuple[ModelMessage, ...]
     tools: tuple[ModelToolDefinition, ...]
     budget: ContextBudgetPlan
+    compaction_id: str | None = None
+    sources: ReceiptSources = ReceiptSources()
 
 
 class _AssistantDeltaBuffer:
@@ -190,7 +195,7 @@ class AgentLoop:
         if not 1 <= max_assistant_chars <= MAX_ASSISTANT_CHARS:
             raise ValueError("invalid assistant output bound")
         self._repository = repository
-        self._gateway = gateway
+        self._gateway = TracedGateway(gateway, repository)
         self._tools = tools
         self._tool_availability = tool_availability
         self._dynamic_tools = dynamic_tools
@@ -199,7 +204,7 @@ class AgentLoop:
         self._context_assembler = ContextAssembler(self._counter)
         self._compaction_service = ConversationCompactionService(
             repository,
-            GatewaySummaryGenerator(gateway),
+            GatewaySummaryGenerator(self._gateway),
         )
         self._system_prompt_provider = (
             system_prompt_provider
@@ -341,6 +346,8 @@ class AgentLoop:
             context_retry_used = False
             failed_calls: Counter[str] = Counter()
             used_call_ids: set[str] = set()
+            request_id = str(uuid4())
+            previous_attempt: Attempt | None = None
 
             for _round in range(self._max_model_rounds + 1):
                 if _round >= self._max_model_rounds and not context_retry_used:
@@ -381,7 +388,18 @@ class AgentLoop:
                 round_text = ""
                 tool_calls: list[ModelToolCall] = []
                 completion: ModelCompleted | None = None
-                stream = self._gateway.stream(request)
+                current_attempt = Attempt(
+                    run_id, request_id, "main",
+                    number=1 if previous_attempt is None else previous_attempt.number + 1,
+                    retry_of=None if previous_attempt is None else previous_attempt.id,
+                    cause=None if previous_attempt is None else "provider_context_limit",
+                    compaction_id=prepared.compaction_id,
+                    sources=replace(prepared.sources, skills=tuple(
+                        {"id": identifier, "revision": skill_state.snapshot.get(identifier).revision,
+                         "contentHash": skill_state.snapshot.get(identifier).content_hash}
+                        for identifier in skill_state.loaded)),
+                )
+                stream = self._gateway.stream(request, attempt=current_attempt)
                 events = self._with_cancellation(
                     stream,
                     cancellation_event,
@@ -402,6 +420,7 @@ class AgentLoop:
                             and not tool_calls
                         ):
                             context_retry_used = True
+                            previous_attempt = current_attempt
                             _LOGGER.info(
                                 "context retrying after provider limit run_id=%s",
                                 run_id,
@@ -416,6 +435,7 @@ class AgentLoop:
                                 force_compaction=True,
                                 compaction_limit=1,
                                 current_user_message_id=run.user_message_id,
+                                parent_request_id=request_id,
                             )
                             transcript = list(prepared.messages)
                             tool_definitions = prepared.tools
@@ -465,6 +485,8 @@ class AgentLoop:
                 await delta_buffer.flush()
                 if retry_with_compaction:
                     continue
+                request_id = str(uuid4())
+                previous_attempt = None
                 if completion is None:
                     await delta_buffer.flush()
                     return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
@@ -502,6 +524,7 @@ class AgentLoop:
                                 system_prompt=system_prompt,
                                 base_transcript=tuple(transcript),
                                 prepared=prepared,
+                                receipt_skills=current_attempt.sources.skills if current_attempt.sources else (),
                                 accumulated_text=accumulated_text,
                                 cancellation_event=cancellation_event,
                                 availability=availability,
@@ -687,6 +710,7 @@ class AgentLoop:
         tools: ToolRegistry,
         prompt_log_sequence: list[int],
         delta_buffer: _AssistantDeltaBuffer,
+        receipt_skills: tuple[dict[str, object], ...] = (),
         provider_endpoint: ProviderEndpointSnapshot | None = None,
     ) -> RunSnapshot:
         continuation_base = base_transcript
@@ -697,6 +721,8 @@ class AgentLoop:
         )
         attempt_limit = configured_max or _MAX_UNLIMITED_CONTINUATIONS
         for attempt in range(1, attempt_limit + 1):
+            request_id = str(uuid4())
+            previous_attempt: Attempt | None = None
             self._raise_if_cancelled(cancellation_event)
             await asyncio.to_thread(
                 self._repository.append_run_event,
@@ -731,6 +757,7 @@ class AgentLoop:
                             tools=tools,
                             force_compaction=True,
                             compaction_limit=1,
+                            compaction_reason="local_budget",
                             current_user_message_id=run.user_message_id,
                         )
                     except ContextLimitExceeded:
@@ -773,7 +800,14 @@ class AgentLoop:
                 round_text = ""
                 completion: ModelCompleted | None = None
                 events = self._with_cancellation(
-                    self._gateway.stream(request),
+                    self._gateway.stream(request, attempt=(current_attempt := Attempt(
+                        run.id, request_id, "continuation",
+                        number=1 if previous_attempt is None else previous_attempt.number + 1,
+                        retry_of=None if previous_attempt is None else previous_attempt.id,
+                        cause=None if previous_attempt is None else "provider_context_limit",
+                        compaction_id=prepared.compaction_id,
+                        sources=replace(prepared.sources, skills=receipt_skills),
+                    ))),
                     cancellation_event,
                 )
                 retry_with_compaction = False
@@ -789,6 +823,7 @@ class AgentLoop:
                             and not context_retry_used
                         ):
                             context_retry_used = True
+                            previous_attempt = current_attempt
                             try:
                                 prepared = await self._prepare_context(
                                     run=run,
@@ -800,6 +835,7 @@ class AgentLoop:
                                     force_compaction=True,
                                     compaction_limit=1,
                                     current_user_message_id=run.user_message_id,
+                                    parent_request_id=request_id,
                                 )
                             except ContextLimitExceeded:
                                 return await self._complete_partial(
@@ -1006,9 +1042,11 @@ class AgentLoop:
         availability: ToolAvailabilitySnapshot | None = None,
         tools: ToolRegistry | None = None,
         force_compaction: bool = False,
+        compaction_reason: str = "provider_context_limit",
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         compaction_limit: int | None = None,
         current_user_message_id: str | None = None,
+        parent_request_id: str | None = None,
     ) -> _PreparedContext:
         self._raise_if_cancelled(cancellation_event)
         limit = (
@@ -1060,6 +1098,7 @@ class AgentLoop:
 
         force_compaction_pending = force_compaction
         compaction_index = 0
+        last_compaction_id: str | None = None
         while True:
             coverage = 0 if summary is None else summary.covers_through_sequence
             uncovered = tuple(
@@ -1098,6 +1137,21 @@ class AgentLoop:
                     messages=assembled.messages,
                     tools=tool_definitions,
                     budget=budget,
+                    compaction_id=last_compaction_id,
+                    sources=ReceiptSources(
+                        bindings=tuple(
+                            (model_message, "currentUser" if message.id == current_user_message_id else "history", message.id, message.sequence)
+                            for model_message, message in zip(
+                                assembled.messages[-assembled.included_message_count:] if assembled.included_message_count else (),
+                                uncovered[-assembled.included_message_count:] if assembled.included_message_count else (),
+                            )
+                        ) + (() if summary is None else ((assembled.messages[1], "summary", summary.id, summary.covers_through_sequence),)),
+                        summary=None if summary is None else {"id": summary.id, "version": summary.summary_version,
+                            "sourceHash": summary.source_hash, "throughSequence": summary.covers_through_sequence},
+                        workspace={"id": run.workspace_id, "revision": run.workspace_revision,
+                            "mountManifestHash": run.workspace_mount_manifest_hash},
+                        context_limit=budget.context_limit_tokens, input_budget=budget.input_budget_tokens,
+                    ),
                 )
             if limit is not None and compaction_index >= limit:
                 raise ContextLimitExceeded
@@ -1122,6 +1176,8 @@ class AgentLoop:
             )
             if not candidates:
                 raise ContextLimitExceeded
+            compaction_id = str(uuid4())
+            compaction_started = False
             try:
                 self._raise_if_cancelled(cancellation_event)
                 candidates = self._fit_compaction_source(
@@ -1133,27 +1189,77 @@ class AgentLoop:
                     self._repository.append_run_event,
                     run.id,
                     RunEventType.CONTEXT_COMPACTION_STARTED,
-                    {},
+                    {
+                        "schemaVersion": 1,
+                        "compactionId": compaction_id,
+                        "reason": compaction_reason if force_compaction_pending else "local_budget",
+                        "fromSequence": candidates[0].sequence,
+                        "throughSequence": candidates[-1].sequence,
+                        "estimatedBeforeTokens": assembled.estimated_input_tokens,
+                        "inputBudgetTokens": budget.input_budget_tokens,
+                    },
                 )
-                summary = await self._await_with_cancellation(
-                    self._compaction_service.compact(
-                        conversation_id=run.conversation_id,
-                        provider_id=run.provider_id,
-                        model_id=run.model_id,
-                        previous=summary,
-                        messages=candidates,
-                        provider_endpoint=provider_endpoint,
-                    ),
-                    cancellation_event,
-                )
+                compaction_started = True
+                with self._gateway.scope(Attempt(run.id, str(uuid4()), "compaction", compaction_id=compaction_id, parent_request_id=parent_request_id,
+                    sources=ReceiptSources(
+                        history_ids=tuple(message.id for message in candidates),
+                        summary=None if summary is None else {"id": summary.id, "version": summary.summary_version,
+                            "sourceHash": summary.source_hash, "throughSequence": summary.covers_through_sequence},
+                        workspace={"id": run.workspace_id, "revision": run.workspace_revision,
+                            "mountManifestHash": run.workspace_mount_manifest_hash},
+                        context_limit=budget.context_limit_tokens, input_budget=budget.input_budget_tokens,
+                    ))):
+                    summary = await self._await_with_cancellation(
+                        self._compaction_service.compact(
+                            conversation_id=run.conversation_id,
+                            provider_id=run.provider_id,
+                            model_id=run.model_id,
+                            previous=summary,
+                            messages=candidates,
+                            provider_endpoint=provider_endpoint,
+                        ),
+                        cancellation_event,
+                    )
                 if summary.covers_through_sequence <= coverage:
                     raise _ContextPreparationFailed
+                await asyncio.to_thread(
+                    self._repository.append_run_event,
+                    run.id,
+                    RunEventType.CONTEXT_COMPACTION_COMPLETED,
+                    {
+                        "schemaVersion": 1,
+                        "compactionId": compaction_id,
+                        "throughSequence": summary.covers_through_sequence,
+                        "inputTokens": summary.input_tokens,
+                        "outputTokens": summary.output_tokens,
+                    },
+                )
                 force_compaction_pending = False
+                last_compaction_id = compaction_id
                 compaction_index += 1
-            except ContextLimitExceeded:
+            except (_RunCancelled, asyncio.CancelledError):
+                if compaction_started:
+                    await asyncio.to_thread(
+                        self._repository.append_run_event, run.id,
+                        RunEventType.CONTEXT_COMPACTION_CANCELLED,
+                        {"schemaVersion": 1, "compactionId": compaction_id, "reason": "cancelled"},
+                    )
                 raise
-            except ValueError as error:
-                raise _ContextPreparationFailed from error
+            except Exception as error:
+                if compaction_started:
+                    await asyncio.to_thread(
+                        self._repository.append_run_event, run.id,
+                        RunEventType.CONTEXT_COMPACTION_FAILED,
+                        {
+                            "schemaVersion": 1, "compactionId": compaction_id,
+                            "errorCode": "context_limit" if isinstance(error, ContextLimitExceeded)
+                            else "provider_failed" if isinstance(error, ModelGatewayError)
+                            else "preparation_failed",
+                        },
+                    )
+                if isinstance(error, ValueError):
+                    raise _ContextPreparationFailed from error
+                raise
             _LOGGER.info(
                 "context compacted run_id=%s through_sequence=%s input_tokens=%s output_tokens=%s",
                 run.id,
