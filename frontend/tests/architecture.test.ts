@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 type Boundary =
+  | "ui"
   | "api"
   | "i18n"
   | "ai-settings"
@@ -20,6 +21,7 @@ const sourceFiles = import.meta.glob("../src/**/*.{ts,tsx}", {
 }) as Record<string, string>;
 
 const allowedDependencies: Record<Boundary, ReadonlySet<Boundary>> = {
+  ui: new Set(["ui"]),
   api: new Set(["api", "i18n"]),
   i18n: new Set(["i18n"]),
   "ai-settings": new Set(["ai-settings", "api", "i18n"]),
@@ -27,6 +29,7 @@ const allowedDependencies: Record<Boundary, ReadonlySet<Boundary>> = {
   "conversation-settings": new Set(["conversation-settings", "api", "i18n"]),
   "app-info": new Set(["app-info", "api", "i18n"]),
   chat: new Set([
+    "ui",
     "chat",
     "ai-settings",
     "general-settings",
@@ -45,6 +48,7 @@ const allowedDependencies: Record<Boundary, ReadonlySet<Boundary>> = {
     "i18n",
   ]),
   app: new Set([
+    "ui",
     "app",
     "ai-settings",
     "general-settings",
@@ -59,6 +63,7 @@ const allowedDependencies: Record<Boundary, ReadonlySet<Boundary>> = {
 
 function boundary(path: string): Boundary | null {
   const normalized = path.replaceAll("\\", "/");
+  if (normalized.includes("/src/ui/")) return "ui";
   if (normalized.includes("/src/api/")) return "api";
   if (normalized.includes("/src/i18n/")) return "i18n";
   if (normalized.includes("/src/features/ai-settings/")) return "ai-settings";

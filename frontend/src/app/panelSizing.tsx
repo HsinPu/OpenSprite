@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { PanelResizeHandle as ResizeHandle } from "../ui/PanelResizeHandle";
 
 export type PanelSide = "left" | "right";
 export type PanelWidths = Record<PanelSide, number>;
@@ -50,38 +51,6 @@ export function usePanelSizing(leftOpen: boolean, rightOpen: boolean) {
   return { actual, maximum, change, reset };
 }
 
-export function PanelResizeHandle({ side, width, maximum, label, hint, onChange, onReset }: {
-  side: PanelSide; width: number; maximum: number; label: string; hint: string;
-  onChange: (width: number) => void; onReset: () => void;
-}) {
-  const drag = useRef<{ id: number; x: number; width: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-  return <div role="separator" aria-orientation="vertical" aria-label={label}
-    aria-valuemin={PANEL_LIMITS[side].min} aria-valuemax={Math.round(maximum)} aria-valuenow={Math.round(width)}
-    tabIndex={0} title={`${label} — ${hint}`} className={`panel-resize-handle panel-resize-handle--${side}${dragging ? " is-dragging" : ""}`}
-    onDoubleClick={onReset}
-    onKeyDown={event => {
-      if (event.key === "Home") { event.preventDefault(); onReset(); }
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      onChange(width + (event.key === "ArrowRight" ? 10 : -10) * (side === "left" ? 1 : -1));
-    }}
-    onPointerDown={event => {
-      if (event.button !== 0 || !event.isPrimary) return;
-      event.preventDefault(); event.currentTarget.focus();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = { id: event.pointerId, x: event.clientX, width }; setDragging(true);
-    }}
-    onPointerMove={event => {
-      if (drag.current?.id !== event.pointerId) return;
-      onChange(drag.current.width + (event.clientX - drag.current.x) * (side === "left" ? 1 : -1));
-    }}
-    onPointerUp={event => {
-      if (drag.current?.id !== event.pointerId) return;
-      drag.current = null; setDragging(false);
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }}
-    onPointerCancel={() => { drag.current = null; setDragging(false); }}
-    onLostPointerCapture={() => { drag.current = null; setDragging(false); }}
-  />;
+export function PanelResizeHandle(props: Omit<Parameters<typeof ResizeHandle>[0], "minimum"> & { minimum?: number }) {
+  return <ResizeHandle {...props} minimum={props.minimum ?? PANEL_LIMITS[props.side].min} />;
 }

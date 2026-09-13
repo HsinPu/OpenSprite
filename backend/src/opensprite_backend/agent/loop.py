@@ -306,6 +306,11 @@ class AgentLoop:
                 run_id=run_id,
                 workspace=workspace,
             )
+            capability = await self._await_with_cancellation(
+                self._resolve_run_capability(run, provider_endpoint), cancellation_event)
+            if not capability.supports_tools:
+                availability = ToolAvailabilitySnapshot(frozenset())
+                system_prompt += "\nTool calling is disabled for this model. No tools are available. Do not simulate tool calls with JSON text. Explain this limitation if a tool is requested."
             if self._delegation is not None and agents is not None and agents.available:
                 capability = await self._await_with_cancellation(
                     self._resolve_run_capability(run, provider_endpoint), cancellation_event)

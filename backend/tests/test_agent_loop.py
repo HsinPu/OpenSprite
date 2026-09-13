@@ -1202,6 +1202,30 @@ async def test_disabled_tool_is_not_advertised_or_executed(
 
 
 @async_test
+async def test_model_without_tool_capability_does_not_advertise_or_execute_tools(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    class NoTools(TestCapabilityResolver):
+        async def resolve(self, provider_id, model_id):
+            return replace(await super().resolve(provider_id, model_id), supports_tools=False)
+
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    tool = LookupTool()
+    gateway = ScriptedGateway([
+        [ModelToolCall("call-1", "lookup_note", {"query": "today"}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+        [ModelTextDelta("Tool calling is disabled."), ModelCompleted(ModelFinishReason.FINAL)],
+    ])
+    result = await AgentLoop(repository=repository, gateway=gateway,
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        capability_resolver=NoTools()).execute(run.id, asyncio.Event())
+    assert result.status is RunStatus.COMPLETED
+    assert tool.calls == []
+    assert all(request.tools == () for request in gateway.requests)
+    assert "Tool calling is disabled for this model" in gateway.requests[0].messages[0].content
+
+
+@async_test
 async def test_production_calculator_returns_result_to_the_model(
     tmp_path: Path,
 ) -> None:

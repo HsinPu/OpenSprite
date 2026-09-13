@@ -2,6 +2,8 @@
 import { createRoot } from "react-dom/client";
 import { RunDiagnostics } from "../src/features/chat/RunDiagnostics";
 import type { RunEvent } from "../src/api/agentChat";
+import "../src/features/chat/ChatWorkspace.css";
+import "../src/app/app.css";
 const runId = "e7527bf5-81c9-4534-908c-a9a9bc501f26";
 const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
 window.fetch = async (input) => {
@@ -19,6 +21,11 @@ window.fetch = async (input) => {
         historyMessageIds: [conversationId], summary: null, skills: [], workspace: null,
       },
     } }];
-  return new Response(JSON.stringify({ events, nextAfterSequence: cursor < 2 ? cursor + 1 : null }));
+  if (cursor > 0) events[0] = { ...events[0], createdAt: "2026-09-12T00:00:01Z", data: {
+    schemaVersion: 1, requestId: runId, attemptId: conversationId, attemptNumber: 1,
+    purpose: "main", retryOfAttemptId: null, retryCause: null, compactionId: null,
+    parentRequestId: null, status: "completed", finishReason: "final", inputTokens: 3, outputTokens: 8,
+  } };
+  return new Response(JSON.stringify({ events, nextAfterSequence: cursor === 0 ? 1 : null }));
 };
-createRoot(document.getElementById("root")!).render(<main><h1>合成資料診斷驗證</h1><RunDiagnostics runId={runId} conversationId={conversationId} /></main>);
+createRoot(document.getElementById("root")!).render(<main><h1>合成資料診斷驗證</h1><details className="chat-workspace__record-details" style={{ maxWidth: 320 }}><summary><span>執行紀錄</span><RunDiagnostics runId={runId} conversationId={conversationId} /></summary><p>此為合成資料，不會呼叫模型或讀取使用者資料。</p></details></main>);

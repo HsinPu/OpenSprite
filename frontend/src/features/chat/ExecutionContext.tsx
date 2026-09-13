@@ -260,7 +260,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
             </section>
 
             <details className="chat-workspace__record-details" open={run.status === "failed" || run.status === "interrupted"}>
-              <summary><span>{t("execution.record")}</span><DownOutlined className="chat-workspace__record-chevron" /></summary>
+              <summary><span>{t("execution.record")}</span><span className="run-diagnostics__entry-actions"><RunDiagnostics key={run.id} runId={run.id} conversationId={run.conversationId} run={run} modelName={modelName} /><DownOutlined className="chat-workspace__record-chevron" /></span></summary>
               {steps.length > 0 ? (
                 <ol className="chat-workspace__process-list" aria-label={t("execution.eventList")}>
                   {steps.map((step) => (
@@ -274,7 +274,6 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
               ) : <p>{t("execution.waitingEvents")}</p>}
               {run.error ? <p className="chat-workspace__record-error">{agentChatErrorText(new AgentChatApiError(run.error.code), t)}</p> : null}
             </details>
-            <RunDiagnostics key={run.id} runId={run.id} conversationId={run.conversationId} />
           </>
         ) : (
           <div className="chat-workspace__context-empty">
