@@ -104,6 +104,11 @@ and must not be claimed.
 
 ## Frontend engineering, UI/UX, and design standards
 
+This section consolidates the user-provided 85-rule frontend standard. It is
+the canonical project frontend guidance, not optional visual inspiration.
+The numbered sections below preserve its requirements while combining repeated
+rules; the source-to-section mapping is recorded at the end of this section.
+
 These rules apply to all AI coding agents (including Codex) and human developers
 creating, modifying, refactoring, or reviewing frontend code unless explicitly
 instructed otherwise.
@@ -402,3 +407,31 @@ components/patterns, Ant Design, clarity over decoration, and function over nove
 Before finishing significant frontend work, ask: “Does this interface feel like
 a mature working product inspired by Stripe and Linear, implemented consistently
 with Ant Design?” If not, continue improving it.
+
+### 13. Original rule coverage
+
+The supplied frontend standard is recorded here as one maintained set of rules.
+Do not append a second competing copy or interpret its example palette/layout
+as permission to overwrite intentional product decisions.
+
+| Original rules | Consolidated sections above |
+| --- | --- |
+| 1–3: philosophy, formula, product type | 1 |
+| 4–5: Ant Design and UI library boundaries | 2 |
+| 6–8: theme values and implementation | 3 |
+| 9–19: palette, hierarchy, density, spacing, typography | 4 |
+| 20–23: layout, sidebar, top bar, page header | 5 |
+| 24–26: buttons and icons | 6 |
+| 27–36: tables, dates, statuses, filters, search | 7 |
+| 37–43: forms, settings, details | 8 |
+| 44–46: lists, toolbars, tabs | 5 |
+| 47–49: modals, drawers, cards | 8 |
+| 50–51: KPI and charts | 7 |
+| 52–55: empty, loading, error, destructive actions | 6 |
+| 56–61: responsive, accessibility, states, motion | 9 |
+| 62–64: copy, navigation, keyboard efficiency | 6, 5, 9 |
+| 65–67: CSS, important, internal overrides | 3 |
+| 68–69: reuse and abstraction | 2 |
+| 70–76: responsibilities, types, state, API, scope | 10, 6 |
+| 77–79: preparation, reference roles, workflow | 11, 1 |
+| 80–85: review, visual standard, completion, decisions | 12 |
