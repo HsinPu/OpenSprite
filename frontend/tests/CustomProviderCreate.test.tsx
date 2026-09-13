@@ -40,9 +40,14 @@ describe("compact custom provider operations", () => {
     expect(screen.queryByLabelText("Model ID")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
     expect(screen.getByLabelText("Model ID")).toBeTruthy();
+    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "支援工具呼叫" }));
+    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
     expect(screen.queryByLabelText("Model ID")).toBeNull();
     expect(controller.remove).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
+    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("requires confirmation before removing a custom provider", async () => {
@@ -68,6 +73,7 @@ describe("compact custom provider operations", () => {
     expect(screen.getByText("沒有符合的模型")).toBeTruthy();
     fireEvent.change(search, { target: { value: "GLM" } });
     fireEvent.click(screen.getByRole("button", { name: /編\s*輯/ }));
+    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(false);
     fireEvent.change(screen.getByLabelText("Context 上限"), { target: { value: "1000000" } });
     fireEvent.click(screen.getByRole("button", { name: /儲\s*存/ }));
     await waitFor(() => expect(controller.editModel).toHaveBeenCalledWith(populated, "model-1", expect.objectContaining({ contextLimit: 1000000, outputLimit: 2048 })));

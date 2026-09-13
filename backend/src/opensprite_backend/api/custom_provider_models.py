@@ -53,7 +53,7 @@ class ProviderModelRequest(ProviderRevisionRequest):
     name: str = Field(min_length=1, max_length=256)
     contextLimit: int = Field(ge=1024)
     outputLimit: int = Field(ge=1)
-    tools: bool = False
+    tools: bool = True
 
     @model_validator(mode="after")
     def limits_policy(self) -> "ProviderModelRequest":

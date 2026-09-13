@@ -97,7 +97,7 @@ class CustomProviderService:
                     if model_id not in manual_ids:
                         models.append(existing.get(model_id) or CustomModel(
                             key=str(uuid4()), model_id=model_id, name=model_id,
-                            context_limit=8192, output_limit=2048, source="discovered"))
+                            context_limit=8192, output_limit=2048, tools=True, source="discovered"))
             except ValueError:
                 raise CatalogError("invalid_request") from None
             return self._replace_models(current, tuple(models))

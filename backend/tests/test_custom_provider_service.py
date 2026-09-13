@@ -37,6 +37,7 @@ def test_model_refresh_preserves_manual_metadata_and_credentials(tmp_path):
     assert refreshed.models[0] == model
     assert len(refreshed.models) == 2
     remote = refreshed.models[1]
+    assert remote.tools is True
     again = service.merge_discovered_models(provider.id, ["remote"], expected_revision=3)
     assert again.models == (model, remote)
     assert credentials.get(f"provider:{provider.id}:bearer") == "private"
@@ -47,6 +48,15 @@ def test_model_refresh_preserves_manual_metadata_and_credentials(tmp_path):
     assert snapshot.models[0].model_id == "custom-model"
     assert snapshot.models[0].context_window_tokens == 32000
     assert snapshot.models[0].supports_tools is True
+
+
+def test_model_request_defaults_tools_on_but_preserves_explicit_off():
+    from opensprite_backend.api.custom_provider_models import ProviderModelRequest
+
+    fields = dict(modelId="test", name="Test", contextLimit=8192,
+                  outputLimit=2048, expectedRevision=1)
+    assert ProviderModelRequest(**fields).tools is True
+    assert ProviderModelRequest(**fields, tools=False).tools is False
 
 
 def test_endpoint_snapshot_is_not_changed_by_later_configuration(tmp_path):

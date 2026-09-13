@@ -29,7 +29,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
   const [modelName, setModelName] = useState("");
   const [contextLimit, setContextLimit] = useState(8192);
   const [outputLimit, setOutputLimit] = useState(2048);
-  const [tools, setTools] = useState(false);
+  const [tools, setTools] = useState(true);
   useEffect(() => {
     if (!open && !removingProvider && !editingModels) return;
     onOverlayChange?.(true);
@@ -68,7 +68,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
         <div className="settings-custom-model-editor">
         {controller.error ? <Alert type="error" title={customProviderErrorText(controller.error, t)} /> : null}
         {!modelFormOpen ? <>
-        <div className="custom-model-toolbar"><Input.Search allowClear aria-label={t("models.custom.search")} placeholder={t("models.custom.search")} value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} /><Button type="primary" disabled={controller.saving} onClick={() => { setEditingModelKey(null); setModelId(""); setModelName(""); setContextLimit(8192); setOutputLimit(2048); setTools(false); setModelFormOpen(true); }}>{t("models.custom.addModel")}</Button></div>
+        <div className="custom-model-toolbar"><Input.Search allowClear aria-label={t("models.custom.search")} placeholder={t("models.custom.search")} value={modelSearch} onChange={(event) => setModelSearch(event.target.value)} /><Button type="primary" disabled={controller.saving} onClick={() => { setEditingModelKey(null); setModelId(""); setModelName(""); setContextLimit(8192); setOutputLimit(2048); setTools(true); setModelFormOpen(true); }}>{t("models.custom.addModel")}</Button></div>
         <div className="custom-model-list">
         {!provider.models.some((model) => `${model.name} ${model.model_id}`.normalize("NFC").toLowerCase().includes(modelSearch.trim().normalize("NFC").toLowerCase())) ? <p role="status">{t("models.custom.noResults")}</p> : null}
         {provider.models.filter((model) => `${model.name} ${model.model_id}`.normalize("NFC").toLowerCase().includes(modelSearch.trim().normalize("NFC").toLowerCase())).map((model) => <div className="custom-model-row" key={model.key}><div><strong>{model.name}</strong><div className="custom-model-id">{model.model_id}</div><small>{t("models.custom.context")}: {model.context_limit.toLocaleString()} · {t("models.custom.output")}: {model.output_limit.toLocaleString()}</small><div className="custom-model-source">{t(model.source === "manual" ? "models.custom.manualCapacity" : "models.custom.fallbackCapacity")}</div></div>
