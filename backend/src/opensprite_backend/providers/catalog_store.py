@@ -47,6 +47,7 @@ class CustomProvider(BaseModel):
     base_url: str
     auth_mode: Literal["none", "bearer"]
     allow_insecure_local: bool = False
+    non_streaming_tools: bool = False
     created_at: str
     updated_at: str
     models: tuple[CustomModel, ...] = ()

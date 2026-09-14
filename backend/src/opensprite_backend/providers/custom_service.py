@@ -33,9 +33,9 @@ class CustomProviderService:
         models = tuple(ModelCapability(provider.id, model.model_id, model.name,
             model.context_limit, model.output_limit, model.tools) for model in provider.models)
         return ProviderEndpointSnapshot(provider.id, provider.revision, provider.protocol,
-            provider.base_url, provider.auth_mode, models)
+            provider.base_url, provider.auth_mode, models, provider.non_streaming_tools)
 
-    def save(self, *, provider_id: str | None, name: str, base_url: str, auth_mode: str, allow_insecure_local: bool, expected_revision: int, secret: str | None) -> CustomProvider:
+    def save(self, *, provider_id: str | None, name: str, base_url: str, auth_mode: str, allow_insecure_local: bool, expected_revision: int, secret: str | None, non_streaming_tools: bool = False) -> CustomProvider:
         """Called inside the shared application mutation gate after busy checks."""
         with self.store.gate:
             catalog = self.list()
@@ -63,6 +63,7 @@ class CustomProviderService:
             try:
                 record = CustomProvider(id=identifier, name=name, revision=previous.revision + 1 if previous else 1,
                     base_url=base_url, auth_mode=auth_mode, allow_insecure_local=allow_insecure_local,
+                    non_streaming_tools=non_streaming_tools,
                     created_at=previous.created_at if previous else now, updated_at=now,
                     models=previous.models if previous else ())
                 providers = tuple(record if p.id == identifier else p for p in catalog.providers) if previous else (*catalog.providers, record)

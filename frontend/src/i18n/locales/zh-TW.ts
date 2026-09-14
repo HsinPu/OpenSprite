@@ -102,6 +102,8 @@ export const zhTWMessages = {
   "models.custom.auth": "認證方式",
   "models.custom.none": "不使用認證",
   "models.custom.allowHttp": "允許未加密的本機／內網 HTTP",
+  "models.custom.nonStreamingTools": "工具呼叫使用非串流（相容模式）",
+  "models.custom.nonStreamingToolsHelp": "僅影響帶有工具的 API 請求，需等待完整回應。適用於串流工具格式異常的供應商；不會自動重送或執行文字 JSON。",
   "models.custom.httpWarning": "HTTP 不會加密傳輸內容，僅適合可信任的本機或內網服務。",
   "subagents.title": "Subagents",
   "subagents.loading": "正在載入 Subagents…",

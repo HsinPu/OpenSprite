@@ -61,6 +61,16 @@ class ChatCompletionsInferenceAdapter:
             if self._openrouter_extensions and request.model_id != "openrouter/auto":
                 body["provider"] = {"require_parameters": True}
         selected_effort = effort(request.response_mode)
+        if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
+            body["stream"] = False
+            body.pop("stream_options", None)
+            async for raw in self._http.payloads(
+                headers={**({"Authorization": f"Bearer {api_key}"} if self._bearer_auth else {}),
+                         "Accept": "application/json", "Content-Type": "application/json"}, body=body,
+            ):
+                for event in _complete_response(load_json_object(raw)):
+                    yield event
+            return
         if self._openrouter_extensions and selected_effort is not None:
             body["reasoning"] = {
                 "effort": selected_effort,
@@ -236,6 +246,51 @@ def _merge_tool_delta(
             fragment.arguments += arguments
             if len(fragment.arguments.encode("utf-8")) > 65536:
                 raise invalid_response()
+
+
+def _complete_response(payload: dict[str, object]) -> list[ModelStreamEvent]:
+    """Validate the entire response before exposing text or executable calls."""
+    choices = payload.get("choices")
+    if type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict:
+        raise invalid_response()
+    choice = choices[0]
+    message = choice.get("message")
+    if choice.get("index") != 0 or type(message) is not dict or message.get("role") != "assistant":
+        raise invalid_response()
+    content = message.get("content")
+    if content is not None and (type(content) is not str or len(content) > 1048576):
+        raise invalid_response()
+    calls = message.get("tool_calls")
+    events: list[ModelStreamEvent] = []
+    reason = choice.get("finish_reason")
+    if calls is not None and type(calls) is not list:
+        raise invalid_response()
+    if calls:
+        if reason != "tool_calls" or len(calls) > 128:
+            raise invalid_response()
+        ids: set[str] = set()
+        for call in calls:
+            if type(call) is not dict or call.get("type") != "function" or type(call.get("function")) is not dict:
+                raise invalid_response()
+            function = call["function"]
+            if type(function.get("arguments")) is not str:
+                raise invalid_response()
+            try:
+                parsed = ModelToolCall(call.get("id"), function.get("name"), load_json_arguments(function.get("arguments")))
+            except (ValueError, TypeError) as error:
+                raise invalid_response() from error
+            if parsed.call_id in ids:
+                raise invalid_response()
+            ids.add(parsed.call_id)
+            events.append(parsed)
+        finish = ModelFinishReason.TOOL_CALLS
+    elif reason in {"stop", "length"}:
+        finish = ModelFinishReason.FINAL if reason == "stop" else ModelFinishReason.OUTPUT_LIMIT
+    else:
+        raise invalid_response()
+    text_events = [ModelTextDelta(content[i:i + 16384]) for i in range(0, len(content or ""), 16384)]
+    usage = _usage(payload.get("usage"))
+    return [*text_events, *events, *([usage] if usage is not None else []), ModelCompleted(finish)]
 
 
 def _usage(value: object) -> ModelUsage | None:

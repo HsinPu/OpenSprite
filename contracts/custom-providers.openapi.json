@@ -1310,6 +1310,10 @@
           "allow_insecure_local": {
             "type": "boolean"
           },
+          "non_streaming_tools": {
+            "type": "boolean",
+            "default": false
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1405,6 +1409,10 @@
             "type": "boolean",
             "default": false
           },
+          "nonStreamingTools": {
+            "type": "boolean",
+            "default": false
+          },
           "apiKey": {
             "type": [
               "string",
@@ -1449,6 +1457,10 @@
             ]
           },
           "allowInsecureLocal": {
+            "type": "boolean",
+            "default": false
+          },
+          "nonStreamingTools": {
             "type": "boolean",
             "default": false
           },

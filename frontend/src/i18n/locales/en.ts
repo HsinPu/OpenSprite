@@ -104,6 +104,8 @@ export const enMessages = {
   "models.custom.auth": "Authentication",
   "models.custom.none": "No authentication",
   "models.custom.allowHttp": "Allow unencrypted local/private HTTP",
+  "models.custom.nonStreamingTools": "Use non-streaming tool requests (compatibility)",
+  "models.custom.nonStreamingToolsHelp": "Requests with tools wait for a complete response. For providers with broken streaming tool calls; no automatic retries or execution of JSON text.",
   "models.custom.httpWarning": "HTTP does not encrypt traffic. Use only for trusted local or private services.",
   "subagents.title": "Subagents",
   "subagents.loading": "Loading Subagents…",

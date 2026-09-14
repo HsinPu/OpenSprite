@@ -64,8 +64,19 @@ class NativeHttpAdapter:
                     follow_redirects=False,
                 ) as response:
                     await self._raise_for_response(response)
-                    async for payload in iter_sse_data(response):
-                        yield payload
+                    if body.get("stream") is False:
+                        data = bytearray()
+                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                            if len(data) + len(chunk) > 4 * 1024 * 1024:
+                                raise StreamFormatError("response too large")
+                            data.extend(chunk)
+                        try:
+                            yield bytes(data).decode("utf-8")
+                        except UnicodeDecodeError as error:
+                            raise StreamFormatError("invalid encoding") from error
+                    else:
+                        async for payload in iter_sse_data(response):
+                            yield payload
         except ModelGatewayError:
             raise
         except (TimeoutError, httpx.TimeoutException) as error:

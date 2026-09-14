@@ -22,6 +22,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
   const [auth, setAuth] = useState<"none" | "bearer">("bearer");
   const [key, setKey] = useState("");
   const [allowHttp, setAllowHttp] = useState(false);
+  const [nonStreamingTools, setNonStreamingTools] = useState(false);
   const [editingModels, setEditingModels] = useState<string | null>(null);
   const [modelFormOpen, setModelFormOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
@@ -38,7 +39,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
   const close = () => { if (!controller.saving) { setOpen(false); setKey(""); } };
   const content = <Form layout="vertical" onFinish={async () => {
     const draft = { name, baseUrl: url, protocol: "openai_chat_completions" as const, authMode: auth,
-      allowInsecureLocal: allowHttp, ...(auth === "bearer" && key ? { apiKey: key } : {}) };
+      allowInsecureLocal: allowHttp, nonStreamingTools, ...(auth === "bearer" && key ? { apiKey: key } : {}) };
     const saved = editingProvider ? await controller.update(editingProvider, draft) : await controller.create(draft);
     if (saved) { setKey(""); setOpen(false); await onChanged(); }
   }}>
@@ -49,6 +50,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
     {auth === "bearer" ? <Form.Item label="API Key" htmlFor={`${formId}-key`}><Input.Password id={`${formId}-key`} value={key} autoComplete="new-password" onChange={(event) => setKey(event.target.value)} disabled={controller.saving} /></Form.Item> : null}
     <Form.Item><Checkbox checked={allowHttp} onChange={(event) => setAllowHttp(event.target.checked)} disabled={controller.saving}>{t("models.custom.allowHttp")}</Checkbox></Form.Item>
     {allowHttp ? <Alert type="warning" title={t("models.custom.httpWarning")} /> : null}
+    <Form.Item extra={t("models.custom.nonStreamingToolsHelp")}><Checkbox checked={nonStreamingTools} onChange={(event) => setNonStreamingTools(event.target.checked)} disabled={controller.saving}>{t("models.custom.nonStreamingTools")}</Checkbox></Form.Item>
     {editingProvider && auth === "bearer" ? <p>{t("models.custom.keepKey")}</p> : null}
     <Button type="primary" htmlType="submit" loading={controller.saving} disabled={controller.loading || controller.catalog === null || !name.trim() || !url.trim() || (auth === "bearer" && !key && !editingProvider)}>{t("common.save")}</Button>
   </Form>;
@@ -57,7 +59,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
     {controller.catalog?.providers.map((provider) => <section key={provider.id} className="settings-service-card">
       <div className="settings-service-identity"><ApiOutlined className="settings-icon" aria-hidden="true" /><span><strong>{provider.name}</strong><small>{provider.models.length} {t("models.custom.models")} · {provider.base_url}</small></span></div>
       <div className="settings-service-actions">
-        <Button disabled={controller.saving} onClick={() => { setEditingProvider(provider); setName(provider.name); setUrl(provider.base_url); setAuth(provider.auth_mode); setKey(""); setAllowHttp(provider.allow_insecure_local); setOpen(true); }}>{t("models.manage")}</Button>
+        <Button disabled={controller.saving} onClick={() => { setEditingProvider(provider); setName(provider.name); setUrl(provider.base_url); setAuth(provider.auth_mode); setKey(""); setAllowHttp(provider.allow_insecure_local); setNonStreamingTools(provider.non_streaming_tools ?? false); setOpen(true); }}>{t("models.manage")}</Button>
         <Dropdown trigger={["click"]} getPopupContainer={() => container ?? document.body} menu={{ items: [
           { key: "models", label: t("models.custom.models"), onClick: () => { setModelFormOpen(false); setModelSearch(""); setEditingModels(provider.id); } },
           { type: "divider" },
@@ -95,7 +97,7 @@ export function CustomProviderCreate({ onChanged, container, hasCustomProviders,
     </section>)}
     <section className="settings-service-card" aria-label={t("models.providerConnection", { provider: t("models.custom.entry") })}>
       <div className="settings-service-identity"><ApiOutlined className="settings-icon" aria-hidden="true" /><span><strong>{t("models.custom.entry")}</strong><small>{t("models.custom.entryDescription")}</small></span></div>
-      <div className="settings-service-actions"><button type="button" className="settings-secondary-button" disabled={controller.saving} onClick={() => { setEditingProvider(null); setName(""); setUrl(""); setKey(""); setAuth("bearer"); setAllowHttp(false); setOpen(true); void controller.reload(); }}>{t("models.connect")}</button></div>
+      <div className="settings-service-actions"><button type="button" className="settings-secondary-button" disabled={controller.saving} onClick={() => { setEditingProvider(null); setName(""); setUrl(""); setKey(""); setAuth("bearer"); setAllowHttp(false); setNonStreamingTools(false); setOpen(true); void controller.reload(); }}>{t("models.connect")}</button></div>
     </section>
     <Modal open={removingProvider !== null} afterClose={() => menuOpener.current?.focus()} getContainer={container ?? false} title={t("models.custom.removeConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} confirmLoading={controller.saving} okButtonProps={{ danger: true }} onCancel={() => { if (!controller.saving) setRemovingProvider(null); }} onOk={async () => { if (removingProvider && await controller.remove(removingProvider)) { setRemovingProvider(null); await onChanged(); } }}>
       <p>{removingProvider?.name}</p>

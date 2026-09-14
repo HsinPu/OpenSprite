@@ -69,7 +69,7 @@ async def update_custom_provider(provider_id: str, request: Request):
     try:
         payload = await mutation_body(request, ProviderUpdateRequest)
         result = await mutations(request).update(provider_id, name=payload.name,
-            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal,
+            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal, non_streaming_tools=payload.nonStreamingTools,
             expected_revision=payload.expectedRevision, secret=payload.apiKey.get_secret_value() if payload.apiKey else None)
         return result.model_dump(mode="json")
     except CatalogError as error:
@@ -114,7 +114,7 @@ async def create_provider(request: Request):
     try:
         payload = await mutation_body(request, ProviderCreateRequest)
         result = await asyncio.to_thread(service(request).save, provider_id=None, name=payload.name,
-            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal,
+            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal, non_streaming_tools=payload.nonStreamingTools,
             expected_revision=payload.expectedRevision, secret=payload.apiKey.get_secret_value() if payload.apiKey else None)
         return JSONResponse(status_code=201, content=result.model_dump(mode="json"))
     except CatalogError as error:

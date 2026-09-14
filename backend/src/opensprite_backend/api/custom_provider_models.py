@@ -14,6 +14,7 @@ class ProviderCreateRequest(BaseModel):
     protocol: Literal["openai_chat_completions"]
     authMode: Literal["none", "bearer"]
     allowInsecureLocal: bool = False
+    nonStreamingTools: bool = False
     apiKey: SecretStr | None = Field(default=None, repr=False, exclude=True)
     expectedRevision: int = Field(ge=0)
 

@@ -104,6 +104,8 @@ export const jaMessages = {
   "models.custom.auth": "認証方式",
   "models.custom.none": "認証なし",
   "models.custom.allowHttp": "ローカル／プライベート HTTP を許可",
+  "models.custom.nonStreamingTools": "ツール呼び出しを非ストリーミングにする（互換モード）",
+  "models.custom.nonStreamingToolsHelp": "ツールを含むリクエストは応答の完了を待ちます。自動再送や JSON テキストの実行は行いません。",
   "models.custom.httpWarning": "HTTP は通信を暗号化しません。信頼できるローカルサービスでのみ使用してください。",
   "subagents.title": "Subagents",
   "subagents.loading": "Subagents を読み込み中…",

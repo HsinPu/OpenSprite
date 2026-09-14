@@ -33,6 +33,16 @@ describe("compact custom provider operations", () => {
     expect(controller.refreshModels).not.toHaveBeenCalled();
   });
 
+  it("saves explicit non-streaming tool compatibility", async () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: /管\s*理/ }));
+    const checkbox = screen.getByRole("checkbox", { name: "工具呼叫使用非串流（相容模式）" }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: /儲\s*存/ }));
+    await waitFor(() => expect(controller.update).toHaveBeenCalledWith(provider, expect.objectContaining({ nonStreamingTools: true })));
+  });
+
   it("retains model editing from the menu", async () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: "Local AI 操作" }));
