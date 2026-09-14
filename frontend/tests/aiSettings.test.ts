@@ -1,8 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AiSettingsApiError, aiSettingsErrorText, getAiSettings, putAiSettings } from "../src/api/aiSettings";
+import { AiSettingsApiError, aiSettingsErrorText, getAiSettings, putAiSettings, putProviderToolPolicy } from "../src/api/aiSettings";
 
 const selection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" } as const;
+const policy = { toolsEnabled: true, transport: "stream", disabledModels: [] } as const;
+
+it.each([[400, "invalid_request"], [503, "settings_store_unavailable"], [500, "internal_error"]] as const)("preserves provider policy error %s/%s", async (status, code) => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code, message: "private", retryable: false } }), { status })));
+  await expect(putProviderToolPolicy("openai", { ...policy, disabledModels: [] })).rejects.toMatchObject({ code });
+});
+
+it("distinguishes policy network failures from malformed responses", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+  await expect(putProviderToolPolicy("openai", { ...policy, disabledModels: [] })).rejects.toMatchObject({ code: "network_error" });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not JSON")));
+  await expect(putProviderToolPolicy("openai", { ...policy, disabledModels: [] })).rejects.toMatchObject({ code: "malformed_response" });
+});
 
 describe("AI settings client", () => {
   it("uses the exact GET and PUT shapes", async () => {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { RunDiagnostics } from "../src/features/chat/RunDiagnostics";
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
@@ -7,7 +7,69 @@ const runId = "e7527bf5-81c9-4534-908c-a9a9bc501f26";
 const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
 const event = (sequence: number): RunEvent => ({ sequence, runId, conversationId,
   type: "context.compaction.started", createdAt: "2026-08-21T08:30:00Z", data: {} });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+const snapshot = (status: RunSnapshot["status"]): RunSnapshot => ({ id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test",
+  workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null,
+  providerId: "openai", modelId: "test", responseMode: "default", status, completionReason: null,
+  error: null, partialText: "", createdAt: event(1).createdAt, startedAt: event(1).createdAt, finishedAt: null });
+
+it.each(["completed", "failed", "cancelled", "interrupted"] as const)("synchronizes after a running snapshot becomes %s and preserves expansion", async status => {
+  const start = { ...event(1), data: { schemaVersion: 1, compactionId: runId, reason: "local_budget", fromSequence: 1, throughSequence: 4, estimatedBeforeTokens: 100, inputBudgetTokens: 200 } };
+  const end = { ...event(2), type: "context.compaction.completed" as const, data: { schemaVersion: 1, compactionId: runId, throughSequence: 4, inputTokens: 100, outputTokens: 20 } };
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ events: [start], nextAfterSequence: null })))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ events: [end], nextAfterSequence: null })));
+  vi.stubGlobal("fetch", fetcher);
+  const view = render(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("running")} />);
+  fireEvent.click(screen.getByRole("button", { name: "開啟診斷明細" }));
+  fireEvent.click(await screen.findByRole("button", { name: /壓縮作業/ }));
+  view.rerender(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot(status)} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: /壓縮作業/ }).textContent).toContain("完成"));
+  expect(screen.getByRole("button", { name: /壓縮作業/ }).getAttribute("aria-expanded")).toBe("true");
+  expect(fetcher.mock.calls[1][0]).toContain("afterSequence=1");
+});
+
+it("polls incrementally without overlapping requests and stops when closed", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ events: [event(1)], nextAfterSequence: null })))
+    .mockImplementation(() => new Promise<Response>(() => {}));
+  vi.stubGlobal("fetch", fetcher);
+  render(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("running")} />);
+  fireEvent.click(screen.getByRole("button", { name: "開啟診斷明細" }));
+  await screen.findByRole("button", { name: /壓縮作業/ });
+  vi.useFakeTimers();
+  // Manual refresh starts one pending request; timers must not start another.
+  fireEvent.click(screen.getByRole("button", { name: "重新載入" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("automatically polls after two seconds without user input", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ events: [event(1)], nextAfterSequence: null })))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ events: [event(2)], nextAfterSequence: null })));
+  vi.stubGlobal("fetch", fetcher);
+  render(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("running")} />);
+  fireEvent.click(screen.getByRole("button", { name: "開啟診斷明細" }));
+  await screen.findByRole("button", { name: /壓縮作業/ });
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2), { timeout: 3500 });
+  expect(fetcher.mock.calls[1][0]).toContain("afterSequence=1");
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+});
+
+it("does a final fetch even when the run finishes during the initial request", async () => {
+  let resolve!: (value: Response) => void;
+  const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(done => { resolve = done; }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ events: [], nextAfterSequence: null })));
+  vi.stubGlobal("fetch", fetcher);
+  const view = render(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("running")} />);
+  fireEvent.click(screen.getByRole("button", { name: "開啟診斷明細" }));
+  view.rerender(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("completed")} />);
+  await act(async () => resolve(new Response(JSON.stringify({ events: [event(1)], nextAfterSequence: null }))));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByText("正在同步最後紀錄…")).toBeNull());
+});
 
 it("explains compaction using the start receipt without inventing an after size", async () => {
   const events: RunEvent[] = [

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Collapse, Descriptions, Drawer, Dropdown, Empty, Popover, Skeleton, Tooltip, Typography } from "antd";
-import { FileSearchOutlined, MoreOutlined } from "@ant-design/icons";
+import { FileSearchOutlined, MoreOutlined, ReloadOutlined } from "@ant-design/icons";
 import { AgentChatApiError, agentChatErrorText, listRunEventHistory, type RunEvent, type RunEventPage, type RunSnapshot } from "../../api/agentChat";
 import { useI18n } from "../../i18n/I18nProvider";
 import { diagnosticExport } from "./diagnosticExport";
@@ -29,6 +29,8 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
   const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [syncedStatus, setSyncedStatus] = useState<RunSnapshot["status"]>();
+  const inFlight = useRef(false);
   const generation = useRef(0);
   const trigger = useRef<HTMLButtonElement>(null);
   const moreTrigger = useRef<HTMLButtonElement>(null);
@@ -36,29 +38,48 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
   const closeScope = () => { setScopeOpen(false); moreTrigger.current?.focus(); };
   useEffect(() => {
     generation.current += 1;
+    inFlight.current = false;
+    setSyncedStatus(undefined);
     setOpen(false); setPage(null); setError(null); setLoading(false); setExportError(false); setScopeOpen(false);
     return () => { generation.current += 1; };
   }, [runId, conversationId]);
 
   async function load(next: number) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     const current = ++generation.current;
+    const requestedStatus = run?.status;
     setLoading(true); setError(null);
     try {
       const result = await listRunEventHistory(runId, next);
       if (generation.current !== current) return;
       if (result.events.some(event => event.conversationId !== conversationId)) throw new Error("mismatched history");
-      setPage(previous => ({ ...result, events: next === 0 ? result.events : [...(previous?.events ?? []), ...result.events] }));
+      setPage(previous => ({ ...result, events: [...new Map([...(previous?.events ?? []), ...result.events].map(event => [event.sequence, event])).values()].sort((a, b) => a.sequence - b.sequence) }));
+      setSyncedStatus(requestedStatus);
     } catch (failure) {
       if (generation.current === current) setError(agentChatErrorText(failure, t));
-    } finally { if (generation.current === current) setLoading(false); }
+    } finally { if (generation.current === current) { inFlight.current = false; setLoading(false); } }
   }
+
+  const active = run?.status === "running" || run?.status === "queued" || run?.status === "cancelling";
+  const cursor = page?.nextAfterSequence ?? page?.events.at(-1)?.sequence ?? 0;
+  const awaitingSync = !!run && syncedStatus !== run.status;
+  useEffect(() => {
+    if (!open || loading || error || !page) return;
+    // Capture the status of each request; a terminal transition during an in-flight
+    // request must cause a final fetch, rather than treating the older snapshot as final.
+    if (awaitingSync) { void load(cursor); return; }
+    if (!active) return;
+    const timer = window.setTimeout(() => void load(cursor), 2000);
+    return () => window.clearTimeout(timer);
+  }, [open, loading, error, page, active, awaitingSync, cursor, run?.status]);
 
   function download() {
     if (!page) return;
     let url: string | undefined;
     try {
       setExportError(false);
-      url = URL.createObjectURL(new Blob([diagnosticExport(runId, page.events, 0, page.nextAfterSequence)], { type: "application/json" }));
+      url = URL.createObjectURL(new Blob([diagnosticExport(runId, page.events, 0, page.nextAfterSequence, !active && !awaitingSync && !error && !loading)], { type: "application/json" }));
       const link = document.createElement("a");
       link.href = url; link.download = `opensprite-diagnostics-${runId}.json`;
       link.click();
@@ -66,7 +87,7 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
     finally { if (url) URL.revokeObjectURL(url); }
   }
 
-  const rows = diagnosticOperations(page?.events ?? [], run?.status, page?.nextAfterSequence != null);
+  const rows = diagnosticOperations(page?.events ?? [], run?.status, page?.nextAfterSequence != null || awaitingSync || !!error || loading);
   const stageLabel = (event: RunEvent) => {
     const purpose = event.data.purpose;
     return event.type === "model.attempt" && (purpose === "main" || purpose === "continuation" || purpose === "compaction")
@@ -75,9 +96,9 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
   const statusLabel = (value: string) => value === "started" || value === "completed" || value === "failed" || value === "cancelled" || value === "partial" || value === "missingEnd" ? t(`diagnostics.${value}`) : t("diagnostics.unknown");
   return <span className="run-diagnostics__entry" onClick={event => event.stopPropagation()}>
     <Tooltip title={t("diagnostics.open")}><Button ref={trigger} type="text" className="run-diagnostics__trigger" aria-label={t("diagnostics.open")} icon={<FileSearchOutlined />} onClick={event => { event.preventDefault(); setOpen(true); setPage(null); void load(0); }} /></Tooltip>
-    {open ? <Drawer rootClassName="run-diagnostics-drawer" title={t("diagnostics.title")} open size={drawerWidth} styles={{ wrapper: { maxWidth: "100vw" } }}
+    {open ? <Drawer rootClassName="run-diagnostics-drawer" title={<span>{t("diagnostics.title")} <Tooltip title={t("diagnostics.retry")}><Button type="text" size="small" aria-label={t("diagnostics.retry")} icon={<ReloadOutlined />} loading={loading} onClick={() => void load(cursor)} /></Tooltip></span>} open size={drawerWidth} styles={{ wrapper: { maxWidth: "100vw" } }}
       extra={<Popover afterOpenChange={visible => { if (visible) scopeClose.current?.focus(); }} trigger={[]} open={scopeOpen} onOpenChange={setScopeOpen} placement="bottomRight" title={t("diagnostics.scope")} content={<div className="run-diagnostics__scope" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); closeScope(); } }}><Typography.Text>{t("diagnostics.range", { from: String(page?.events[0]?.sequence ?? "—"), to: String(page?.events.at(-1)?.sequence ?? "—") })}</Typography.Text>{page?.nextAfterSequence != null ? <Typography.Text>{t("diagnostics.partial")}</Typography.Text> : null}<Typography.Text>{t("diagnostics.description")}</Typography.Text><Button ref={scopeClose} size="small" onClick={closeScope}>{t("diagnostics.closeScope")}</Button></div>}><Dropdown trigger={["click"]} menu={{ items: [{ key: "export", label: t("diagnostics.export"), disabled: loading || !page }, { key: "scope", label: t("diagnostics.scope") }], onClick: ({ key }) => { if (key === "export") download(); else setScopeOpen(true); } }}><Button ref={moreTrigger} type="text" aria-label={t("diagnostics.more")} icon={<MoreOutlined />} /></Dropdown></Popover>}
-      onClose={() => { generation.current += 1; setOpen(false); setScopeOpen(false); setLoading(false); queueMicrotask(() => trigger.current?.focus()); }}>
+      onClose={() => { generation.current += 1; inFlight.current = false; setOpen(false); setScopeOpen(false); setLoading(false); queueMicrotask(() => trigger.current?.focus()); }}>
       {!mobile ? <div className="run-diagnostics__resize"><PanelResizeHandle side="right" width={drawerWidth} minimum={360} maximum={maximumWidth} label={t("diagnostics.resize")} hint={t("diagnostics.resizeHint")} onChange={value => setPreferredWidth(Math.max(360, Math.min(maximumWidth, value)))} onReset={() => setPreferredWidth(560)} /></div> : null}
       <div className="run-diagnostics">
         <section className="run-diagnostics__overview" aria-label={t("diagnostics.result")}>
@@ -91,7 +112,9 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
           </div>
         </section>
         <Typography.Text strong>{t("execution.record")}</Typography.Text>
-        {error ? <Alert type="error" title={error} action={<Button size="small" onClick={() => void load(page?.nextAfterSequence ?? 0)}>{t("diagnostics.retry")}</Button>} /> : null}
+        {awaitingSync && !active && !error ? <Typography.Text type="secondary">{t("diagnostics.syncing")}</Typography.Text> : null}
+        {active ? <Typography.Text type="secondary">{t("diagnostics.liveSnapshot")}</Typography.Text> : null}
+        {error ? <Alert type="error" title={error} action={<Button size="small" disabled={loading} onClick={() => void load(cursor)}>{t("diagnostics.retry")}</Button>} /> : null}
         {exportError ? <Alert type="error" title={t("diagnostics.exportError")} /> : null}
         {loading && !page ? <Skeleton active paragraph={{ rows: 3 }} /> : rows.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("diagnostics.empty")} /> :
           <Collapse ghost size="small" className="run-diagnostics__events" style={{ borderRadius: 0 }} items={rows.map(operation => ({ key: operation.key,

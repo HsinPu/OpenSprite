@@ -7,9 +7,9 @@ export function diagnosticEvents(events: RunEvent[]): RunEvent[] {
     : event.type.startsWith("context.compaction.") && validCompactionPayload(event.type, event.data));
 }
 
-export function diagnosticExport(runId: string, events: RunEvent[], afterSequence: number, nextAfterSequence: number | null): string {
+export function diagnosticExport(runId: string, events: RunEvent[], afterSequence: number, nextAfterSequence: number | null, synchronized = true): string {
   return JSON.stringify({ schemaVersion: 1, runId, scope: "loaded-page", afterSequence, nextAfterSequence,
-    coversCurrentHistory: afterSequence === 0 && nextAfterSequence === null,
+    coversCurrentHistory: synchronized && afterSequence === 0 && nextAfterSequence === null,
     runCompletionAsserted: false,
     contentIncluded: false,
     events: diagnosticEvents(events).filter(event => event.runId === runId).map(event => ({

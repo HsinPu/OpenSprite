@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { NativeProviderTools } from "../src/features/settings/NativeProviderTools";
-import { getAiSettings, putProviderToolPolicy } from "../src/api/aiSettings";
+import { AiSettingsApiError, getAiSettings, putProviderToolPolicy } from "../src/api/aiSettings";
 vi.mock("../src/api/aiSettings", async importOriginal => ({ ...await importOriginal<typeof import("../src/api/aiSettings")>(), getAiSettings: vi.fn(), putProviderToolPolicy: vi.fn() }));
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(getAiSettings).mockResolvedValue({ model:null,responseMode:"default",outputContinuation:"5",responseDelivery:"stream",logFullPrompts:false }); });
 it("loads legacy defaults and saves a provider-only tool policy", async () => {
@@ -19,4 +19,18 @@ it("shows a load failure and does not allow saving unknown settings", async () =
   fireEvent.click(screen.getByRole("button", {name:"工具設定"}));
   expect(await screen.findByRole("alert")).not.toBeNull();
   expect((screen.getByRole("button", {name:/儲/}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("retains inputs and permits retry after a failed save", async () => {
+  vi.mocked(putProviderToolPolicy).mockRejectedValueOnce(new AiSettingsApiError("invalid_request"));
+  render(<NativeProviderTools provider="openai" name="OpenAI" />);
+  fireEvent.click(screen.getByRole("button", { name: "工具設定" }));
+  const checkbox = await screen.findByRole("checkbox");
+  await waitFor(() => expect((checkbox as HTMLInputElement).disabled).toBe(false));
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole("button", { name: /儲/ }));
+  await screen.findByRole("alert");
+  expect((checkbox as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: /儲/ }));
+  await waitFor(() => expect(putProviderToolPolicy).toHaveBeenCalledTimes(2));
 });

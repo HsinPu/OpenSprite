@@ -67,10 +67,10 @@ function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorC
   return value.error.code as AiSettingsErrorCode;
 }
 
-async function request(init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>): Promise<AiSettings> {
+async function request(init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>, path = "/api/settings/ai"): Promise<AiSettings> {
   let response: Response;
   try {
-    response = await apiFetch("/api/settings/ai", init);
+    response = await apiFetch(path, init);
   } catch {
     throw new AiSettingsApiError("network_error");
   }
@@ -103,9 +103,9 @@ export function putAiSettings(next: AiSettings): Promise<AiSettings> {
 }
 
 export async function putProviderToolPolicy(provider: NativeProviderId, policy: ProviderToolPolicy): Promise<AiSettings> {
-  const response = await apiFetch(`/api/settings/ai/providers/${provider}/tools`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(policy) });
-  if (!response.ok) throw new AiSettingsApiError("settings_store_unavailable");
-  return responseBody(await response.json());
+  return request({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(policy) },
+    new Map([[400, ["invalid_request"]], [503, ["settings_store_unavailable"]], [500, ["internal_error"]]]),
+    `/api/settings/ai/providers/${provider}/tools`);
 }
 
 export function aiSettingsErrorText(error: unknown, t: Translator = defaultTranslator): string {
