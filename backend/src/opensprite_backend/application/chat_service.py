@@ -1,7 +1,7 @@
 """Application orchestration between settings, Providers, Runs, and storage."""
 
 from __future__ import annotations
-from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS
+from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS, ProviderEndpointSnapshot
 from opensprite_backend.providers.catalog_store import CatalogError
 from opensprite_backend.providers.custom_service import CustomProviderService
 from opensprite_backend.skills.service import SkillsService
@@ -450,6 +450,15 @@ class AgentChatService:
         async with self._workspace_mutation_gate.hold():
             try:
                 provider_endpoint = None
+                policies = (await self._ai_settings.get()).providerToolPolicies
+                def builtin_endpoint(identifier):
+                    policy = policies.get(identifier)
+                    if policy is None:
+                        return None
+                    protocol = {"openai": "openai_responses", "anthropic": "anthropic_messages", "openrouter": "openrouter"}[identifier]
+                    return ProviderEndpointSnapshot(identifier, 1, protocol, "", "bearer", non_streaming_tools=policy.transport == "non_streaming", tools_enabled=policy.toolsEnabled, disabled_models=tuple(policy.disabledModels))
+                if not is_custom:
+                    provider_endpoint = builtin_endpoint(profile.provider_id)
                 if is_custom:
                     if self._custom_providers is None:
                         raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
@@ -463,11 +472,17 @@ class AgentChatService:
                 except AgentError:
                     # Bad Agent configuration must not prevent ordinary chat.
                     agent_snapshot = AgentExecutionSnapshot()
-                if self._custom_providers is not None:
+                if self._custom_providers is not None or policies:
                     endpoints = {provider_endpoint.provider_id: provider_endpoint} if provider_endpoint is not None else {}
                     for candidate in agent_snapshot.available:
                         identifier = candidate.definition.provider_id if candidate.definition is not None else None
+                        if identifier in BUILTIN_PROVIDER_IDS and identifier not in endpoints:
+                            builtin = builtin_endpoint(identifier)
+                            if builtin is not None:
+                                endpoints[identifier] = builtin
                         if identifier and identifier not in BUILTIN_PROVIDER_IDS and identifier not in endpoints:
+                            if self._custom_providers is None:
+                                continue
                             try:
                                 endpoints[identifier] = await asyncio.to_thread(self._custom_providers.execution_endpoint, identifier)
                             except CatalogError:

@@ -69,12 +69,14 @@ class ProviderMutations:
             await self._check(provider_id, deleting=True)
             await _owned_thread(self.service.delete, provider_id, expected_revision=expected_revision)
 
-    async def update_model(self, provider_id: str, model: CustomModel, *, expected_revision: int):
+    async def update_model(self, provider_id: str, model: CustomModel, *, expected_revision: int, preserve_tool_policy: bool = False):
         async with self.gate.hold():
             current = await asyncio.to_thread(self.service.get, provider_id)
             previous = next((item for item in current.models if item.key == model.key), None)
             if previous is None:
                 raise CatalogError("model_not_found")
+            if preserve_tool_policy:
+                model = model.model_copy(update={"tools": previous.tools})
             await self._check(provider_id, deleting=previous.model_id != model.model_id, model_id=previous.model_id)
             return await _owned_thread(self.service.save_model, provider_id, model, expected_revision=expected_revision)
 

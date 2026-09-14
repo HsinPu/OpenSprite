@@ -31,6 +31,9 @@
     }
   ],
   "paths": {
+    "/api/settings/ai/providers/{provider_id}/tools": {
+      "put": {"operationId":"putProviderToolPolicy","summary":"Update one native provider tool policy atomically","parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","enum":["openai","anthropic","openrouter"]}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ProviderToolPolicy"}}}},"responses":{"200":{"description":"Policy saved; other preferences preserved","content":{"application/json":{"schema":{"$ref":"#/components/schemas/AiSettings"}}}},"400":{"$ref":"#/components/responses/InvalidRequest"},"503":{"$ref":"#/components/responses/SettingsStoreUnavailable"},"500":{"$ref":"#/components/responses/InternalError"}}}
+    },
     "/api/settings/ai": {
       "get": {
         "operationId": "getAiSettings",
@@ -70,6 +73,7 @@
   },
   "components": {
     "schemas": {
+      "ProviderToolPolicy": {"type":"object","additionalProperties":false,"properties":{"toolsEnabled":{"type":"boolean","default":true},"transport":{"type":"string","enum":["stream","non_streaming"],"default":"stream"},"disabledModels":{"type":"array","maxItems":1000,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":256},"default":[]}}},
       "ProviderId": {"type": "string", "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"},
       "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
       "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
@@ -102,7 +106,8 @@
           "responseMode": {"$ref": "#/components/schemas/ResponseMode"},
           "outputContinuation": {"$ref": "#/components/schemas/OutputContinuation"},
           "responseDelivery": {"$ref": "#/components/schemas/ResponseDelivery"},
-          "logFullPrompts": {"type": "boolean", "description": "Whether complete model request messages are written to local per-request Prompt logs."}
+          "logFullPrompts": {"type": "boolean", "description": "Whether complete model request messages are written to local per-request Prompt logs."},
+          "providerToolPolicies": {"type":"object","additionalProperties":false,"description":"Native provider policies. Omitted on general PUT preserves current policies.","properties":{"openai":{"$ref":"#/components/schemas/ProviderToolPolicy"},"anthropic":{"$ref":"#/components/schemas/ProviderToolPolicy"},"openrouter":{"$ref":"#/components/schemas/ProviderToolPolicy"}}}
         }
       },
       "ErrorCode": {

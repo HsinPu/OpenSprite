@@ -91,6 +91,26 @@ class RecordingConnections:
         )
 
 
+def test_native_tool_policy_migration_and_partial_update(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    legacy = {"version": 8, "model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "complete", "logFullPrompts": False}
+    path.write_text(json.dumps(legacy), encoding="utf-8")
+    store = JsonAiSettingsStore(path)
+    assert store.get().providerToolPolicies == {}
+    service = AiSettingsService(store, RecordingConnections())
+    with TestClient(create_app(RecordingConnections(), ai_settings=service)) as client:
+        policy = {"toolsEnabled": False, "transport": "non_streaming", "disabledModels": ["test-model"]}
+        result = client.put("/api/settings/ai/providers/openai/tools", json=policy)
+        assert result.status_code == 200
+        assert result.json()["providerToolPolicies"]["openai"] == policy
+        preferences = {key: value for key, value in legacy.items() if key != "version"}
+        preferences["responseDelivery"] = "stream"
+        assert client.put("/api/settings/ai", json=preferences).status_code == 200
+        assert client.get("/api/settings/ai").json()["providerToolPolicies"]["openai"] == policy
+        assert client.put("/api/settings/ai/providers/openai/tools", json={"toolsEnabled": "yes"}).status_code == 400
+    assert JsonAiSettingsStore(path).get().providerToolPolicies["openai"].transport == "non_streaming"
+
+
 def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
@@ -102,7 +122,8 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 8,
+        "version": 9,
+        "providerToolPolicies": {},
         "model": {
             "providerId": "openai",
             "modelId": "gpt-5.6",
@@ -317,9 +338,10 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
             json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False}
+    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
     assert saved.status_code == 200
     assert saved.json() == {
+        "providerToolPolicies": {},
         "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
         "responseMode": "deep",
         "outputContinuation": "5",
@@ -373,7 +395,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False}
+        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()

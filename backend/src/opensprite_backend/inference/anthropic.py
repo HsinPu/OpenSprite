@@ -60,6 +60,16 @@ class AnthropicInferenceAdapter:
         if selected_effort is not None:
             body["output_config"] = {"effort": selected_effort}
 
+        if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
+            body["stream"] = False
+            async for raw in self._http.payloads(
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Accept": "application/json", "Content-Type": "application/json"},
+                body=body,
+            ):
+                for event in _complete_response(load_json_object(raw)):
+                    yield event
+            return
+
         tools: dict[int, _ToolBlock] = {}
         input_tokens: int | None = None
         output_tokens: int | None = None
@@ -181,6 +191,49 @@ class AnthropicInferenceAdapter:
                 raise invalid_response()
         if not stopped:
             raise invalid_response()
+
+
+def _complete_response(payload: dict[str, object]) -> list[ModelStreamEvent]:
+    """Do not expose partial or malformed tool blocks to the agent loop."""
+    content = payload.get("content")
+    reason = payload.get("stop_reason")
+    if payload.get("type") != "message" or payload.get("role") != "assistant" or type(content) is not list:
+        raise invalid_response()
+    if reason not in {"tool_use", "end_turn", "max_tokens", "model_context_window_exceeded"}:
+        raise invalid_response()
+    events: list[ModelStreamEvent] = []
+    ids: set[str] = set()
+    for block in content:
+        if type(block) is not dict:
+            raise invalid_response()
+        kind = block.get("type")
+        if kind == "text":
+            text = block.get("text")
+            if type(text) is not str:
+                raise invalid_response()
+            events.extend(ModelTextDelta(text[i:i + 16384]) for i in range(0, len(text), 16384))
+        elif kind == "tool_use":
+            if reason != "tool_use":
+                raise invalid_response()
+            try:
+                call = ModelToolCall(block.get("id"), block.get("name"), block.get("input"))
+            except (TypeError, ValueError) as error:
+                raise invalid_response() from error
+            if call.call_id in ids:
+                raise invalid_response()
+            ids.add(call.call_id)
+            events.append(call)
+        elif kind not in {"thinking", "redacted_thinking"}:
+            raise invalid_response()
+    if reason == "tool_use" and not ids:
+        raise invalid_response()
+    usage = payload.get("usage")
+    input_tokens = _token_value(usage, "input_tokens")
+    output_tokens = _token_value(usage, "output_tokens")
+    if input_tokens is not None or output_tokens is not None:
+        events.append(ModelUsage(input_tokens, output_tokens))
+    finish = ModelFinishReason.TOOL_CALLS if ids else ModelFinishReason.FINAL if reason == "end_turn" else ModelFinishReason.OUTPUT_LIMIT
+    return [*events, ModelCompleted(finish)]
 
 
 def _messages(

@@ -69,7 +69,9 @@ async def update_custom_provider(provider_id: str, request: Request):
     try:
         payload = await mutation_body(request, ProviderUpdateRequest)
         result = await mutations(request).update(provider_id, name=payload.name,
-            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal, non_streaming_tools=payload.nonStreamingTools,
+            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal,
+            non_streaming_tools=payload.nonStreamingTools if "nonStreamingTools" in payload.model_fields_set else None,
+            tools_enabled=payload.toolsEnabled if "toolsEnabled" in payload.model_fields_set else None,
             expected_revision=payload.expectedRevision, secret=payload.apiKey.get_secret_value() if payload.apiKey else None)
         return result.model_dump(mode="json")
     except CatalogError as error:
@@ -94,7 +96,8 @@ async def update_custom_model(provider_id: str, model_key: str, request: Request
                 context_limit=payload.contextLimit, output_limit=payload.outputLimit, tools=payload.tools, source="manual")
         except ValueError:
             raise CatalogError("invalid_request") from None
-        result = await mutations(request).update_model(provider_id, model, expected_revision=payload.expectedRevision)
+        result = await mutations(request).update_model(provider_id, model, expected_revision=payload.expectedRevision,
+            preserve_tool_policy="tools" not in payload.model_fields_set)
         return {"revision": result.revision, "models": [item.model_dump(mode="json") for item in result.models]}
     except CatalogError as error:
         return error_response(error)
@@ -114,7 +117,8 @@ async def create_provider(request: Request):
     try:
         payload = await mutation_body(request, ProviderCreateRequest)
         result = await asyncio.to_thread(service(request).save, provider_id=None, name=payload.name,
-            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal, non_streaming_tools=payload.nonStreamingTools,
+            base_url=payload.baseUrl, auth_mode=payload.authMode, allow_insecure_local=payload.allowInsecureLocal,
+            non_streaming_tools=payload.nonStreamingTools, tools_enabled=payload.toolsEnabled,
             expected_revision=payload.expectedRevision, secret=payload.apiKey.get_secret_value() if payload.apiKey else None)
         return JSONResponse(status_code=201, content=result.model_dump(mode="json"))
     except CatalogError as error:

@@ -1,5 +1,8 @@
 from dataclasses import replace
 from uuid import uuid4
+import pytest
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
+from opensprite_backend.inference.capabilities import ModelCapability
 
 from opensprite_backend.agent.context.receipt import ReceiptSources, request_receipt
 from opensprite_backend.agent.context.counter import ConservativeTokenCounter
@@ -39,3 +42,24 @@ def test_unknown_provenance_is_not_invented():
     assert receipt["historyMessageIds"] == []
     assert receipt["components"]["unattributed"] > 0
     assert receipt["components"]["currentUser"] == 0
+
+
+@pytest.mark.parametrize("enabled,model_tools,has_tools,compat,policy,transport", [
+    (True, True, True, True, "inherit", "non_streaming"),
+    (True, True, True, False, "inherit", "streaming"),
+    (True, True, False, True, "inherit", "streaming"),
+    (False, False, False, True, "provider_disabled", "streaming"),
+    (True, False, False, True, "model_disabled", "streaming"),
+])
+def test_tool_execution_receipt_and_legacy_validation(enabled, model_tools, has_tools, compat, policy, transport):
+    pid = str(uuid4())
+    endpoint = ProviderEndpointSnapshot(pid, 1, "openai_chat_completions", "https://example.com/v1", "none",
+        (ModelCapability(pid, "test", "Test", 8192, 2048, model_tools),), compat, enabled)
+    request = ModelRequest(pid, "test", "default", (ModelMessage("user", "synthetic"),),
+        (ModelToolDefinition("calculator", "Calculate", {"type": "object"}),) if has_tools else (), provider_endpoint=endpoint)
+    receipt = request_receipt(request, None, "main")
+    assert receipt["toolExecution"] == {"policy": policy, "transport": transport}
+    assert valid_context_receipt(receipt)
+    assert not valid_context_receipt({**receipt, "toolExecution": {"policy": "invented", "transport": transport}})
+    del receipt["toolExecution"]
+    assert valid_context_receipt(receipt)

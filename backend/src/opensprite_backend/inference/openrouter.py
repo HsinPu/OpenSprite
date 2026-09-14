@@ -61,6 +61,8 @@ class ChatCompletionsInferenceAdapter:
             if self._openrouter_extensions and request.model_id != "openrouter/auto":
                 body["provider"] = {"require_parameters": True}
         selected_effort = effort(request.response_mode)
+        if self._openrouter_extensions and selected_effort is not None:
+            body["reasoning"] = {"effort": selected_effort, "exclude": True}
         if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
             body["stream"] = False
             body.pop("stream_options", None)
@@ -71,11 +73,6 @@ class ChatCompletionsInferenceAdapter:
                 for event in _complete_response(load_json_object(raw)):
                     yield event
             return
-        if self._openrouter_extensions and selected_effort is not None:
-            body["reasoning"] = {
-                "effort": selected_effort,
-                "exclude": True,
-            }
 
         fragments: dict[int, _ToolFragments] = {}
         finish_reason: str | None = None

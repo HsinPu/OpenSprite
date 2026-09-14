@@ -110,6 +110,7 @@ function DiagnosticDetails({ operation, hideError }: { operation: DiagnosticOper
   const [showZero, setShowZero] = useState(false);
   const context = (start?.data.context ?? event.data.context) as Record<string, unknown> | undefined;
   const components = context?.components as Record<string, number> | undefined;
+  const toolExecution = context?.toolExecution as { policy: "builtin" | "inherit" | "provider_disabled" | "model_disabled"; transport: "streaming" | "non_streaming" } | undefined;
   const format = (value: unknown) => typeof value === "number" ? value.toLocaleString(locale) : t("diagnostics.unreported");
   return <div className="run-diagnostics__details">
     {!start && event.type === "model.attempt" ? <Typography.Text type="secondary">{t("diagnostics.missingStart")}</Typography.Text> : null}
@@ -130,6 +131,11 @@ function DiagnosticDetails({ operation, hideError }: { operation: DiagnosticOper
     {event.data.status === "completed" && event.type === "model.attempt" ? <section><Typography.Text strong>{t("diagnostics.actualUsage")}</Typography.Text><dl className="run-diagnostics__numbers">{(["inputTokens", "outputTokens"] as const).map(key => <div key={key}><dt>{t(`diagnostics.${key}`)}</dt><dd>{format(event.data[key])}</dd></div>)}</dl></section> : null}
     {context ? <section><Typography.Text strong>{t("diagnostics.receipt")}</Typography.Text><dl className="run-diagnostics__numbers">{(["estimatedInputTokens", "inputBudgetTokens", "outputReserveTokens"] as const).map(key => <div key={key}><dt>{t(`diagnostics.${key}`)}</dt><dd>{format(context[key])}</dd></div>)}</dl></section> : null}
     </div>
+    {context ? <section><Typography.Text strong>{t("diagnostics.toolExecution")}</Typography.Text><dl className="run-diagnostics__numbers">
+      <div><dt>{t("diagnostics.toolPolicy")}</dt><dd>{toolExecution ? t(`diagnostics.policy.${toolExecution.policy}`) : t("diagnostics.unreported")}</dd></div>
+      <div><dt>{t("diagnostics.transport")}</dt><dd>{toolExecution ? t(`diagnostics.transport.${toolExecution.transport}`) : t("diagnostics.unreported")}</dd></div>
+      <div><dt>{t("diagnostics.toolCount")}</dt><dd>{format(context.toolCount)}</dd></div>
+    </dl></section> : null}
     {event.type === "model.attempt" && event.data.status === "completed" ? <Typography.Text type="secondary">{t("diagnostics.usageNote")}</Typography.Text> : null}
     {context ? <>
       <Collapse ghost size="small" items={[{ key: "sources", label: t("diagnostics.sources"), children: <>

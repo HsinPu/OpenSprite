@@ -1033,6 +1033,9 @@ class AgentLoop:
     async def _resolve_run_capability(self, run: RunSnapshot, endpoint: ProviderEndpointSnapshot | None):
         if endpoint is None:
             return await self._capability_resolver.resolve(run.provider_id, run.model_id)
+        if endpoint.protocol != "openai_chat_completions":
+            capability = await self._capability_resolver.resolve(run.provider_id, run.model_id)
+            return replace(capability, supports_tools=capability.supports_tools and endpoint.tools_enabled and run.model_id not in endpoint.disabled_models)
         for model in endpoint.models:
             if model.provider_id == run.provider_id and model.model_id == run.model_id:
                 return model

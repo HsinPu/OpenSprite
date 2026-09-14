@@ -12,6 +12,7 @@ from opensprite_backend.models import (
     AiSettingsErrorDetail,
     AiSettingsErrorEnvelope,
     PutAiSettingsRequest,
+    ProviderToolPolicy,
 )
 
 
@@ -109,4 +110,12 @@ async def put_ai_settings(
     payload: PutAiSettingsRequest,
     settings: AiSettingsOperations = Depends(_ai_settings),
 ) -> AiSettings:
-    return await settings.put(AiSettings.model_validate(payload.model_dump()))
+    data = payload.model_dump()
+    if data["providerToolPolicies"] is None:
+        data.pop("providerToolPolicies")
+    return await settings.put(AiSettings.model_validate(data))
+
+
+@router.put("/api/settings/ai/providers/{provider_id}/tools", operation_id="putProviderToolPolicy", response_model=AiSettings, responses=AI_SETTINGS_PUT_ERROR_RESPONSES, tags=["ai-settings"])
+async def put_provider_tool_policy(provider_id: str, payload: ProviderToolPolicy, settings: AiSettingsOperations = Depends(_ai_settings)) -> AiSettings:
+    return await settings.put_tool_policy(provider_id, payload)

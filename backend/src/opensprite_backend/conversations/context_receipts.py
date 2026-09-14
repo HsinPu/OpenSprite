@@ -25,7 +25,14 @@ def valid_context_receipt(data):
     keys = {"schemaVersion", "requestHash", "estimateMethod", "estimatedInputTokens", "components",
             "contextLimitTokens", "inputBudgetTokens", "outputReserveTokens", "messageCount", "toolCount",
             "systemHash", "toolsHash", "historyMessageIds", "summary", "skills", "workspace"}
-    if not isinstance(data, dict) or set(data) != keys or type(data["schemaVersion"]) is not int or data["schemaVersion"] != 1:
+    if not isinstance(data, dict):
+        return False
+    if "toolExecution" in data:
+        keys.add("toolExecution")
+        execution = data["toolExecution"]
+        if not isinstance(execution, dict) or set(execution) != {"policy", "transport"} or execution["policy"] not in ("builtin", "inherit", "provider_disabled", "model_disabled") or execution["transport"] not in ("streaming", "non_streaming"):
+            return False
+    if set(data) != keys or type(data["schemaVersion"]) is not int or data["schemaVersion"] != 1:
         return False
     if data["estimateMethod"] != "utf8-conservative-v1" or not all(_hash(data[key]) for key in ("requestHash", "systemHash", "toolsHash")):
         return False

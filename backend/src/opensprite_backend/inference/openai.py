@@ -53,6 +53,16 @@ class OpenAIInferenceAdapter:
         if selected_effort is not None:
             body["reasoning"] = {"effort": selected_effort}
 
+        if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
+            body["stream"] = False
+            async for raw in self._http.payloads(
+                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"},
+                body=body,
+            ):
+                for event in _complete_response(load_json_object(raw)):
+                    yield event
+            return
+
         call_items: dict[str, tuple[str, str]] = {}
         calls: list[ModelToolCall] = []
         call_ids: set[str] = set()
@@ -183,6 +193,50 @@ class OpenAIInferenceAdapter:
             raise invalid_response()
 
 
+def _complete_response(payload: dict[str, object]) -> list[ModelStreamEvent]:
+    """Validate the complete envelope before exposing executable calls."""
+    status = payload.get("status")
+    if status not in {"completed", "incomplete"}:
+        raise invalid_response()
+    output = payload.get("output")
+    if type(output) is not list:
+        raise invalid_response()
+    events: list[ModelStreamEvent] = []
+    seen: set[str] = set()
+    for item in output:
+        if type(item) is not dict:
+            raise invalid_response()
+        if item.get("type") == "function_call":
+            if status != "completed" or item.get("call_id") in seen:
+                raise invalid_response()
+            calls = _completed_calls([item], seen)
+            for call in calls:
+                seen.add(call.call_id)
+                events.append(call)
+        elif item.get("type") == "message":
+            content = item.get("content")
+            if type(content) is not list:
+                raise invalid_response()
+            for block in content:
+                if type(block) is not dict:
+                    raise invalid_response()
+                kind = block.get("type")
+                text = block.get("text") if kind == "output_text" else block.get("refusal") if kind == "refusal" else None
+                if type(text) is not str:
+                    raise invalid_response()
+                events.extend(ModelTextDelta(text[i:i + 16384]) for i in range(0, len(text), 16384))
+        elif item.get("type") != "reasoning":
+            raise invalid_response()
+    finish = ModelFinishReason.TOOL_CALLS if seen else ModelFinishReason.FINAL
+    if status == "incomplete":
+        details = payload.get("incomplete_details")
+        if type(details) is not dict or details.get("reason") not in {"max_tokens", "max_output_tokens"}:
+            raise invalid_response()
+        finish = ModelFinishReason.OUTPUT_LIMIT
+    usage = _usage(payload.get("usage"))
+    return [*events, *([usage] if usage is not None else []), ModelCompleted(finish)]
+
+
 def _input(messages: tuple[ModelMessage, ...]) -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
     for message in messages:
@@ -247,14 +301,14 @@ def _completed_calls(
         call_id = item.get("call_id")
         name = item.get("name")
         arguments = item.get("arguments")
-        if call_id in seen:
-            continue
         if (
             type(call_id) is not str
             or type(name) is not str
             or type(arguments) is not str
         ):
             raise invalid_response()
+        if call_id in seen:
+            continue
         try:
             calls.append(
                 ModelToolCall(call_id, name, load_json_arguments(arguments))

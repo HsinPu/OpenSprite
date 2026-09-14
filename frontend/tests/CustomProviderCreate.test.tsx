@@ -23,6 +23,20 @@ const setup = () => render(<CustomProviderCreate onChanged={changed} container={
 describe("compact custom provider operations", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(useCustomProviders).mockReturnValue(controller); });
 
+  it("defaults new providers on and retains compatibility while tools are disabled", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "連接" }));
+    const tools = screen.getByRole("checkbox", { name: "允許模型使用工具" }) as HTMLInputElement;
+    const transport = screen.getByRole("checkbox", { name: "工具呼叫使用非串流（相容模式）" }) as HTMLInputElement;
+    expect(tools.checked).toBe(true);
+    expect(transport.checked).toBe(true);
+    fireEvent.click(tools);
+    expect(transport.disabled).toBe(true);
+    expect(transport.checked).toBe(true);
+    fireEvent.click(tools);
+    expect(transport.disabled).toBe(false);
+  });
+
   it("keeps management visible without a duplicate refresh menu entry", async () => {
     setup();
     expect(screen.getByRole("button", { name: /管\s*理/ })).toBeTruthy();
@@ -50,14 +64,14 @@ describe("compact custom provider operations", () => {
     expect(screen.queryByLabelText("Model ID")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
     expect(screen.getByLabelText("Model ID")).toBeTruthy();
-    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: "支援工具呼叫" }));
-    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByText("進階工具設定"));
+    expect(await screen.findByText("跟隨供應商")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
     expect(screen.queryByLabelText("Model ID")).toBeNull();
     expect(controller.remove).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
-    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByText("進階工具設定"));
+    expect(await screen.findByText("跟隨供應商")).toBeTruthy();
   });
 
   it("requires confirmation before removing a custom provider", async () => {
@@ -83,10 +97,11 @@ describe("compact custom provider operations", () => {
     expect(screen.getByText("沒有符合的模型")).toBeTruthy();
     fireEvent.change(search, { target: { value: "GLM" } });
     fireEvent.click(screen.getByRole("button", { name: /編\s*輯/ }));
-    expect((screen.getByRole("checkbox", { name: "支援工具呼叫" }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByText("進階工具設定"));
+    expect(await screen.findByText("停用此模型的工具呼叫")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Context 上限"), { target: { value: "1000000" } });
     fireEvent.click(screen.getByRole("button", { name: /儲\s*存/ }));
-    await waitFor(() => expect(controller.editModel).toHaveBeenCalledWith(populated, "model-1", expect.objectContaining({ contextLimit: 1000000, outputLimit: 2048 })));
+    await waitFor(() => expect(controller.editModel).toHaveBeenCalledWith(populated, "model-1", expect.objectContaining({ contextLimit: 1000000, outputLimit: 2048, tools: false })));
     expect(controller.update).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByLabelText("Model ID")).toBeNull());
   });

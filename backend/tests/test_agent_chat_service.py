@@ -78,6 +78,39 @@ class FixedSettings:
         return payload
 
 
+@pytest.mark.parametrize("enabled,disabled", [(True, []), (False, []), (True, ["openrouter/auto"])])
+@async_test
+async def test_native_policy_is_frozen_for_accepted_run(tmp_path, enabled, disabled):
+    from opensprite_backend.models import ProviderToolPolicy
+
+    chat, repository, manager, _ = service(tmp_path)
+    policy = ProviderToolPolicy(toolsEnabled=enabled, transport="non_streaming", disabledModels=disabled)
+    chat._ai_settings.settings.providerToolPolicies = {"openrouter": policy}
+    captured = []
+
+    class CaptureGateway:
+        async def stream(self, request, *, attempt=None):
+            captured.append(request.provider_endpoint)
+            yield ModelTextDelta("done")
+            yield ModelCompleted(ModelFinishReason.FINAL)
+
+    manager._loop._gateway = CaptureGateway()
+    accepted = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
+        client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
+    policy.toolsEnabled = not enabled
+    policy.transport = "stream"
+    policy.disabledModels.clear()
+    completed = await manager.wait(accepted.run.id)
+    assert completed.status is RunStatus.COMPLETED
+    endpoint = captured[0]
+    assert endpoint.non_streaming_tools is True
+    assert endpoint.tools_enabled is enabled
+    assert endpoint.disabled_models == tuple(disabled)
+    capability = await manager._loop._resolve_run_capability(repository.get_run(accepted.run.id), endpoint)
+    assert capability.supports_tools == (enabled and not disabled)
+    await chat.close()
+
+
 class FixedConnections:
     def __init__(self, connected: set[str]) -> None:
         self.connected = connected

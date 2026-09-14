@@ -1314,6 +1314,11 @@
             "type": "boolean",
             "default": false
           },
+          "tools_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Provider-wide tool gate. Model tools=true inherits; false opts out."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1411,7 +1416,11 @@
           },
           "nonStreamingTools": {
             "type": "boolean",
-            "default": false
+            "default": true
+          },
+          "toolsEnabled": {
+            "type": "boolean",
+            "default": true
           },
           "apiKey": {
             "type": [
@@ -1462,7 +1471,11 @@
           },
           "nonStreamingTools": {
             "type": "boolean",
-            "default": false
+            "description": "Omission preserves the existing value."
+          },
+          "toolsEnabled": {
+            "type": "boolean",
+            "description": "Omission preserves the existing value."
           },
           "apiKey": {
             "type": [

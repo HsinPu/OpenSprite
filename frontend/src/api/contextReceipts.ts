@@ -5,7 +5,8 @@ const hash = (value: unknown) => typeof value === "string" && /^[0-9a-f]{64}$/.t
 const id = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 
 export function validContextReceipt(data: unknown): boolean {
-  if (!record(data) || !exact(data, ["schemaVersion", "requestHash", "estimateMethod", "estimatedInputTokens", "components", "contextLimitTokens", "inputBudgetTokens", "outputReserveTokens", "messageCount", "toolCount", "systemHash", "toolsHash", "historyMessageIds", "summary", "skills", "workspace"])) return false;
+  if (!record(data) || !exact(data, ["schemaVersion", "requestHash", "estimateMethod", "estimatedInputTokens", "components", "contextLimitTokens", "inputBudgetTokens", "outputReserveTokens", "messageCount", "toolCount", "systemHash", "toolsHash", "historyMessageIds", "summary", "skills", "workspace", ...("toolExecution" in data ? ["toolExecution"] : [])])) return false;
+  if ("toolExecution" in data && (!record(data.toolExecution) || !exact(data.toolExecution, ["policy", "transport"]) || !["builtin", "inherit", "provider_disabled", "model_disabled"].includes(String(data.toolExecution.policy)) || !["streaming", "non_streaming"].includes(String(data.toolExecution.transport)))) return false;
   if (data.schemaVersion !== 1 || data.estimateMethod !== "utf8-conservative-v1" || ![data.requestHash, data.systemHash, data.toolsHash].every(hash)) return false;
   if (![data.estimatedInputTokens, data.messageCount, data.toolCount, data.outputReserveTokens].every(value => integer(value))) return false;
   if (Number(data.messageCount) < 1 || Number(data.messageCount) > 256 || Number(data.outputReserveTokens) < 1 || Number(data.outputReserveTokens) > 131072) return false;

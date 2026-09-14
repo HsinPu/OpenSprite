@@ -1,6 +1,7 @@
 from dataclasses import replace
 from uuid import uuid4
 import json
+import asyncio
 import httpx
 import pytest
 
@@ -8,6 +9,8 @@ from opensprite_backend.inference.openrouter import ChatCompletionsInferenceAdap
 from opensprite_backend.inference.models import ModelRequest, ModelMessage, ModelToolDefinition, ModelToolCall, ModelTextDelta
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.inference.gateway import ModelGatewayError
+from opensprite_backend.tools.builtins.calculator import CalculatorTool
+from opensprite_backend.tools.definition import ToolContext
 
 
 @pytest.mark.anyio
@@ -42,7 +45,8 @@ async def test_tool_result_roundtrip_both_transports(compatibility):
         first = [event async for event in adapter.stream(request,'')]
         call = next(event for event in first if isinstance(event,ModelToolCall))
         assert call.arguments == {'expression':'7391 * 4827'}
-        result = str(7391 * 4827)
+        tool_result = await CalculatorTool().invoke(call.arguments, ToolContext(str(uuid4()), str(uuid4()), asyncio.Event()))
+        result = tool_result.content
         followup = replace(request,messages=(*request.messages,ModelMessage('assistant','',(call,)),ModelMessage('tool',result,tool_call_id=call.call_id,tool_name=call.name)))
         final = [event async for event in adapter.stream(followup,'')]
         assert any(isinstance(event,ModelTextDelta) and event.text == result for event in final)

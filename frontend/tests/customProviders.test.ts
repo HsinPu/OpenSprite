@@ -7,6 +7,14 @@ const model = { key: "22222222-2222-4222-8222-222222222222", model_id: "local", 
 const provider = { id, name: "Local", revision: 1, protocol: "openai_chat_completions", base_url: "https://example.com/v1", auth_mode: "none", allow_insecure_local: false, created_at: "2026-09-10T00:00:00+00:00", updated_at: "2026-09-10T00:00:00+00:00", models: [model] };
 
 describe("custom provider API", () => {
+  it("accepts provider tool policy and rejects malformed flags", async () => {
+    const configured = { ...provider, tools_enabled: false, non_streaming_tools: true };
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(configured)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...configured, tools_enabled: "true" }))));
+    await expect(getCustomProvider(id)).resolves.toEqual(configured);
+    await expect(getCustomProvider(id)).rejects.toThrow("malformed_response");
+  });
   it("collects model pages and rejects revisions changing between pages", async () => {
     const nextModel = { ...model, key: "33333333-3333-4333-8333-333333333333", model_id: "second" };
     const page = (revision: number, entries: unknown[], nextCursor: string | null) => new Response(JSON.stringify({ revision, models: entries, nextCursor }));

@@ -53,6 +53,19 @@ def test_duplicate_json_rejected_without_writing(tmp_path):
         assert not (tmp_path / "providers.json").exists()
 
 
+def test_tool_policy_defaults_and_partial_update_preservation(tmp_path):
+    with client_for(tmp_path) as client:
+        fields = dict(name="Tools", baseUrl="https://example.com/v1", protocol="openai_chat_completions", authMode="none")
+        created = client.post("/api/providers", json={**fields, "expectedRevision": 0}).json()
+        assert created["tools_enabled"] and created["non_streaming_tools"]
+        url = f"/api/providers/{created['id']}"
+        response = client.put(url, json={**fields, "expectedRevision": 1, "toolsEnabled": False, "nonStreamingTools": False})
+        assert response.status_code == 200
+        response = client.put(url, json={**fields, "expectedRevision": 2})
+        assert response.status_code == 200
+        assert not response.json()["tools_enabled"] and not response.json()["non_streaming_tools"]
+
+
 def test_mutation_stream_stops_at_size_limit():
     receive = AsyncMock(side_effect=[
         {"type": "http.request", "body": b" " * 65536, "more_body": True},

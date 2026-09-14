@@ -187,6 +187,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/auth/password", "put", "changeLocalPassword"),
         ("/api/settings/ai", "get", "getAiSettings"),
         ("/api/settings/ai", "put", "putAiSettings"),
+        ("/api/settings/ai/providers/{provider_id}/tools", "put", "putProviderToolPolicy"),
         ("/api/settings/general", "get", "getGeneralSettings"),
         ("/api/settings/general", "put", "putGeneralSettings"),
         ("/api/settings/conversation", "get", "getConversationSettings"),

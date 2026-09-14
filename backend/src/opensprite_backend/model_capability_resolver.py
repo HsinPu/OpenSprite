@@ -64,7 +64,7 @@ class ProviderModelCapabilityResolver:
                 raise ModelCapabilityNotFound
             return ModelCapability(provider_id=provider.id, model_id=model.model_id, name=model.name,
                 context_window_tokens=model.context_limit, max_output_tokens=model.output_limit,
-                supports_tools=model.tools)
+                supports_tools=provider.allows_model_tools(model))
         fixed = fixed_model_capability(provider_id, model_id)
         if fixed is not None:
             return fixed

@@ -274,12 +274,26 @@ class ResponseDelivery(StrEnum):
     COMPLETE = "complete"
 
 
+class ProviderToolPolicy(ContractModel):
+    toolsEnabled: StrictBool = True
+    transport: Literal["stream", "non_streaming"] = "stream"
+    disabledModels: list[str] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("disabledModels")
+    @classmethod
+    def validate_disabled_models(cls, values: list[str]) -> list[str]:
+        if len(set(values)) != len(values) or any(not 1 <= len(value) <= 256 or value != value.strip() for value in values):
+            raise ValueError("invalid model opt-outs")
+        return values
+
+
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     outputContinuation: OutputContinuation = OutputContinuation.FIVE
     responseDelivery: ResponseDelivery = ResponseDelivery.STREAM
     logFullPrompts: StrictBool = False
+    providerToolPolicies: dict[Literal["openai", "anthropic", "openrouter"], ProviderToolPolicy] = Field(default_factory=dict)
 
 
 class PutAiSettingsRequest(ContractModel):
@@ -288,6 +302,7 @@ class PutAiSettingsRequest(ContractModel):
     outputContinuation: OutputContinuation
     responseDelivery: ResponseDelivery
     logFullPrompts: StrictBool
+    providerToolPolicies: dict[Literal["openai", "anthropic", "openrouter"], ProviderToolPolicy] | None = None
 
 
 class GeneralSettings(ContractModel):

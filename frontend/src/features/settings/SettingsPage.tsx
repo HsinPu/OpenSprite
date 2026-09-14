@@ -36,6 +36,7 @@ import "./settings.css";
 import { SkillsSettings } from "./SkillsSettings";
 import { AgentsSettings } from "./AgentsSettings";
 import { CustomProviderCreate } from "./CustomProviderCreate";
+import { NativeProviderTools } from "./NativeProviderTools";
 import { getCustomProvider, refreshCustomModels, CustomProviderApiError } from "../../api/customProviders";
 import { customProviderErrorText } from "../ai-settings/customProviderErrors";
 
@@ -466,6 +467,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
                 <div className="settings-service-card" key={provider.id} aria-label={t("models.providerConnection", { provider: provider.name })} aria-busy={busy}>
                   <div className="settings-service-identity"><Icon name={provider.id === "openai" || provider.id === "anthropic" || provider.id === "openrouter" ? provider.id : "robot"} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{t(providerStatusKeys[provider.status])}</span></span></div>
                   <div className="settings-service-actions" role="group" aria-label={t("models.providerActions", { provider: provider.name })} aria-busy={busy}>
+                    <NativeProviderTools provider={provider.id as "openai" | "anthropic" | "openrouter"} name={provider.name} container={modalContainer} onOverlayChange={onProviderModalChange} />
                     <button type="button" className="settings-secondary-button" onClick={() => setModalProvider(provider)} disabled={busy}>{provider.connected ? t("models.manage") : t("models.connect")}</button>
                     {provider.connected ? <Dropdown trigger={["click"]} getPopupContainer={getSettingsPopupContainer} menu={{ items: [
                       { key: "test", label: t("models.testConnection"), onClick: () => void testConnection(provider) },

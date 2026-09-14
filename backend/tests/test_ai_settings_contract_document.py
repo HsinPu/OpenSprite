@@ -38,6 +38,7 @@ def test_contract_has_only_the_approved_ai_settings_operations() -> None:
     assert operations == {
         ("/api/settings/ai", "get"),
         ("/api/settings/ai", "put"),
+        ("/api/settings/ai/providers/{provider_id}/tools", "put"),
     }
 
 
@@ -79,7 +80,7 @@ def test_ai_settings_schema_persists_model_response_continuation_and_delivery() 
     settings = schemas["AiSettings"]
     assert settings["additionalProperties"] is False
     assert settings["required"] == ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"]
-    assert set(settings["properties"]) == {"model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"}
+    assert set(settings["properties"]) == {"model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts", "providerToolPolicies"}
     assert schemas["OutputContinuation"]["enum"] == ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
     assert schemas["ResponseDelivery"]["enum"] == ["stream", "complete"]
     assert settings["properties"]["logFullPrompts"]["type"] == "boolean"

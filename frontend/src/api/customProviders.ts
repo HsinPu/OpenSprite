@@ -2,8 +2,8 @@ import { apiFetch } from "./http";
 import { isProviderId, providerIds, type ProviderId } from "./providerConnections";
 
 export type CustomModel = { key: string; model_id: string; name: string; context_limit: number; output_limit: number; tools: boolean; source: "manual" | "discovered" };
-export type CustomProvider = { id: ProviderId; name: string; revision: number; protocol: "openai_chat_completions"; base_url: string; auth_mode: "none" | "bearer"; allow_insecure_local: boolean; non_streaming_tools?: boolean; created_at: string; updated_at: string; models: CustomModel[] };
-export type ProviderDraft = { name: string; baseUrl: string; protocol: "openai_chat_completions"; authMode: "none" | "bearer"; allowInsecureLocal: boolean; nonStreamingTools?: boolean; apiKey?: string; expectedRevision: number };
+export type CustomProvider = { id: ProviderId; name: string; revision: number; protocol: "openai_chat_completions"; base_url: string; auth_mode: "none" | "bearer"; allow_insecure_local: boolean; non_streaming_tools?: boolean; tools_enabled?: boolean; created_at: string; updated_at: string; models: CustomModel[] };
+export type ProviderDraft = { name: string; baseUrl: string; protocol: "openai_chat_completions"; authMode: "none" | "bearer"; allowInsecureLocal: boolean; nonStreamingTools?: boolean; toolsEnabled?: boolean; apiKey?: string; expectedRevision: number };
 export type ModelDraft = { modelId: string; name: string; contextLimit: number; outputLimit: number; tools: boolean; expectedRevision: number };
 export class CustomProviderApiError extends Error {
   constructor(readonly code: string) { super(code); this.name = "CustomProviderApiError"; }
@@ -29,7 +29,8 @@ function models(value: unknown): CustomModel[] {
   return result;
 }
 function provider(value: unknown): CustomProvider {
-  if (!record(value) || !exact(value, ["id", "name", "revision", "protocol", "base_url", "auth_mode", "allow_insecure_local", "created_at", "updated_at", "models", ...("non_streaming_tools" in value ? ["non_streaming_tools"] : [])])
+  if (!record(value) || !exact(value, ["id", "name", "revision", "protocol", "base_url", "auth_mode", "allow_insecure_local", "created_at", "updated_at", "models", ...("non_streaming_tools" in value ? ["non_streaming_tools"] : []), ...("tools_enabled" in value ? ["tools_enabled"] : [])])
+    || ("tools_enabled" in value && typeof value.tools_enabled !== "boolean")
     || ("non_streaming_tools" in value && typeof value.non_streaming_tools !== "boolean")
     || !customId(value.id) || !text(value.name, 80) || !integer(value.revision, 1) || value.protocol !== "openai_chat_completions"
     || typeof value.base_url !== "string" || !/^https?:\/\//.test(value.base_url)
@@ -38,7 +39,7 @@ function provider(value: unknown): CustomProvider {
     || typeof value.updated_at !== "string" || !Number.isFinite(Date.parse(value.updated_at))) return fail();
   return { id: value.id, name: value.name, revision: value.revision, protocol: value.protocol, base_url: value.base_url,
     auth_mode: value.auth_mode, allow_insecure_local: value.allow_insecure_local, created_at: value.created_at,
-    updated_at: value.updated_at, models: models(value.models), ...(typeof value.non_streaming_tools === "boolean" ? { non_streaming_tools: value.non_streaming_tools } : {}) };
+    updated_at: value.updated_at, models: models(value.models), ...(typeof value.non_streaming_tools === "boolean" ? { non_streaming_tools: value.non_streaming_tools } : {}), ...(typeof value.tools_enabled === "boolean" ? { tools_enabled: value.tools_enabled } : {}) };
 }
 function modelList(value: unknown): { revision: number; models: CustomModel[] } {
   if (!record(value) || !exact(value, ["revision", "models"]) || !integer(value.revision, 1)) return fail();

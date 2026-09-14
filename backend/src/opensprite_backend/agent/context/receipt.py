@@ -54,6 +54,15 @@ def request_receipt(request: ModelRequest, sources: ReceiptSources | None, purpo
         "messages": [asdict(message) for message in request.messages],
         "tools": [asdict(tool) for tool in request.tools],
     }
+    endpoint = request.provider_endpoint
+    policy = "builtin"
+    if endpoint is not None:
+        model = next((m for m in endpoint.models if m.model_id == request.model_id), None)
+        policy = "provider_disabled" if not endpoint.tools_enabled else "model_disabled" if request.model_id in endpoint.disabled_models or (model is not None and not model.supports_tools) else "inherit"
+    tool_execution = {
+        "policy": policy,
+        "transport": "non_streaming" if endpoint is not None and endpoint.non_streaming_tools and request.tools else "streaming",
+    }
     return {
         "schemaVersion": 1, "requestHash": content_hash(normalized),
         "estimateMethod": "utf8-conservative-v1", "estimatedInputTokens": sum(components.values()),
@@ -64,4 +73,5 @@ def request_receipt(request: ModelRequest, sources: ReceiptSources | None, purpo
         "toolsHash": content_hash(normalized["tools"]),
         "historyMessageIds": history_ids, "summary": sources.summary,
         "skills": list(sources.skills), "workspace": sources.workspace,
+        "toolExecution": tool_execution,
     }

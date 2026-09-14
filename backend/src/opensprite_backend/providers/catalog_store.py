@@ -48,9 +48,14 @@ class CustomProvider(BaseModel):
     auth_mode: Literal["none", "bearer"]
     allow_insecure_local: bool = False
     non_streaming_tools: bool = False
+    tools_enabled: bool = True
     created_at: str
     updated_at: str
     models: tuple[CustomModel, ...] = ()
+
+    def allows_model_tools(self, model: CustomModel) -> bool:
+        """Model tools=True inherits; False is a preserved individual opt-out."""
+        return self.tools_enabled and model.tools
 
     @field_validator("name")
     @classmethod
