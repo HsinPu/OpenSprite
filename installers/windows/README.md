@@ -60,8 +60,21 @@ Run a clean-Windows smoke test before publishing the draft.
 ## Install
 
 Prerequisites: Node.js 20.19+ (20.x) or 22.12+, npm, and uv must be on PATH.
-The installer checks these before stopping an existing installation. It does not
-automatically install system tools. Reopen PowerShell after installing them.
+Both local and download installers check these before stopping an existing installation.
+Missing packages can be installed with winget after an interactive confirmation,
+or with explicit consent using `-InstallPrerequisites`. Add `-InstallGit` to include
+Git when missing; Git remains optional for source/ZIP installation. These switches
+also accept package/source agreements. `-NonInteractive` fails without consent.
+Unsupported existing Node.js versions require a manual upgrade. Missing npm offers
+the Node.js LTS package; if npm remains unavailable, repair Node.js and retry.
+No winget means manual installation. PATH is refreshed after installation; tools
+are rechecked before proceeding. OS elevation prompts may still appear.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installers\windows\install.ps1 -InstallPrerequisites -InstallGit
+```
+
+`-WhatIf` on the local installer does not install prerequisites.
 
 On failed upgrades, recovery restores saved access state before restarting the
 previous application. Failed program files may remain in `.app-failed-*` next

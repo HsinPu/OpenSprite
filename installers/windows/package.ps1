@@ -19,7 +19,7 @@ $files = @(& $git.Source -c "safe.directory=$($root.Replace('\','/'))" -C $root 
 if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate release source.' }
 $files += @('backend/pyproject.toml','backend/uv.lock','backend/README.md',
     'frontend/package.json','frontend/package-lock.json','frontend/index.html','frontend/tsconfig.json','frontend/vite.config.ts','frontend/README.md',
-    'installers/windows/install.ps1','installers/windows/access.ps1','installers/windows/launch.ps1','installers/windows/uninstall.ps1')
+    'installers/windows/bootstrap.ps1','installers/windows/install.ps1','installers/windows/access.ps1','installers/windows/launch.ps1','installers/windows/uninstall.ps1')
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $name = "OpenSprite-$version-windows.zip"

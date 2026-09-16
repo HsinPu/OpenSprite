@@ -3,6 +3,7 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+& (Join-Path $PSScriptRoot "test-prerequisites.ps1")
 & (Join-Path $PSScriptRoot "test-recovery.ps1")
 & (Join-Path $PSScriptRoot "test-bootstrap.ps1")
 & (Join-Path $PSScriptRoot "test-package.ps1")

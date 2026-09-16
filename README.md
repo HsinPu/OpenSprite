@@ -8,12 +8,20 @@ OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可
 
 ### 從本機原始碼安裝（目前可用）
 
-先安裝 Node.js 20.19+（20.x）或 22.12+、npm 與 uv，確認它們已加入 PATH；安裝工具後請重新開啟 PowerShell。
+安裝器會檢查 Node.js 20.19+（20.x）或 22.12+、npm 與 uv；缺少時可同意透過 winget 安裝。沒有 winget 時請手動安裝並重新開啟 PowerShell。
 在下載或 clone 的 OpenSprite 專案根目錄執行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\installers\windows\install.ps1
 ```
+
+若要自動補齊必要工具，並在缺少 Git 時一併安裝：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installers\windows\install.ps1 -InstallPrerequisites -InstallGit
+```
+
+`-InstallPrerequisites` 代表同意安裝缺少的套件及其授權條款；Git 為選用。既有 Node.js 版本過舊時仍需手動升級。自動化環境可加 `-NonInteractive`，未提供安裝同意時會直接回報缺少工具。
 
 更新時，先取得新版原始碼，再執行同一條指令。安裝完成後會啟動程式並開啟瀏覽器；之後可透過 `http://localhost:8765/` 使用。
 

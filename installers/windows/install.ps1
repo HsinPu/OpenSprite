@@ -1,10 +1,13 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
 param(
-    [string]$SourceRoot = (Join-Path $PSScriptRoot "..\.."),
+    [string]$SourceRoot,
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "OpenSprite\app"),
     [string]$StartupName = "OpenSprite",
     [int]$Port = 8765,
     [switch]$NoStart,
+    [switch]$InstallPrerequisites,
+    [switch]$InstallGit,
+    [switch]$NonInteractive,
     [switch]$ResetLocalAccess,
     [ValidateSet("TrustedLocal", "Password")][string]$AccessMode,
     [string]$UserDataRoot = (Join-Path $env:USERPROFILE ".opensprite"),
@@ -17,6 +20,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ([String]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = Join-Path $PSScriptRoot "..\.." }
 . (Join-Path $PSScriptRoot "access.ps1")
 
 function Resolve-AbsolutePath([string]$Path) {
@@ -295,6 +299,13 @@ if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite
     return
 }
 
+# Scope bootstrap parameters locally; dot sourcing never downloads a release.
+& {
+    param($Consent, $Quiet, $IncludeGit)
+    . (Join-Path $PSScriptRoot "bootstrap.ps1")
+    Ensure-BootstrapPrerequisites $Consent $Quiet $IncludeGit
+} ([bool]$InstallPrerequisites) ([bool]$NonInteractive) ([bool]$InstallGit)
+
 # Resolve and exercise prerequisites before creating staging or stopping an existing app.
 $nodeCommand = Get-InstallTool @("node.exe", "node") "Node.js (^20.19.0 or >=22.12.0)"
 $npmCommand = Get-InstallTool @("npm.cmd", "npm") "npm (included with Node.js)"
@@ -318,6 +329,7 @@ try {
         Copy-RequiredItem (Join-Path $sourceRootPath "frontend\$file") (Join-Path $stagingRoot "frontend")
     }
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\install.ps1") (Join-Path $stagingRoot "installers\windows")
+    Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\bootstrap.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\access.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\launch.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\uninstall.ps1") (Join-Path $stagingRoot "installers\windows")

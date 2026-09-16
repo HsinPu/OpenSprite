@@ -2,6 +2,7 @@
 param(
     [ValidatePattern('^(latest|[0-9]+\.[0-9]+\.[0-9]+)$')][string]$Version = 'latest',
     [switch]$InstallPrerequisites,
+    [switch]$InstallGit,
     [switch]$NonInteractive,
     [switch]$SkipBrowserLaunch
 )
@@ -110,36 +111,37 @@ function Remove-BootstrapTemp([string]$Path) {
     }
 }
 
-function Get-MissingPrerequisites {
+function Get-MissingPrerequisites([bool]$IncludeGit = $false) {
     $missing = @()
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
     if ($null -eq $node) { $missing += 'OpenJS.NodeJS.LTS' }
     else {
         & $node.Source -e "const [a,b]=process.versions.node.split('.').map(Number);if(!((a===20&&b>=19)||(a===22&&b>=12)||a>22))process.exit(1)"
         if ($LASTEXITCODE -ne 0) { throw 'Node.js is too old. Upgrade to 22.12+ and rerun; existing tools are not overwritten automatically.' }
-        if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'npm is missing. Repair Node.js and rerun.' }
+        if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { $missing += 'OpenJS.NodeJS.LTS' }
     }
     if (-not (Get-Command uv.exe -ErrorAction SilentlyContinue)) { $missing += 'astral-sh.uv' }
+    if ($IncludeGit -and -not (Get-Command git.exe -ErrorAction SilentlyContinue)) { $missing += 'Git.Git' }
     return $missing
 }
 
-function Ensure-BootstrapPrerequisites([bool]$Consent, [bool]$Quiet) {
-    $missing = @(Get-MissingPrerequisites)
+function Ensure-BootstrapPrerequisites([bool]$Consent, [bool]$Quiet, [bool]$IncludeGit = $false) {
+    $missing = @(Get-MissingPrerequisites $IncludeGit)
     if (-not $missing.Count) { return }
     Write-Host "Missing prerequisites: $($missing -join ', ')"
     if (-not $Consent) {
-        if ($Quiet) { throw 'Prerequisites missing. Install Node.js and uv, or explicitly pass -InstallPrerequisites.' }
+        if ($Quiet) { throw 'Prerequisites missing. Install the listed packages, or explicitly pass -InstallPrerequisites.' }
         $Consent = (Read-Host 'Install these packages using winget? [y/N]') -eq 'y'
     }
     if (-not $Consent) { throw 'Prerequisite installation declined. No application changes made.' }
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
-    if ($null -eq $winget) { throw 'winget is unavailable. Install Node.js and uv manually, reopen PowerShell and retry.' }
+    if ($null -eq $winget) { throw 'winget is unavailable. Install the listed packages manually, reopen PowerShell and retry.' }
     foreach ($id in $missing) {
         & $winget.Source install --id $id --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
         if ($LASTEXITCODE -ne 0) { throw "Prerequisite installation failed: $id. Reopen PowerShell after resolving it." }
     }
     $env:PATH = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:PATH
-    if (@(Get-MissingPrerequisites).Count) { throw 'Tools are not yet on PATH. Reopen PowerShell and retry.' }
+    if (@(Get-MissingPrerequisites $IncludeGit).Count) { throw 'Tools are not yet on PATH. Reopen PowerShell and retry.' }
 }
 
 function Invoke-OpenSpriteBootstrap {
@@ -153,7 +155,7 @@ function Invoke-OpenSpriteBootstrap {
         try { $held = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $held = $true }
         if (-not $held) { throw 'Another OpenSprite installation is running.' }
         Write-Host '[1/6] Checking prerequisites'
-        Ensure-BootstrapPrerequisites ([bool]$InstallPrerequisites) ([bool]$NonInteractive)
+        Ensure-BootstrapPrerequisites ([bool]$InstallPrerequisites) ([bool]$NonInteractive) ([bool]$InstallGit)
         $temp = Join-Path ([IO.Path]::GetTempPath()) ('opensprite-download-' + [Guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $temp | Out-Null
         $stage = 'release metadata'
