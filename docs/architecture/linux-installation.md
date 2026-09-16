@@ -42,3 +42,23 @@ The installer rejects root execution, non-Linux systems, unsafe test roots,
 symlink roots, invalid ports and unavailable prerequisites. It does not expose
 a public listener, configure a reverse proxy, enable system linger, or alter a
 firewall.
+
+## Verification
+
+From a non-root Linux account with a systemd user manager and the installer
+prerequisites available, run:
+
+```bash
+uv sync --project backend --dev
+uv run --project backend bash installers/linux/test.sh
+```
+
+The test builds an isolated installation under a temporary path containing
+spaces, checks access-policy/bootstrap behavior, and validates the generated
+unit with `systemd-analyze --user verify`. Test mode writes the unit only inside
+its temporary root and never registers or starts it. Actual service startup,
+update, restart and uninstall must be checked separately with a disposable user.
+
+`WorkingDirectory=` takes the absolute directory without surrounding quotes;
+`ExecStart=` retains quoting for its executable path. Linger detection names the
+target user explicitly so it also works outside an interactive login session.

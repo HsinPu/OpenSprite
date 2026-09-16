@@ -185,7 +185,7 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 - CLI：不在新版本範圍內。
 - API：Provider、AI settings、Workspace、Agent chat HTTP/SSE 與受保護的排程 CRUD／執行紀錄契約已實作；未使用 WebSocket。
 - 存取：支援本機免密碼的 `trusted_local` 與需要 Argon2id 密碼、記憶體 Session 的 `password_required`。
-- 安裝器：Windows 與 Linux current-user installer 均已實作；Linux 實機 systemd 隔離測試仍待真實 Linux 主機執行。
+- 安裝器：Windows 與 Linux current-user installer 均已實作；Linux 已在 WSL 2＋Ubuntu 24.04 驗證隔離安裝、systemd 啟動、更新、解除安裝及重裝保留資料，詳見 [驗證紀錄](docs/changes/0299-linux-systemd-wsl-verification.md)。Linux 目前仍需先備妥 Node.js／npm、uv、Python 與原始碼。
 
 ## 工作區
 

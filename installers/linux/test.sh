@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(mktemp -d "${TMPDIR:-/tmp}/opensprite-installer-test-XXXXXX")"; trap 'rm -rf -- "$ROOT"' EXIT
+ROOT="$(mktemp -d "${TMPDIR:-/tmp}/opensprite-installer-test-space XXXXXX")"; trap 'rm -rf -- "$ROOT"' EXIT
 python3 - "$ROOT" "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" <<'PY'
 import importlib.util, io, json, pathlib, sys
 root=pathlib.Path(sys.argv[1])/".opensprite"; source=pathlib.Path(sys.argv[2])
@@ -20,5 +20,6 @@ PY
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/install.sh" --source-root "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" --test-root "$ROOT" --access-mode trusted_local
 [[ -f "$ROOT/app/frontend/dist/index.html" ]]
 [[ -f "$ROOT/app/backend/.venv/bin/uvicorn" ]]
+systemd-analyze --user verify "$ROOT/systemd/opensprite.service"
 [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["mode"])' "$ROOT/.opensprite/config/access-policy.json")" == "trusted_local" ]]
-echo "Linux installer helper test passed."
+echo "Linux installer build, access helper and systemd unit checks passed."

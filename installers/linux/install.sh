@@ -103,7 +103,7 @@ check_user_linger() {
   local linger="unknown"
   local target_user="${USER:-$(id -un)}"
   if command -v loginctl >/dev/null; then
-    linger="$(loginctl show-user --property=Linger --value 2>/dev/null || true)"
+    linger="$(loginctl show-user "$target_user" --property=Linger --value 2>/dev/null || true)"
   fi
   if [[ "${linger,,}" != "yes" ]]; then
     printf '%s\n' \
@@ -147,17 +147,15 @@ PY
 
 INSTALLED_PYTHON="$INSTALL_ROOT/backend/.venv/bin/python"
 "$INSTALLED_PYTHON" "$INSTALL_ROOT/installers/linux/access.py" policy "$USER_DATA_ROOT" "$ACCESS_MODE"
-if ((SKIP_SERVICE == 0)); then
-  check_user_linger
-  mkdir -p "$UNIT_ROOT"
-  cat >"$UNIT_FILE" <<EOF
+mkdir -p "$UNIT_ROOT"
+cat >"$UNIT_FILE" <<EOF
 [Unit]
 Description=OpenSprite local backend
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory="$INSTALL_ROOT/backend"
+WorkingDirectory=$INSTALL_ROOT/backend
 ExecStart="$INSTALL_ROOT/backend/.venv/bin/uvicorn" opensprite_backend.installed_runtime:create_installed_app --factory --host 127.0.0.1 --port $PORT --no-proxy-headers
 Restart=on-failure
 RestartSec=2
@@ -165,6 +163,8 @@ RestartSec=2
 [Install]
 WantedBy=default.target
 EOF
+if ((SKIP_SERVICE == 0)); then
+  check_user_linger
   systemctl --user daemon-reload
   systemctl --user enable opensprite.service >/dev/null
   if ((NO_START == 0)); then

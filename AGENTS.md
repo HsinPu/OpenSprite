@@ -88,10 +88,19 @@ Windows installer checks:
 ./installers/windows/test.ps1
 ```
 
-Browser verification remains manual against the local Vite server or installed
-single-origin runtime. Frontend, backend, API contract and Windows installer
-isolation tests are committed; Linux installer execution tests do not exist yet
-and must not be claimed.
+Linux installer checks (non-root Linux user with npm, uv, Python and a systemd
+user manager):
+
+```bash
+uv sync --project backend --dev
+uv run --project backend bash installers/linux/test.sh
+```
+
+The Linux check builds an isolated installation in a temporary path containing
+spaces and validates its generated systemd unit. It does not start or uninstall
+the real user service; verify that lifecycle separately in a disposable Linux
+account. Browser verification remains manual against the local Vite server or
+installed single-origin runtime.
 
 ## Generated and local files
 
