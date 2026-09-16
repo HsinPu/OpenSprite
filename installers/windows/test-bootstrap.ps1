@@ -97,5 +97,25 @@ try {
             Remove-BootstrapTemp $path
         }
     }
+    $FromSource = $true
+    $Version = 'latest'
+    function Get-OpenSpriteSource([string]$Destination) {
+        $script:downloadRoots += (Split-Path -Parent $Destination)
+        Expand-ReleaseArchive $script:fixture $Destination
+    }
+    function Ensure-BootstrapPrerequisites([bool]$Consent, [bool]$Quiet, [bool]$IncludeGit) {
+        Assert-True $IncludeGit 'Source installation must request Git.'
+    }
+    function Save-ReleaseDownload { throw 'Source mode must not use Release assets.' }
+    $output = Invoke-OpenSpriteBootstrap
+    Assert-True ($output -contains 'TEST-INSTALL-OK') 'Source installer was not invoked.'
+    foreach ($path in $script:downloadRoots) { Assert-True (-not (Test-Path -LiteralPath $path)) 'Source temporary root was not removed.' }
+    $Version = '1.2.3'
+    Assert-Rejected { Invoke-OpenSpriteBootstrap }
+    $Version = 'latest'
+    function Get-OpenSpriteSource([string]$Destination) { $script:failedSourceRoot = Split-Path -Parent $Destination; throw 'Injected clone failure' }
+    Assert-Rejected { Invoke-OpenSpriteBootstrap }
+    Assert-True (Test-Path (Join-Path $script:failedSourceRoot 'failure.txt')) 'Missing clone failure stage report.'
+    Remove-BootstrapTemp $script:failedSourceRoot
     Write-Host 'Bootstrap safety and orchestration checks passed.'
 } finally { Remove-BootstrapTemp $root }

@@ -6,6 +6,21 @@ OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可
 
 ## Windows 安裝與更新
 
+### 一行指令下載原始碼並安裝
+
+新版腳本推送到 GitHub `main` 後，可在任意目錄開啟 PowerShell，貼上：
+
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/HsinPu/OpenSprite/main/installers/windows/bootstrap.ps1').Content)) -FromSource -InstallPrerequisites
+```
+
+不需要事先 clone 或發布 Release。腳本會透過 winget 補齊 Git、Node.js／npm、uv，
+再把官方 repository 的 `main` 淺層 clone 到暫存目錄，執行安裝、檢查啟動並開啟瀏覽器。
+更新也使用同一條指令；個人資料與既有存取模式保留，完成後清理下載暫存。
+此指令同意安裝缺少的工具及套件條款；Windows 可能顯示權限提示。
+沒有 winget 或既有 Node.js 過舊時會提示手動處理。
+此入口執行官方 `main` 最新原始碼，請只在信任此來源時使用；正式版本入口見下方。
+
 ### 從本機原始碼安裝（目前可用）
 
 安裝器會檢查 Node.js 20.19+（20.x）或 22.12+、npm 與 uv；缺少時可同意透過 winget 安裝。沒有 winget 時請手動安裝並重新開啟 PowerShell。

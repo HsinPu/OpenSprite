@@ -1,11 +1,28 @@
 # OpenSprite Windows installer
 
+## One-command source installation
+
+After the updated bootstrap is pushed to main, run from any PowerShell directory:
+
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/HsinPu/OpenSprite/main/installers/windows/bootstrap.ps1').Content)) -FromSource -InstallPrerequisites
+```
+
+This explicitly selects the latest main source, installs missing Git/Node.js/npm/uv
+with winget consent, shallow-clones the fixed official repository into a unique
+temporary directory, and runs the existing installer. It needs no Release assets
+or manual checkout. Rerun to update while preserving personal data/access mode.
+The source is trusted through GitHub HTTPS; it is not a checksum-verified release.
+Source mode cannot be combined with a numbered release version.
+
+
 ## Download installer (release assets must be published first)
 
 `bootstrap.ps1` downloads a stable GitHub Release from **HsinPu/OpenSprite**,
 checks SHA-256, validates ZIP paths, invokes the existing installer and cleans
 its download directory. Git is not required on the destination machine.
-There is no fallback to `main`, prereleases or another repository.
+Release mode never falls back to `main`, prereleases or another repository.
+Use explicit `-FromSource` for the separate source installation workflow.
 
 After a release containing these assets is published, download
 `OpenSprite-install.ps1` from that release, inspect it, then run:

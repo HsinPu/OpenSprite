@@ -3,6 +3,7 @@ param(
     [ValidatePattern('^(latest|[0-9]+\.[0-9]+\.[0-9]+)$')][string]$Version = 'latest',
     [switch]$InstallPrerequisites,
     [switch]$InstallGit,
+    [switch]$FromSource,
     [switch]$NonInteractive,
     [switch]$SkipBrowserLaunch
 )
@@ -144,7 +145,18 @@ function Ensure-BootstrapPrerequisites([bool]$Consent, [bool]$Quiet, [bool]$Incl
     if (@(Get-MissingPrerequisites $IncludeGit).Count) { throw 'Tools are not yet on PATH. Reopen PowerShell and retry.' }
 }
 
+function Get-OpenSpriteSource([string]$Destination) {
+    if (Test-Path -LiteralPath $Destination) { throw 'Source destination must not exist.' }
+    $git = Get-Command git.exe -ErrorAction Stop
+    & $git.Source -c core.hooksPath=NUL clone --depth 1 --single-branch --branch main -- https://github.com/HsinPu/OpenSprite.git $Destination | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Git source download failed. Existing installation was not changed.' }
+    foreach ($file in @('installers/windows/install.ps1', 'installers/windows/bootstrap.ps1', 'backend/pyproject.toml', 'frontend/package.json')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Destination $file) -PathType Leaf)) { throw "Incomplete source checkout: $file" }
+    }
+}
+
 function Invoke-OpenSpriteBootstrap {
+    if ($FromSource -and $Version -ne 'latest') { throw '-FromSource cannot be combined with a release version.' }
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'This installer supports Windows only.' }
     $mutex = [Threading.Mutex]::new($false, 'Local\OpenSprite.Windows.Install')
     $held = $false
@@ -155,9 +167,17 @@ function Invoke-OpenSpriteBootstrap {
         try { $held = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $held = $true }
         if (-not $held) { throw 'Another OpenSprite installation is running.' }
         Write-Host '[1/6] Checking prerequisites'
-        Ensure-BootstrapPrerequisites ([bool]$InstallPrerequisites) ([bool]$NonInteractive) ([bool]$InstallGit)
+        Ensure-BootstrapPrerequisites ([bool]$InstallPrerequisites) ([bool]$NonInteractive) ([bool]($InstallGit -or $FromSource))
         $temp = Join-Path ([IO.Path]::GetTempPath()) ('opensprite-download-' + [Guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $temp | Out-Null
+        if ($FromSource) {
+            $stage = 'source download'
+            Write-Host '[2/6] Cloning OpenSprite main from GitHub'
+            $source = Join-Path $temp 'source'
+            Get-OpenSpriteSource $source
+            $resolved = 'from main'
+            Write-Host '[3/6] Source checkout ready'
+        } else {
         $stage = 'release metadata'
         Write-Host '[2/6] Resolving and downloading the release'
         $api = if ($Version -eq 'latest') { 'https://api.github.com/repos/HsinPu/OpenSprite/releases/latest' } else { "https://api.github.com/repos/HsinPu/OpenSprite/releases/tags/v$Version" }
@@ -179,6 +199,7 @@ function Invoke-OpenSpriteBootstrap {
         Expand-ReleaseArchive (Join-Path $temp $asset) $source
         $manifest = Get-Content -LiteralPath (Join-Path $source 'release-source.json') -Raw | ConvertFrom-Json
         if ($manifest.version -ne $resolved -or $manifest.revision -notmatch '^[a-f0-9]{40}$') { throw 'Release provenance mismatch.' }
+        }
         $stage = 'installation'
         Write-Host "[4/6] Installing OpenSprite $resolved (startup and health checks included)"
         & (Join-Path $source 'installers\windows\install.ps1') -SourceRoot $source -SkipBrowserLaunch:$SkipBrowserLaunch
