@@ -57,7 +57,12 @@ Get-CimInstance Win32_Process | Where-Object {
     $_.CommandLine -match $escapedRoot -and $_.CommandLine -match "opensprite_backend\.installed_runtime"
 } | ForEach-Object {
     if ($PSCmdlet.ShouldProcess("PID $($_.ProcessId)", "Stop installed OpenSprite backend")) {
-        Stop-Process -Id $_.ProcessId -Force
+        try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop }
+        catch {
+            # Stopping the launcher can also end a child captured by the CIM query.
+            # Only an already-exited PID is success; access/other failures must abort.
+            if ($_.FullyQualifiedErrorId -notlike 'NoProcessFoundForGivenId,*') { throw }
+        }
     }
 }
 
