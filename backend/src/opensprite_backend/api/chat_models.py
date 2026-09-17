@@ -1,6 +1,8 @@
 """Strict consumer-visible models for Conversation and Run HTTP routes."""
 
 from __future__ import annotations
+
+from opensprite_backend.response_modes import HistoricalResponseMode, ReasoningResolution
 from opensprite_backend.provider_identity import ProviderId
 
 from datetime import datetime
@@ -111,7 +113,8 @@ class RunResponse(ChatContractModel):
     assistant_message_id: UUID | None
     provider_id: ProviderId
     model_id: str
-    response_mode: Literal["default", "fast", "balanced", "deep"]
+    response_mode: HistoricalResponseMode
+    reasoning_resolution: ReasoningResolution | None = None
     status: Literal[
         "queued",
         "running",
@@ -255,6 +258,7 @@ def run_response(item: RunSnapshot) -> RunResponse:
         providerId=item.provider_id,
         modelId=item.model_id,
         responseMode=item.response_mode,
+        reasoningResolution=item.reasoning_resolution,
         status=item.status.value,
         completionReason=(
             None

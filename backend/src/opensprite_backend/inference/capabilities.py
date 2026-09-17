@@ -16,6 +16,7 @@ class ModelCapability:
     context_window_tokens: int
     max_output_tokens: int
     supports_tools: bool = True
+    reasoning_efforts: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.model_id or not self.name:
@@ -30,6 +31,7 @@ _FIXED_CAPABILITIES: Final = {
     ("openai", "gpt-5.6"): ModelCapability(
         provider_id="openai",
         model_id="gpt-5.6",
+        reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
         name="GPT-5.6",
         context_window_tokens=1_050_000,
         max_output_tokens=128_000,
@@ -37,6 +39,7 @@ _FIXED_CAPABILITIES: Final = {
     ("openai", "gpt-5.6-luna"): ModelCapability(
         provider_id="openai",
         model_id="gpt-5.6-luna",
+        reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
         name="GPT-5.6 Luna",
         context_window_tokens=1_050_000,
         max_output_tokens=128_000,
@@ -44,6 +47,7 @@ _FIXED_CAPABILITIES: Final = {
     ("anthropic", "claude-sonnet-4-6"): ModelCapability(
         provider_id="anthropic",
         model_id="claude-sonnet-4-6",
+        reasoning_efforts=("low", "medium", "high", "max"),
         name="Claude Sonnet 4.6",
         context_window_tokens=1_000_000,
         max_output_tokens=128_000,
@@ -51,6 +55,7 @@ _FIXED_CAPABILITIES: Final = {
     ("anthropic", "claude-haiku-4-5"): ModelCapability(
         provider_id="anthropic",
         model_id="claude-haiku-4-5",
+        reasoning_efforts=(),
         name="Claude Haiku 4.5",
         context_window_tokens=200_000,
         max_output_tokens=64_000,

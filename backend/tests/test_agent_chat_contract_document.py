@@ -211,7 +211,7 @@ def test_response_mode_keeps_provider_default_as_an_explicit_value() -> None:
         "default",
         "fast",
         "balanced",
-        "deep",
+        "deep", "low", "medium", "high", "xhigh", "max", "ultra",
     ]
 
 

@@ -6,7 +6,7 @@ const run: RunSnapshot = {
   workspaceId: "00000000-0000-4000-8000-000000000000", workspaceRevision: 1, workspaceName: "Default workspace",
   workspaceRootHash: null, workspaceMountManifestHash: "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
   userMessageId: "33333333-3333-4333-8333-333333333333", assistantMessageId: null,
-  providerId: "openrouter", modelId: "test/original", responseMode: "default", status: "completed",
+  providerId: "openrouter", modelId: "test/original", responseMode: "medium", status: "completed",
   completionReason: "stop", error: null, partialText: "測試回覆：這是隔離的介面驗證，不會讀寫本機對話。",
   createdAt: "2026-09-08T08:00:00Z", startedAt: "2026-09-08T08:00:01Z", finishedAt: "2026-09-08T08:00:10Z",
 };

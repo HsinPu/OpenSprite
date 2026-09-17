@@ -39,7 +39,7 @@ describe("mobile navigation accessibility", () => {
       if (path === "/api/runs" && init?.method === "POST") return pending;
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/providers") return json(connectedOpenAi);
-      if (path === "/api/settings/ai") return json({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "balanced", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false });
+      if (path === "/api/settings/ai") return json({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false });
       if (path === "/api/settings/conversation") return json({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false });
       if (path.startsWith("/api/conversations?")) return json({ conversations: [], nextCursor: null });
       if (path.includes("/messages")) return json({ messages: [], nextBeforeSequence: null });
@@ -262,7 +262,7 @@ describe("Ant Design shell controls", () => {
 describe("persisted AI settings", () => {
   it("chooses the first available model when no selection exists", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -275,7 +275,7 @@ describe("persisted AI settings", () => {
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
     });
   });
 
@@ -293,7 +293,7 @@ describe("persisted AI settings", () => {
     await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(true);
-    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "high", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
 
     await waitFor(() => expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(false));
     expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6");
@@ -302,9 +302,9 @@ describe("persisted AI settings", () => {
 
   it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -317,12 +317,12 @@ describe("persisted AI settings", () => {
     fireEvent.mouseDown(screen.getByLabelText("模型"));
     fireEvent.click(await screen.findByText("GPT-5.6 Luna"));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6 Luna"));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }) });
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }) });
   });
 
   it("keeps the confirmed model when the PUT fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
       throw new Error(`unexpected request ${path}`);
@@ -343,7 +343,7 @@ describe("persisted AI settings", () => {
 
   it("hydrates and persists the response mode with the confirmed model", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "high", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -353,22 +353,22 @@ describe("persisted AI settings", () => {
 
     await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
-    const deep = await screen.findByRole("button", { name: "深入" });
-    expect(deep.getAttribute("aria-pressed")).toBe("true");
+    const deep = await screen.findByRole("radio", { name: "高" });
+    expect((deep as HTMLInputElement).checked).toBe(true);
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).parentElement?.textContent).toContain("一次回答");
-    fireEvent.click(screen.getByRole("button", { name: "快速" }));
+    fireEvent.click(screen.getByRole("radio", { name: "低" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "快速" }).getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect((screen.getByRole("radio", { name: "低" }) as HTMLInputElement).checked).toBe(true));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "fast", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "low", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
     });
   });
 
   it("keeps the confirmed response mode when saving fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "balanced", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }));
       throw new Error(`unexpected request ${path}`);
@@ -378,13 +378,13 @@ describe("persisted AI settings", () => {
 
     await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
-    const balanced = await screen.findByRole("button", { name: "平衡" });
-    await waitFor(() => expect(balanced.getAttribute("aria-pressed")).toBe("true"));
-    fireEvent.click(screen.getByRole("button", { name: "深入" }));
+    const balanced = await screen.findByRole("radio", { name: "中" });
+    await waitFor(() => expect((balanced as HTMLInputElement).checked).toBe(true));
+    fireEvent.click(screen.getByRole("radio", { name: "高" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("AI 設定暫時無法讀取或儲存");
-    expect(balanced.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("false");
+    expect((balanced as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: "高" }) as HTMLInputElement).checked).toBe(false);
   });
 });
 
@@ -507,13 +507,13 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const fetchMock = vi.fn((path: string) => {
       if (path === "/api/workspaces") return workspaceResponse();
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "balanced", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "Asia/Taipei" })));
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: DEFAULT_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: true, title: "排程專屬對話", latestMessagePreview: null, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
-      if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [{ id: "20000000-0000-4000-8000-000000000001", workspaceId: DEFAULT_WORKSPACE_ID, name: "晨間整理", prompt: "整理工作", timeZone: "Asia/Taipei", cadence: { type: "daily", localTime: "09:00" }, executionProfile: { providerId: "openai", modelId: "gpt-5.6", responseMode: "balanced", contextBudget: "64k", outputBudget: "16k", outputContinuation: "5" }, status: "active", conversationId, nextRunAt: "2026-09-05T01:00:00Z", revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", latestOccurrence: null }], nextCursor: null })));
+      if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [{ id: "20000000-0000-4000-8000-000000000001", workspaceId: DEFAULT_WORKSPACE_ID, name: "晨間整理", prompt: "整理工作", timeZone: "Asia/Taipei", cadence: { type: "daily", localTime: "09:00" }, executionProfile: { providerId: "openai", modelId: "gpt-5.6", responseMode: "medium", contextBudget: "64k", outputBudget: "16k", outputContinuation: "5" }, status: "active", conversationId, nextRunAt: "2026-09-05T01:00:00Z", revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", latestOccurrence: null }], nextCursor: null })));
       if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
       return new Promise<Response>(() => undefined);
     });
@@ -540,7 +540,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "default", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify({ providers: [] })));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
       return new Promise<Response>(() => undefined);
@@ -562,7 +562,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", workspaceId: DEFAULT_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: false, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -584,7 +584,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: DEFAULT_WORKSPACE_ID, revision: 1, workspaceManagedBySchedule: false, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -603,7 +603,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/workspaces") return workspaceResponse();
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "default", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({
         conversations: [{
@@ -651,3 +651,8 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
   });
 });
+
+vi.mock("../src/api/responseModes", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/api/responseModes")>(),
+  getResponseModeResolution: vi.fn(async (_provider, _model, mode) => ({ requested: mode, effective: null, status: "unknown" })),
+}));

@@ -366,6 +366,57 @@
       }
     },
     "schemas": {
+      "ReasoningResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requested",
+          "effective",
+          "status"
+        ],
+        "properties": {
+          "requested": {
+            "type": "string",
+            "enum": [
+              "default",
+              "fast",
+              "balanced",
+              "deep",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "ultra"
+            ]
+          },
+          "effective": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "fallback",
+              "provider_default",
+              "unknown"
+            ]
+          }
+        }
+      },
       "Identifier": {
         "type": "string",
         "format": "uuid",
@@ -382,12 +433,18 @@
       },
       "ResponseMode": {
         "type": "string",
-        "description": "default means the adapter omits an explicit inference-effort parameter.",
+        "description": "Six current preferences plus read-only historical mode names retained on existing Runs and events.",
         "enum": [
           "default",
           "fast",
           "balanced",
-          "deep"
+          "deep",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
         ]
       },
       "CompletionReason": {
@@ -675,8 +732,13 @@
           },
           "workspaceRootHash": {
             "oneOf": [
-              {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-              {"type": "null"}
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "workspaceMountManifestHash": {
@@ -756,6 +818,17 @@
                 "type": "null"
               }
             ]
+          },
+          "reasoningResolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasoningResolution"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Frozen before the first provider call; null for queued and historical Runs."
           }
         }
       },

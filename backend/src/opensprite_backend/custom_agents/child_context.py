@@ -27,7 +27,7 @@ class ChildContextRepository:
         now = datetime.now(UTC)
         message_id = str(uuid4())
         self._run = replace(
-            parent, id=child.id, conversation_id=child.id,
+            parent, reasoning_resolution=None, id=child.id, conversation_id=child.id,
             user_message_id=message_id, assistant_message_id=None,
             provider_id=child.provider_id, model_id=child.model_id,
             status=RunStatus.QUEUED, partial_text="", error=None,
@@ -64,6 +64,15 @@ class ChildContextRepository:
         # Only the explicit delegation prompt is history; it must not be
         # compacted away to make an oversized mandatory task appear to fit.
         return None
+
+    def set_reasoning_resolution(self, run_id, resolution):
+        with self._lock:
+            self._require(run_id)
+            if self._run.response_mode != resolution.requested:
+                raise ConversationStoreError(StoreFailure.INVALID_STATE)
+            if self._run.reasoning_resolution is None:
+                self._run = replace(self._run, reasoning_resolution=resolution)
+            return self._run
 
     def mark_run_started(self, run_id, availability=None, mounts=()):
         with self._lock:

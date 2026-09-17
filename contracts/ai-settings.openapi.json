@@ -31,6 +31,64 @@
     }
   ],
   "paths": {
+    "/api/settings/ai/response-mode": {
+      "get": {
+        "operationId": "resolveResponseMode",
+        "tags": [
+          "ai-settings"
+        ],
+        "description": "Read-only preview using the same capability resolution as execution. Does not save preferences or invoke inference. Unknown capabilities return status unknown and effective null.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderId"
+            }
+          },
+          {
+            "in": "query",
+            "name": "modelId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          {
+            "in": "query",
+            "name": "responseMode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResponseMode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved native reasoning effort.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasoningResolution"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "503": {
+            "$ref": "#/components/responses/SettingsOrCredentialStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/api/settings/ai/providers/{provider_id}/tools": {
       "put": {"operationId":"putProviderToolPolicy","summary":"Update one native provider tool policy atomically","parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","enum":["openai","anthropic","openrouter"]}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ProviderToolPolicy"}}}},"responses":{"200":{"description":"Policy saved; other preferences preserved","content":{"application/json":{"schema":{"$ref":"#/components/schemas/AiSettings"}}}},"400":{"$ref":"#/components/responses/InvalidRequest"},"503":{"$ref":"#/components/responses/SettingsStoreUnavailable"},"500":{"$ref":"#/components/responses/InternalError"}}}
     },
@@ -38,7 +96,7 @@
       "get": {
         "operationId": "getAiSettings",
         "summary": "Read AI settings",
-        "description": "Returns a null model, default response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
+        "description": "Returns a null model, medium response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
         "tags": ["ai-settings"],
         "responses": {
           "200": {
@@ -73,9 +131,67 @@
   },
   "components": {
     "schemas": {
+      "ReasoningResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requested",
+          "effective",
+          "status"
+        ],
+        "properties": {
+          "requested": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "ultra"
+            ]
+          },
+          "effective": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "fallback",
+              "provider_default",
+              "unknown"
+            ]
+          }
+        }
+      },
       "ProviderToolPolicy": {"type":"object","additionalProperties":false,"properties":{"toolsEnabled":{"type":"boolean","default":true},"transport":{"type":"string","enum":["stream","non_streaming"],"default":"stream"},"disabledModels":{"type":"array","maxItems":1000,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":256},"default":[]}}},
       "ProviderId": {"type": "string", "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"},
-      "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
+      "ResponseMode": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ],
+        "description": "Requested reasoning preference. Unsupported levels use the highest supported native effort; ultra is resolved to the highest available effort. Unknown or unavailable effort control omits the provider parameter."
+      },
       "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
       "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]},
       "ModelSelection": {

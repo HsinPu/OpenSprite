@@ -23,7 +23,7 @@ function snapshot(id: string): RunSnapshot {
     assistantMessageId: "7e660e86-4838-4af5-99d5-ab926428b1c0",
     providerId: "openrouter",
     modelId: "openrouter/auto",
-    responseMode: "default",
+    responseMode: "medium",
     status: "completed",
     completionReason: "stop",
     error: null,

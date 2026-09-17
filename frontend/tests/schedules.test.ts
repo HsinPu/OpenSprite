@@ -24,7 +24,7 @@ const fields: ScheduleFields = {
   executionProfile: {
     providerId: "openai",
     modelId: "gpt-5.6",
-    responseMode: "balanced",
+    responseMode: "medium",
     contextBudget: "64k",
     outputBudget: "16k",
     outputContinuation: "5",

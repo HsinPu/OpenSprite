@@ -118,7 +118,7 @@ describe("Agent chat HTTP contract", () => {
           assistantMessageId: null,
           providerId: "openrouter",
           modelId: "openrouter/auto",
-          responseMode: "default",
+          responseMode: "medium",
           status: "running",
           completionReason: null,
           error: null,
@@ -153,7 +153,7 @@ describe("Agent chat HTTP contract", () => {
       assistantMessageId,
       providerId: "openrouter",
       modelId: "openrouter/auto",
-      responseMode: "default",
+      responseMode: "medium",
       status: "completed",
       completionReason: "output_limit",
       error: null,
@@ -249,7 +249,7 @@ describe("Agent chat SSE contract", () => {
         runId,
         conversationId,
         createdAt: "2026-08-21T08:30:01Z",
-        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames },
+        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "medium", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames },
       }),
     }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {

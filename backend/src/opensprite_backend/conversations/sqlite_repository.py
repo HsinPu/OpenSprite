@@ -9,6 +9,7 @@ import os
 import re
 import sqlite3
 from collections.abc import Callable, Mapping
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
@@ -63,7 +64,8 @@ _TERMINAL_EVENT_TYPES = {
     RunEventType.RUN_INTERRUPTED,
 }
 from opensprite_backend.providers.catalog_models import valid_provider_id
-_RESPONSE_MODES = {"default", "fast", "balanced", "deep"}
+from opensprite_backend.response_modes import HISTORICAL_RESPONSE_MODES, ReasoningResolution
+_RESPONSE_MODES = set(HISTORICAL_RESPONSE_MODES)
 _CONTEXT_BUDGETS = {"auto", "32k", "64k", "128k", "256k", "max"}
 _OUTPUT_BUDGETS = {"auto", "8k", "16k", "32k", "64k", "max"}
 _OUTPUT_CONTINUATIONS = {"off", "1", "2", "3", "5", "10", "20", "50", "unlimited"}
@@ -749,6 +751,30 @@ class SqliteConversationRepository:
                 raise ConversationStoreError(
                     StoreFailure.DATABASE_UNAVAILABLE
                 ) from error
+            finally:
+                connection.close()
+
+    def set_reasoning_resolution(self, run_id: str, resolution: ReasoningResolution) -> RunSnapshot:
+        """Freeze the actual effort before the first provider call."""
+        self._require_identifier(run_id)
+        with self._lock:
+            connection = self._open_write()
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                row = self._require_run_row(connection, run_id)
+                if row["response_mode"] != resolution.requested or row["status"] not in {"running", "cancelling"}:
+                    raise ConversationStoreError(StoreFailure.INVALID_STATE)
+                connection.execute("UPDATE runs SET reasoning_resolution_json=? WHERE id=? AND reasoning_resolution_json IS NULL",
+                    (json.dumps(asdict(resolution), separators=(",", ":")), run_id))
+                result = self._run(self._require_run_row(connection, run_id))
+                connection.commit()
+                return result
+            except ConversationStoreError:
+                connection.rollback()
+                raise
+            except (sqlite3.Error, OSError, TypeError, ValueError) as error:
+                connection.rollback()
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
             finally:
                 connection.close()
 
@@ -1677,6 +1703,7 @@ class SqliteConversationRepository:
             provider_id=row["provider_id"],
             model_id=row["model_id"],
             response_mode=row["response_mode"],
+            reasoning_resolution=(ReasoningResolution(**json.loads(row["reasoning_resolution_json"])) if row["reasoning_resolution_json"] is not None else None),
             context_budget=row["context_budget"],
             output_budget=row["output_budget"],
             output_continuation=row["output_continuation"],

@@ -1,4 +1,4 @@
-import { Button, Collapse, Drawer, Dropdown, Input, Modal, Select, Switch, Tooltip } from "antd";
+import { Button, Collapse, Drawer, Dropdown, Input, Modal, Radio, Select, Switch, Tooltip } from "antd";
 import { ArrowLeftOutlined, EllipsisOutlined, MenuOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
@@ -11,6 +11,8 @@ import {
   type ProviderStatus,
   type ProviderSummary,
 } from "../../api/providerConnections";
+import { responseModes } from "../../api/responseModes";
+import { ResponseModeHint } from "../ai-settings/ResponseModeHint";
 import type { ContextBudget, OutputBudget, OutputContinuation, ResponseDelivery, ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -449,7 +451,6 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
     : selectedProvider?.id === "openrouter" && selectedModels.length === 0 ? t("models.helper.emptyOpenRouter")
     : modelSelection ? t("models.helper.selected") : t("models.helper.select");
 
-  const responseModes: ReadonlyArray<{ value: ResponseMode; label: string }> = [{ value: "default", label: t("models.response.default") }, { value: "fast", label: t("models.response.fast") }, { value: "balanced", label: t("models.response.balanced") }, { value: "deep", label: t("models.response.deep") }];
   const responseDeliveryOptions = responseDeliveryValues.map((value) => ({ value, label: t(responseDeliveryLabelKeys[value]) }));
   return (
     <div className="settings-form-stack settings-models-layout">
@@ -493,7 +494,12 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
           {aiSettingsError ? <div className="settings-model-load-error" role="alert"><p>{aiSettingsError}</p><button type="button" className="settings-secondary-button" onClick={() => void onAiSettingsReload()}>{t("common.retry")}</button></div> : null}
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
-        <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={!aiSettingsLoaded || aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
+        <div className="settings-response-preference">
+          <div className="settings-preference-row"><span id="settings-response-mode-label">{t("models.responseMode")}</span>
+            <Radio.Group className="settings-response-modes" name="response-mode" aria-labelledby="settings-response-mode-label" aria-busy={aiSettingsSaving} value={responseMode} disabled={!aiSettingsLoaded} onChange={(event) => void onResponseModeChange(event.target.value as ResponseMode)} options={responseModes.map((value) => ({ value, label: t(`models.response.${value}`) }))} />
+          </div>
+          <ResponseModeHint providerId={modelSelection?.providerId} modelId={modelSelection?.modelId} mode={responseMode} enabled={aiSettingsLoaded} />
+        </div>
       </SettingsCard>
       <SettingsCard icon="settings" title={t("models.replySettings")}>
         <div className="settings-budget-field">

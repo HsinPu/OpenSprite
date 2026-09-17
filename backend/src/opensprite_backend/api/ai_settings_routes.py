@@ -2,7 +2,9 @@
 
 from typing import cast
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Query, status
+from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.response_modes import ResponseModeValue, ReasoningResolution
 from fastapi.responses import JSONResponse
 
 from opensprite_backend.ai_settings import AiSettingsOperations
@@ -119,3 +121,13 @@ async def put_ai_settings(
 @router.put("/api/settings/ai/providers/{provider_id}/tools", operation_id="putProviderToolPolicy", response_model=AiSettings, responses=AI_SETTINGS_PUT_ERROR_RESPONSES, tags=["ai-settings"])
 async def put_provider_tool_policy(provider_id: str, payload: ProviderToolPolicy, settings: AiSettingsOperations = Depends(_ai_settings)) -> AiSettings:
     return await settings.put_tool_policy(provider_id, payload)
+
+
+@router.get("/api/settings/ai/response-mode", operation_id="resolveResponseMode", response_model=ReasoningResolution, responses={400: {"model": AiSettingsErrorEnvelope}, **AI_SETTINGS_GET_ERROR_RESPONSES}, tags=["ai-settings"])
+async def resolve_response_mode_route(
+    providerId: ProviderId,
+    modelId: str = Query(min_length=1, max_length=256),
+    responseMode: ResponseModeValue = Query(),
+    settings: AiSettingsOperations = Depends(_ai_settings),
+) -> ReasoningResolution:
+    return await settings.resolve_mode(providerId, modelId, responseMode)

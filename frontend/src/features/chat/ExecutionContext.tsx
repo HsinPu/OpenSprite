@@ -10,6 +10,7 @@ import { formatTime } from "../general-settings/dateTime";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
 import { ToolApprovalCard } from "./ToolApprovalCard";
 import { SubagentExecution } from "./SubagentExecution";
+import { responseModeResolutionText } from "../ai-settings/ResponseModeHint";
 import { RunDiagnostics } from "./RunDiagnostics";
 
 
@@ -32,6 +33,13 @@ const responseModeKeys: Record<RunSnapshot["responseMode"], MessageKey> = {
   fast: "execution.mode.fast",
   balanced: "execution.mode.balanced",
   deep: "execution.mode.deep",
+  low: "models.response.low",
+  medium: "models.response.medium",
+  high: "models.response.high",
+  xhigh: "models.response.xhigh",
+  max: "models.response.max",
+  ultra: "models.response.ultra",
+
 };
 
 function toolLabel(name: string, t: Translator): string {
@@ -217,6 +225,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <span className={`chat-workspace__run-pill chat-workspace__run-pill--${run.status}`}><i aria-hidden="true" />{status}</span>
               </div>
               <p className="chat-workspace__model-meta">{run.providerId} · {run.modelId} · {t(responseModeKeys[run.responseMode])}</p>
+              {run.reasoningResolution ? <p className="chat-workspace__model-meta">{responseModeResolutionText(run.reasoningResolution, t)}</p> : null}
             </section>
 
             <section className="chat-workspace__context-section" aria-labelledby={`${contextId}-tools-title`}>

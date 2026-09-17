@@ -90,7 +90,7 @@ def test_schema_v10_migrates_to_current_without_losing_conversation_data(tmp_pat
     assert created.name == "Morning brief"
     assert conversations.get_run(accepted.run.id) is not None
     with closing(sqlite3.connect(database)) as connection, connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
 
 
 def test_schedule_workspace_change_moves_owned_conversation_atomically(

@@ -50,7 +50,7 @@ def request_receipt(request: ModelRequest, sources: ReceiptSources | None, purpo
     components["framing"] = 3
     normalized = {
         "providerId": request.provider_id, "modelId": request.model_id,
-        "responseMode": request.response_mode, "maxOutputTokens": request.max_output_tokens,
+        "responseMode": request.response_mode, "reasoningEffort": request.reasoning_resolution.effective if request.reasoning_resolution else None, "maxOutputTokens": request.max_output_tokens,
         "messages": [asdict(message) for message in request.messages],
         "tools": [asdict(tool) for tool in request.tools],
     }

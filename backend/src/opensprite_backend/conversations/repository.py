@@ -1,6 +1,7 @@
 """Interface consumed by the Agent and HTTP layers, independent of SQLite."""
 
 from __future__ import annotations
+from opensprite_backend.response_modes import ReasoningResolution
 
 from collections.abc import Mapping
 from typing import Protocol
@@ -129,6 +130,8 @@ class ConversationRepository(Protocol):
         input_tokens: int,
         output_tokens: int,
     ) -> ConversationCompaction: ...
+
+    def set_reasoning_resolution(self, run_id: str, resolution: ReasoningResolution) -> RunSnapshot: ...
 
     def mark_run_started(
         self,

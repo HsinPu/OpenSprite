@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, field_validator, model_validator
 
 from opensprite_backend.provider_identity import ProviderId
+from .response_modes import ResponseMode
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
 TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
 StartupView = Literal["new", "recent"]
@@ -196,6 +197,7 @@ class ProviderListResponse(ContractModel):
 
 
 class OpenRouterModel(ContractModel):
+    reasoning_efforts: tuple[str, ...] | None = Field(default=None, exclude=True)
     supports_tools: bool | None = Field(default=None, exclude=True)
     id: str = Field(min_length=1, max_length=256)
     name: str = Field(min_length=1, max_length=256)
@@ -250,11 +252,6 @@ class ModelSelection(ContractModel):
         return value
 
 
-class ResponseMode(StrEnum):
-    DEFAULT = "default"
-    FAST = "fast"
-    BALANCED = "balanced"
-    DEEP = "deep"
 
 
 class OutputContinuation(StrEnum):

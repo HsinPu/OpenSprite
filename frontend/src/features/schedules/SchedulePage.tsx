@@ -9,6 +9,9 @@ import {
 } from "@ant-design/icons";
 import { Button, Drawer, Dropdown, Input, Modal, Pagination, Select, Switch, Tag, Tooltip } from "antd";
 
+import { isProviderId } from "../../api/providerConnections";
+import { responseModes } from "../../api/responseModes";
+import { ResponseModeHint } from "../ai-settings/ResponseModeHint";
 import type { ContextBudget, OutputBudget, OutputContinuation, PersistedModelSelection, ResponseMode } from "../../api/aiSettings";
 import { ScheduleApiError, type Schedule, type ScheduleCadence, type ScheduleFields, type ScheduleStatus } from "../../api/schedules";
 import type { ModelChoice } from "../ai-settings/modelCatalog";
@@ -290,6 +293,8 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
 
 function ScheduleEditor({ container, form, setForm, modelOptions, workspaceOptions, saving, error, onCancel, onSave }: { container: HTMLElement | null; form: FormState; setForm: (next: FormState) => void; modelOptions: { value: string; label: string }[]; workspaceOptions: { value: string; label: string }[]; saving: boolean; error: string | null; onCancel: () => void; onSave: () => void }) {
   const { t } = useI18n();
+  const providerId = form.providerModel.slice(0, form.providerModel.indexOf(":"));
+  const modelId = form.providerModel.slice(form.providerModel.indexOf(":") + 1);
   const patch = (next: Partial<FormState>) => setForm({ ...form, ...next });
   const popupContainer = (trigger: HTMLElement) => container ?? trigger.parentElement ?? document.body;
   return <form className="schedule-editor" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
@@ -308,7 +313,8 @@ function ScheduleEditor({ container, form, setForm, modelOptions, workspaceOptio
     <fieldset disabled={saving} className="schedule-editor-section"><legend>{t("schedules.section.execution")}</legend>
     <label>{t("schedules.field.model")}<Select disabled={saving} getPopupContainer={popupContainer} showSearch value={form.providerModel || undefined} options={modelOptions} onChange={(providerModel) => patch({ providerModel })} /></label>
     <details className="schedule-editor-advanced"><summary>{t("schedules.advanced")}</summary>
-    <label>{t("models.responseMode")}<Select disabled={saving} getPopupContainer={popupContainer} value={form.responseMode} options={(["default", "fast", "balanced", "deep"] as const).map((value) => ({ value, label: t(`models.response.${value}`) }))} onChange={(value) => patch({ responseMode: value })} /></label>
+    <label>{t("models.responseMode")}<Select disabled={saving} getPopupContainer={popupContainer} value={form.responseMode} options={responseModes.map((value) => ({ value, label: t(`models.response.${value}`) }))} onChange={(value) => patch({ responseMode: value })} /></label>
+    <ResponseModeHint providerId={isProviderId(providerId) ? providerId : undefined} modelId={modelId} mode={form.responseMode} />
     <label>{t("models.contextBudget")}<Select disabled={saving} getPopupContainer={popupContainer} value={form.contextBudget} options={(["auto", "32k", "64k", "128k", "256k", "max"] as const).map((value) => ({ value, label: t(`models.context.${value}`) }))} onChange={(value) => patch({ contextBudget: value })} /></label>
     <label>{t("models.outputBudget")}<Select disabled={saving} getPopupContainer={popupContainer} value={form.outputBudget} options={(["auto", "8k", "16k", "32k", "64k", "max"] as const).map((value) => ({ value, label: t(`models.output.${value}`) }))} onChange={(value) => patch({ outputBudget: value })} /></label>
     <label>{t("models.outputContinuation")}<Select disabled={saving} getPopupContainer={popupContainer} value={form.outputContinuation} options={(["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const).map((value) => ({ value, label: t(value === "off" || value === "unlimited" ? `models.outputContinuation.${value}` : `models.outputContinuation.${({ "1": "one", "2": "two", "3": "three", "5": "five", "10": "ten", "20": "twenty", "50": "fifty" } as const)[value]}`) }))} onChange={(value) => patch({ outputContinuation: value })} /></label>

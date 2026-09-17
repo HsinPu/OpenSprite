@@ -15,7 +15,7 @@ from opensprite_backend.workspaces.models import (
 
 
 from opensprite_backend.provider_identity import ProviderId
-ResponseMode = Literal["default", "fast", "balanced", "deep"]
+from opensprite_backend.response_modes import HistoricalResponseMode as ResponseMode, HISTORICAL_RESPONSE_MODES, ReasoningResolution
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
 OutputContinuation = Literal["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
@@ -145,6 +145,7 @@ class RunSnapshot:
     workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME
     workspace_root_hash: str | None = None
     workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH
+    reasoning_resolution: ReasoningResolution | None = None
 
 
 @dataclass(frozen=True, slots=True)

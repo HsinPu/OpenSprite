@@ -38,7 +38,7 @@ def _payload() -> dict[str, object]:
         "executionProfile": {
             "providerId": "openrouter",
             "modelId": "openrouter/auto",
-            "responseMode": "balanced",
+            "responseMode": "medium",
             "contextBudget": "64k",
             "outputBudget": "16k",
             "outputContinuation": "5",

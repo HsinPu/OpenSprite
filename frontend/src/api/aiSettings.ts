@@ -8,7 +8,8 @@ export type PersistedModelSelection = {
   outputBudget: OutputBudget;
 };
 
-export type ResponseMode = "default" | "fast" | "balanced" | "deep";
+import { responseModes, type ResponseMode } from "./responseModes";
+export type { ResponseMode } from "./responseModes";
 export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
 export type OutputBudget = "auto" | "8k" | "16k" | "32k" | "64k" | "max";
 export type OutputContinuation = "off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited";
@@ -38,7 +39,7 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) => Object.keys(value).length === expected.length && Object.keys(value).every((key) => expected.includes(key));
 const codePointLength = (value: string) => Array.from(value).length;
 const errorCodes = ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"] as const;
-const responseModes = ["default", "fast", "balanced", "deep"] as const;
+
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
 const outputContinuations = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const;

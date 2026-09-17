@@ -55,4 +55,4 @@ def test_current_schema_and_full_v14_upgrade_have_identical_child_tables():
             "SELECT name, sql FROM sqlite_master WHERE name LIKE 'agent_%' ORDER BY name"
         ).fetchall()
         assert actual == expected
-        assert database.execute("PRAGMA user_version").fetchone()[0] == 18
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 19

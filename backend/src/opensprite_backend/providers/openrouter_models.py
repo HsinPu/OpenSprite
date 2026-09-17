@@ -9,6 +9,7 @@ from typing import Final
 import httpx
 
 from ..models import ErrorCode, OpenRouterModel, OpenRouterModelListResponse
+from ..response_modes import NATIVE_EFFORTS
 from .adapters import ProviderValidationError
 
 OPENROUTER_MODELS_URL: Final = "https://openrouter.ai/api/v1/models/user"
@@ -138,7 +139,19 @@ class OpenRouterModelDiscovery:
             ):
                 max_output_tokens = candidate
 
+        reasoning = record.get("reasoning")
+        efforts: tuple[str, ...] | None = None
+        if reasoning is None:
+            efforts = ()
+        elif isinstance(reasoning, dict):
+            if "supported_efforts" not in reasoning:
+                efforts = ()
+            elif reasoning["supported_efforts"] is None:
+                efforts = NATIVE_EFFORTS
+            elif isinstance(reasoning["supported_efforts"], list) and all(isinstance(item, str) and item in NATIVE_EFFORTS for item in reasoning["supported_efforts"]):
+                efforts = tuple(reasoning["supported_efforts"])
         return OpenRouterModel(
+            reasoning_efforts=efforts,
             id=model_id,
             name=name,
             contextWindowTokens=context_length,

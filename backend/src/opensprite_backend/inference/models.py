@@ -11,7 +11,7 @@ from typing import Literal, TypeAlias
 
 from opensprite_backend.provider_identity import ProviderId
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot, valid_provider_id
-ResponseMode = Literal["default", "fast", "balanced", "deep"]
+from opensprite_backend.response_modes import HistoricalResponseMode as ResponseMode, HISTORICAL_RESPONSE_MODES, ReasoningResolution
 ModelRole = Literal["system", "user", "assistant", "tool"]
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -112,6 +112,7 @@ class ModelRequest:
     tools: tuple[ModelToolDefinition, ...]
     max_output_tokens: int = 8192
     provider_endpoint: ProviderEndpointSnapshot | None = None
+    reasoning_resolution: ReasoningResolution | None = None
 
     def __post_init__(self) -> None:
         if not valid_provider_id(self.provider_id):
@@ -120,8 +121,10 @@ class ModelRequest:
             raise ValueError("provider snapshot mismatch")
         if not isinstance(self.model_id, str) or not 1 <= len(self.model_id) <= 256:
             raise ValueError("invalid request model")
-        if self.response_mode not in {"default", "fast", "balanced", "deep"}:
+        if self.response_mode not in HISTORICAL_RESPONSE_MODES:
             raise ValueError("invalid request response mode")
+        if self.reasoning_resolution is not None and self.reasoning_resolution.requested != self.response_mode:
+            raise ValueError("reasoning resolution mismatch")
         if not self.messages or len(self.messages) > 256:
             raise ValueError("invalid request bounds")
         if (

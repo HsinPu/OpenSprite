@@ -59,7 +59,7 @@ function run(status: "running" | "cancelling" | "completed") {
     assistantMessageId: status === "completed" ? assistantMessageId : null,
     providerId: "openrouter",
     modelId: "openrouter/auto",
-    responseMode: "default",
+    responseMode: "medium",
     status,
     completionReason: status === "completed" ? "stop" : null,
     error: null,

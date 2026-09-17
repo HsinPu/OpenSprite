@@ -1,31 +1,24 @@
-"""Capability-aware translation from OpenSprite response modes."""
-
+"""Translate a frozen response-mode decision into a provider parameter."""
 from __future__ import annotations
-
 import re
-
 from .gateway import ModelGatewayError
-from .models import InferenceFailure
+from .models import InferenceFailure, ModelRequest
+from .capabilities import fixed_model_capability
+from opensprite_backend.response_modes import LEGACY_RESPONSE_MODES, resolve_response_mode
 
 
-_EFFORT = {"fast": "low", "balanced": "medium", "deep": "high"}
-_OPENAI_REASONING_MODEL = re.compile(r"^(?:gpt-[5-9]|o[1-9])", re.IGNORECASE)
-
-
-def effort(response_mode: str) -> str | None:
-    if response_mode == "default":
+def request_effort(request: ModelRequest) -> str | None:
+    if request.reasoning_resolution is not None:
+        return request.reasoning_resolution.effective
+    if request.response_mode == "default":
         return None
-    try:
-        return _EFFORT[response_mode]
-    except KeyError as error:
-        raise invalid_response() from error
-
-
-def openai_effort(model_id: str, response_mode: str) -> str | None:
-    value = effort(response_mode)
-    if value is not None and _OPENAI_REASONING_MODEL.match(model_id) is None:
-        raise invalid_response()
-    return value
+    # Legacy transcripts and internal callers retain their original interpretation.
+    if request.response_mode in LEGACY_RESPONSE_MODES:
+        if request.provider_id == "openai" and re.match(r"^(?:gpt-[5-9]|o[1-9])", request.model_id, re.I) is None:
+            raise invalid_response()
+        return LEGACY_RESPONSE_MODES[request.response_mode]
+    capability = fixed_model_capability(request.provider_id, request.model_id)
+    return resolve_response_mode(request.response_mode, capability.reasoning_efforts if capability else None).effective
 
 
 def invalid_response() -> ModelGatewayError:

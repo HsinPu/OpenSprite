@@ -166,7 +166,7 @@ class FinalGateway:
     ) -> AsyncIterator[ModelStreamEvent]:
         assert request.provider_id == "openrouter"
         assert request.model_id == "openrouter/auto"
-        assert request.response_mode == "default"
+        assert request.response_mode == "medium"
         assert request.max_output_tokens == 8_192
         yield ModelTextDelta("真實流程回覆")
         yield ModelCompleted(ModelFinishReason.FINAL)
@@ -208,7 +208,7 @@ def service(
             if model
             else None
         ),
-        responseMode=ResponseMode.DEFAULT,
+        responseMode=ResponseMode.MEDIUM,
     )
     loop = AgentLoop(
         repository=repository,
@@ -301,7 +301,7 @@ async def test_replay_does_not_depend_on_current_configuration(tmp_path: Path, m
     first = await chat.start_run(**request)
     await manager.wait(first.run.id)
     if changed == "settings":
-        await chat._ai_settings.put(AiSettings(model=None, responseMode=ResponseMode.DEFAULT))
+        await chat._ai_settings.put(AiSettings(model=None, responseMode=ResponseMode.MEDIUM))
     elif changed == "provider":
         chat._provider_connections.connected.clear()
     else:
@@ -331,7 +331,7 @@ async def test_custom_provider_acceptance_passes_endpoint_snapshot(tmp_path, mon
         allow_insecure_local=False, expected_revision=0, secret=None)
     chat._custom_providers = custom
     await chat._ai_settings.put(AiSettings(model=ModelSelection(providerId=provider.id, modelId="local",
-        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.DEFAULT))
+        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.MEDIUM))
     captured = []
 
     async def capture(*args):
@@ -385,7 +385,7 @@ async def test_custom_provider_run_completes_with_registered_capability(tmp_path
     chat._run_manager = manager
     chat._custom_providers = custom
     await chat._ai_settings.put(AiSettings(model=ModelSelection(providerId=provider.id, modelId="local",
-        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.DEFAULT))
+        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.MEDIUM))
     try:
         if scheduled:
             accepted = await chat.start_scheduled_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
@@ -674,7 +674,7 @@ async def test_event_stream_waits_for_persisted_event_notification(
         {
             "providerId": "openrouter",
             "modelId": "openrouter/auto",
-            "responseMode": "default",
+            "responseMode": "medium",
             "maxOutputTokens": 8_192,
         },
     )

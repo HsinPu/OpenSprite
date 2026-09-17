@@ -9,6 +9,7 @@ from pydantic import ValidationError
 import pytest
 
 from opensprite_backend import create_app
+from opensprite_backend.build_info import product_version
 from opensprite_backend.models import (
     ErrorCode,
     OpenRouterModel,
@@ -186,6 +187,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/auth/logout-all", "post", "logoutAllLocalAccess"),
         ("/api/auth/password", "put", "changeLocalPassword"),
         ("/api/settings/ai", "get", "getAiSettings"),
+        ("/api/settings/ai/response-mode", "get", "resolveResponseMode"),
         ("/api/settings/ai", "put", "putAiSettings"),
         ("/api/settings/ai/providers/{provider_id}/tools", "put", "putProviderToolPolicy"),
         ("/api/settings/general", "get", "getGeneralSettings"),
@@ -401,7 +403,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.21.0",
+        "version": product_version(),
         "revision": "development",
         "buildType": "development",
         "dirty": True,

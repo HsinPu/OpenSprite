@@ -11,7 +11,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const snapshot = (status: RunSnapshot["status"]): RunSnapshot => ({ id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test",
   workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null,
-  providerId: "openai", modelId: "test", responseMode: "default", status, completionReason: null,
+  providerId: "openai", modelId: "test", responseMode: "medium", status, completionReason: null,
   error: null, partialText: "", createdAt: event(1).createdAt, startedAt: event(1).createdAt, finishedAt: null });
 
 it.each(["completed", "failed", "cancelled", "interrupted"] as const)("synchronizes after a running snapshot becomes %s and preserves expansion", async status => {
@@ -100,7 +100,7 @@ it.each([false, true])("preserves distinct attempts while removing only duplicat
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ events, nextAfterSequence: null }))));
   const run: RunSnapshot = { id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test",
     workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null,
-    providerId: "openai", modelId: "test", responseMode: "default", status: "failed", completionReason: null,
+    providerId: "openai", modelId: "test", responseMode: "medium", status: "failed", completionReason: null,
     error: { code: "invalid_credentials", message: "", retryable: false }, partialText: "", createdAt: failed.createdAt,
     startedAt: failed.createdAt, finishedAt: failed.createdAt };
   render(<RunDiagnostics runId={runId} conversationId={conversationId} run={run} />);

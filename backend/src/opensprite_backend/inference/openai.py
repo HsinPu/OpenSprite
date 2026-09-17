@@ -20,7 +20,7 @@ from .models import (
     ModelToolDefinition,
     ModelUsage,
 )
-from .reasoning import invalid_response, openai_effort
+from .reasoning import invalid_response, request_effort
 from .sse import load_json_arguments, load_json_object
 
 
@@ -46,10 +46,7 @@ class OpenAIInferenceAdapter:
         if request.tools:
             body["tools"] = _tools(request.tools)
             body["tool_choice"] = "auto"
-        selected_effort = openai_effort(
-            request.model_id,
-            request.response_mode,
-        )
+        selected_effort = request_effort(request)
         if selected_effort is not None:
             body["reasoning"] = {"effort": selected_effort}
 

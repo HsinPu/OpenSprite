@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.skills.models import SkillExecutionSnapshot
 from .skill_phase import handle_skill_call
@@ -308,6 +309,8 @@ class AgentLoop:
             )
             capability = await self._await_with_cancellation(
                 self._resolve_run_capability(run, provider_endpoint), cancellation_event)
+            if run.reasoning_resolution is None:
+                run = await asyncio.to_thread(self._repository.set_reasoning_resolution, run.id, resolve_response_mode(run.response_mode, capability.reasoning_efforts))
             if not capability.supports_tools:
                 availability = ToolAvailabilitySnapshot(frozenset())
                 system_prompt += "\nTool calling is disabled for this model. No tools are available. Do not simulate tool calls with JSON text. Explain this limitation if a tool is requested."
@@ -380,6 +383,7 @@ class AgentLoop:
                     provider_endpoint=provider_endpoint,
                     model_id=run.model_id,
                     response_mode=run.response_mode,
+                    reasoning_resolution=run.reasoning_resolution,
                     messages=tuple(transcript),
                     tools=tool_definitions,
                     max_output_tokens=prepared.budget.output_reserve_tokens,
@@ -792,6 +796,7 @@ class AgentLoop:
                     provider_endpoint=provider_endpoint,
                     model_id=run.model_id,
                     response_mode=run.response_mode,
+                    reasoning_resolution=run.reasoning_resolution,
                     messages=transcript,
                     tools=(),
                     max_output_tokens=prepared.budget.output_reserve_tokens,
@@ -959,6 +964,7 @@ class AgentLoop:
                 provider_id=request.provider_id,
                 model_id=request.model_id,
                 response_mode=request.response_mode,
+                reasoning_effort=request.reasoning_resolution.effective if request.reasoning_resolution else None,
                 max_output_tokens=request.max_output_tokens,
                 messages=request.messages,
                 tools=request.tools,

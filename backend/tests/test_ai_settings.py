@@ -45,7 +45,7 @@ def selection() -> ModelSelection:
 def settings(
     *,
     model: ModelSelection | None = None,
-    response_mode: ResponseMode = ResponseMode.BALANCED,
+    response_mode: ResponseMode = ResponseMode.MEDIUM,
     output_continuation: OutputContinuation = OutputContinuation.TWO,
     response_delivery: ResponseDelivery = ResponseDelivery.STREAM,
 ) -> AiSettings:
@@ -105,6 +105,7 @@ def test_native_tool_policy_migration_and_partial_update(tmp_path: Path) -> None
         assert result.json()["providerToolPolicies"]["openai"] == policy
         preferences = {key: value for key, value in legacy.items() if key != "version"}
         preferences["responseDelivery"] = "stream"
+        preferences["responseMode"] = "medium"
         assert client.put("/api/settings/ai", json=preferences).status_code == 200
         assert client.get("/api/settings/ai").json()["providerToolPolicies"]["openai"] == policy
         assert client.put("/api/settings/ai/providers/openai/tools", json={"toolsEnabled": "yes"}).status_code == 400
@@ -115,14 +116,14 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == AiSettings(model=None, responseMode="default", outputContinuation="5", responseDelivery="stream")
+    assert store.get() == AiSettings(model=None, responseMode="medium", outputContinuation="5", responseDelivery="stream")
     assert not paths.home.exists()
-    saved = settings(model=selection(), response_mode=ResponseMode.DEEP, response_delivery=ResponseDelivery.COMPLETE)
+    saved = settings(model=selection(), response_mode=ResponseMode.HIGH, response_delivery=ResponseDelivery.COMPLETE)
     store.set(saved)
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 9,
+        "version": 10,
         "providerToolPolicies": {},
         "model": {
             "providerId": "openai",
@@ -130,7 +131,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
             "contextBudget": "auto",
             "outputBudget": "auto",
         },
-        "responseMode": "deep",
+        "responseMode": "high",
         "outputContinuation": "2",
         "responseDelivery": "complete",
         "logFullPrompts": False,
@@ -140,7 +141,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
         "config/settings.json",
     ]
 
-    cleared = settings(model=None, response_mode=ResponseMode.FAST)
+    cleared = settings(model=None, response_mode=ResponseMode.LOW)
     store.set(cleared)
     assert store.get() == cleared
     assert paths.settings_file.exists()
@@ -156,7 +157,7 @@ def test_store_reads_current_v3_selection_as_auto_output_without_rewriting(tmp_p
 
     assert JsonAiSettingsStore(path).get() == settings(
         model=selection(),
-        response_mode=ResponseMode.BALANCED,
+        response_mode=ResponseMode.MEDIUM,
     )
     assert path.read_bytes() == previous
 
@@ -168,7 +169,7 @@ def test_store_reads_v3_null_model_without_rewriting(tmp_path: Path) -> None:
 
     assert JsonAiSettingsStore(path).get() == settings(
         model=None,
-        response_mode=ResponseMode.DEEP,
+        response_mode=ResponseMode.HIGH,
     )
     assert path.read_bytes() == previous
 
@@ -316,8 +317,8 @@ def test_service_checks_connection_only_for_non_null_model(
     assert raised.value.code is ErrorCode.NOT_CONNECTED
     assert connections.list_calls == 1
 
-    response = run(service.put(settings(model=None, response_mode=ResponseMode.DEEP)))
-    assert response == settings(model=None, response_mode=ResponseMode.DEEP)
+    response = run(service.put(settings(model=None, response_mode=ResponseMode.HIGH)))
+    assert response == settings(model=None, response_mode=ResponseMode.HIGH)
     assert connections.list_calls == 1
 
 
@@ -331,19 +332,19 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "outputContinuation": "5", "responseDelivery": "complete", "logFullPrompts": True},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "high", "outputContinuation": "5", "responseDelivery": "complete", "logFullPrompts": True},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "high", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
+    assert initial.json() == {"model": None, "responseMode": "medium", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
     assert saved.status_code == 200
     assert saved.json() == {
         "providerToolPolicies": {},
         "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
-        "responseMode": "deep",
+        "responseMode": "high",
         "outputContinuation": "5",
         "responseDelivery": "complete",
         "logFullPrompts": True,
@@ -367,7 +368,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "balanced", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
+            json={"model": None, "responseMode": "medium", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
     assert response.status_code == 400
@@ -395,7 +396,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
+        assert response.json() == {"model": None, "responseMode": "medium", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()

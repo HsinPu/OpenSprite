@@ -58,3 +58,33 @@ def test_terminal_child_cannot_start_again(stores):
         context.mark_run_started(child.id)
     assert context.get_run(child.id).status == RunStatus.QUEUED
     assert repository.get(parent.id, child.id).status == "cancelled"
+
+
+def test_child_resolves_its_own_model_and_freezes_effort_for_continuation(stores):
+    from dataclasses import replace
+    from opensprite_backend.response_modes import resolve_response_mode
+
+    repository, _, parent, _ = stores
+    parent = replace(parent, response_mode="ultra", reasoning_resolution=resolve_response_mode("ultra", ("max",)))
+    child, _ = create(repository, parent, model_id="child-model")
+    context = ChildContextRepository(repository, child, parent, "delegated task")
+    assert context.get_run(child.id).reasoning_resolution is None
+
+    class ChangingCapabilities(TestCapabilityResolver):
+        calls = 0
+        async def resolve(self, provider_id, model_id):
+            self.calls += 1
+            assert model_id == "child-model"
+            return replace(await super().resolve(provider_id, model_id), reasoning_efforts=("high",) if self.calls == 1 else ("low",))
+
+    gateway = ScriptedGateway([
+        [ModelTextDelta("first "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+        [ModelTextDelta("second"), ModelCompleted(ModelFinishReason.FINAL)],
+    ])
+    loop = AgentLoop(repository=context, gateway=gateway, tools=ToolRegistry((), policy=ReadOnlyToolPolicy()),
+                     capability_resolver=ChangingCapabilities(), allow_tool_approval=False)
+    result = asyncio.run(loop.execute(child.id, asyncio.Event()))
+    assert result.status == RunStatus.COMPLETED
+    assert len(gateway.requests) == 2
+    assert [request.reasoning_resolution.effective for request in gateway.requests] == ["high", "high"]
+    assert parent.reasoning_resolution.effective == "max"

@@ -24,7 +24,7 @@ const event = (data: Record<string, unknown>): RunEvent => ({
 describe("context usage indicator", () => {
   it("extracts the latest valid model context usage and ignores legacy events", () => {
     expect(contextUsageFromEvents([
-      event({ providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768 }),
+      event({ providerId: "openrouter", modelId: "openrouter/auto", responseMode: "medium", maxOutputTokens: 32_768 }),
       event({ providerId: usage.providerId, modelId: usage.modelId, contextTokens: usage.contextTokens, contextLimitTokens: usage.contextLimitTokens, inputBudgetTokens: usage.inputBudgetTokens }),
     ])).toEqual(usage);
   });

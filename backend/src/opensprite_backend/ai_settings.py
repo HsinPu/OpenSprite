@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Final, Protocol
 
 from .app_paths import AppPaths
+from .response_modes import ReasoningResolution, ResponseModeValue, migrate_response_mode, resolve_response_mode
 from .atomic_file import atomic_write
 from .models import AiSettings, ErrorCode, ProviderToolPolicy
 from .provider_connections import ProviderConnectionError, ProviderConnections
@@ -15,7 +16,7 @@ from .providers.catalog_store import CatalogError
 from .providers.custom_service import CustomProviderService
 from .workspaces import WorkspaceMutationGate
 
-_SCHEMA_VERSION: Final = 9
+_SCHEMA_VERSION: Final = 10
 _PREVIOUS_CANONICAL_SCHEMA_VERSION: Final = 7
 _BOOLEAN_CONTINUATION_SCHEMA_VERSION: Final = 6
 _PREVIOUS_SCHEMA_VERSION: Final = 5
@@ -38,6 +39,8 @@ class AiSettingsStore(Protocol):
 
 
 class AiSettingsOperations(Protocol):
+    async def resolve_mode(self, provider_id: str, model_id: str, mode: ResponseModeValue) -> ReasoningResolution: ...
+
     async def get(self) -> AiSettings: ...
 
     async def put(self, payload: AiSettings) -> AiSettings: ...
@@ -48,7 +51,7 @@ class AiSettingsOperations(Protocol):
 def default_ai_settings() -> AiSettings:
     return AiSettings(
         model=None,
-        responseMode="default",
+        responseMode="medium",
         outputContinuation="5",
         responseDelivery="stream",
         logFullPrompts=False,
@@ -173,7 +176,7 @@ class JsonAiSettingsStore:
             output_continuation = raw["outputContinuation"]
             response_delivery = "stream"
             log_full_prompts = raw["logFullPrompts"]
-        elif raw["version"] in {8, _SCHEMA_VERSION}:
+        elif raw["version"] in {8, 9, _SCHEMA_VERSION}:
             expected = {
                 "version",
                 "model",
@@ -182,7 +185,7 @@ class JsonAiSettingsStore:
                 "responseDelivery",
                 "logFullPrompts",
             }
-            if raw["version"] == _SCHEMA_VERSION:
+            if raw["version"] >= 9:
                 expected.add("providerToolPolicies")
             if set(raw) != expected:
                 raise SettingsStoreError
@@ -197,7 +200,7 @@ class JsonAiSettingsStore:
             settings = AiSettings.model_validate(
                 {
                     "model": model,
-                    "responseMode": raw["responseMode"],
+                    "responseMode": migrate_response_mode(raw["responseMode"]) if raw["version"] < _SCHEMA_VERSION else raw["responseMode"],
                     "outputContinuation": output_continuation,
                     "responseDelivery": response_delivery,
                     "logFullPrompts": log_full_prompts,
@@ -223,6 +226,9 @@ class JsonAiSettingsStore:
 class UnavailableAiSettings:
     """Fail closed when AI settings storage is not explicitly composed."""
 
+    async def resolve_mode(self, provider_id: str, model_id: str, mode: ResponseModeValue) -> ReasoningResolution:
+        raise SettingsStoreError
+
     async def get(self) -> AiSettings:
         raise SettingsStoreError
 
@@ -241,6 +247,8 @@ class AiSettingsService:
         custom_providers: CustomProviderService | None = None,
         mutation_gate: WorkspaceMutationGate | None = None,
     ) -> None:
+        from .model_capability_resolver import ProviderModelCapabilityResolver
+        self._capability_resolver = ProviderModelCapabilityResolver(provider_connections, custom_providers=custom_providers)
         self._store = store
         self._provider_connections = provider_connections
         self._custom_providers = custom_providers
@@ -248,6 +256,15 @@ class AiSettingsService:
 
     async def get(self) -> AiSettings:
         return self._store.get()
+
+    async def resolve_mode(self, provider_id: str, model_id: str, mode: ResponseModeValue) -> ReasoningResolution:
+        from .agent.context.capability_resolver import ModelCapabilityNotFound, ModelCapabilityProviderError
+        try:
+            capability = await self._capability_resolver.resolve(provider_id, model_id)
+            supported = capability.reasoning_efforts
+        except (ModelCapabilityNotFound, ModelCapabilityProviderError):
+            supported = None
+        return resolve_response_mode(mode, supported)
 
     async def put(self, payload: AiSettings) -> AiSettings:
         async with self._mutation_gate.hold():

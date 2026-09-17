@@ -15,7 +15,7 @@ let saves = 0;
 window.fetch = async (input, init) => {
   if (String(input).includes("/settings/ai")) {
     if (init?.method === "PUT" && saves++ === 0) return new Response(JSON.stringify({ error: { code: "invalid_request", message: "test", retryable: false } }), { status: 400 });
-    return new Response(JSON.stringify({ model: null, responseMode: "default", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false }));
+    return new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false }));
   }
   if (!scheduled) { scheduled = true; window.setTimeout(() => { finished = true; finish(); }, 8000); }
   const cursor = Number(new URL(String(input), location.origin).searchParams.get("afterSequence") ?? 0);
@@ -42,7 +42,7 @@ window.fetch = async (input, init) => {
 function Preview() {
   const [status, setStatus] = useState<RunSnapshot["status"]>("running");
   finish = () => setStatus("completed");
-  const run: RunSnapshot = { id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test", workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null, providerId: "openai", modelId: "test", responseMode: "default", status, completionReason: null, error: null, partialText: "", createdAt: "2026-09-12T00:00:00Z", startedAt: null, finishedAt: null };
+  const run: RunSnapshot = { id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test", workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null, providerId: "openai", modelId: "test", responseMode: "medium", status, completionReason: null, error: null, partialText: "", createdAt: "2026-09-12T00:00:00Z", startedAt: null, finishedAt: null };
   return <main><h1>合成資料診斷驗證</h1><details className="chat-workspace__record-details" style={{ maxWidth: 320 }}><summary><span>執行紀錄</span><RunDiagnostics runId={runId} conversationId={conversationId} run={run} /></summary><p>此為合成資料，不會呼叫模型或讀取使用者資料。開啟後 8 秒完成。</p></details><NativeProviderTools provider="openai" name="Test OpenAI" /></main>;
 }
 createRoot(document.getElementById("root")!).render(<Preview />);
