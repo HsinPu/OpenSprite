@@ -1,59 +1,57 @@
-# OpenSprite repository instructions
+# OpenSprite 儲存庫指引
 
-## Current direction
+## 目前開發方向
 
-- OpenSprite is being rebuilt from a clean repository foundation.
-- The repository now contains a runnable React frontend and a minimal Python
-  backend for local Provider connections and encrypted credential persistence.
-- Continue to add backend capabilities only from an explicitly approved
-  frontend workflow or contract; do not restore speculative archived behavior.
-- Do not add an application CLI, command shim, Typer, Click, or argparse command suite.
-- The archived implementation at `codex/archive-main-before-refactor-20260820` is read-only reference material. Never restore it wholesale.
+- OpenSprite 正在以乾淨的儲存庫基礎重新建置。
+- 儲存庫目前包含可執行的 React 前端，以及支援本機供應商（Provider）連線與加密憑證持久化的精簡 Python 後端。
+- 只有經明確核准的前端流程或契約，才能作為新增後端功能的依據；不得恢復未經需求確認的封存行為。
+- 不得新增應用程式 CLI、指令轉接層（command shim），或使用 Typer、Click、argparse 建立指令套件。
+- `codex/archive-main-before-refactor-20260820` 中的封存實作僅供唯讀參考，絕對不得整批還原。
 
-## Repository boundaries
+## 儲存庫職責邊界
 
-- `frontend/` owns browser UI source, frontend tests, and frontend build configuration.
-- `backend/` owns the Python local service, encrypted persistence adapters and
-  backend tests.
-- `contracts/` owns authoritative frontend/backend HTTP and future WebSocket
-  contracts.
-- `installers/` will own separate Linux and Windows installation implementations with matching behavior.
-- `docs/architecture/` records durable architecture decisions.
-- `docs/changes/` records every implementation slice and its verification evidence.
-- `scripts/` is reserved for repository verification and maintenance automation.
+- `frontend/`：瀏覽器介面原始碼、前端測試與前端建置設定。
+- `backend/`：Python 本機服務、加密持久化介接實作與後端測試。
+- `contracts/`：具權威性的前後端 HTTP 契約，以及未來的 WebSocket 契約。
+- `installers/`：分別實作 Linux 與 Windows 安裝流程，兩者行為必須一致。
+- `docs/architecture/`：記錄長期適用的架構決策。
+- `docs/changes/`：記錄每個實作階段及其驗證證據。
+- `scripts/`：僅用於儲存庫驗證與維護自動化。
 
-Keep business behavior out of shared configuration, installer, and documentation boundaries. Do not create generic dumping grounds such as broad `utils`, `helpers`, or `services` directories.
+不得把業務行為放入共用設定、安裝器或文件範圍。不得建立用途過於廣泛的 `utils`、`helpers`、`services` 等目錄來堆放不相關內容。
 
-## Local user-data boundary
+## 本機使用者資料邊界
 
-- `%USERPROFILE%\.opensprite` on Windows and `~/.opensprite` on Linux are the sole OpenSprite user-data roots.
-- All future conversations, databases, uploaded attachments, generated outputs, memory, state, logs, and cache must remain below that root and use the mapping owned by `backend/src/opensprite_backend/app_paths.py`.
-- Do not introduce a second product-data root, persist absolute user-profile paths in the database, or let individual features construct their own home-directory paths.
-- Program installation remains separate. Provider API keys are stored only as
-  AES-256-GCM ciphertext in `.opensprite/auth.json`, using the random
-  per-install key in `.opensprite/config/credential.key`.
-- Never add plaintext credential persistence, OS-keyring fallback, a fixed
-  application-wide encryption key, secret logging, or API responses containing
-  raw credentials. Treat the complete `.opensprite` root as sensitive because
-  possession of both encrypted data and `credential.key` permits decryption.
-- Backup, restore, move and delete `auth.json` and `credential.key` together.
-- Only one desktop backend process may write a user-data root; do not enable
-  multiple Uvicorn workers or a reloader against one `.opensprite`.
-- Do not create reserved directories until an implemented feature performs its first real write.
+- Windows 的 `%USERPROFILE%\.opensprite` 與 Linux 的 `~/.opensprite` 是 OpenSprite 唯一的使用者資料根目錄。
+- 所有未來的對話、資料庫、上傳附件、產出檔案、記憶、狀態、日誌與快取，都必須位於此根目錄下，並使用 `backend/src/opensprite_backend/app_paths.py` 管理的路徑對應。
+- 不得新增第二個產品資料根目錄、在資料庫中儲存使用者個人資料夾的絕對路徑，或讓個別功能自行組合家目錄路徑。
+- 程式安裝目錄必須與使用者資料分開。供應商 API 金鑰只能以 AES-256-GCM 密文儲存在 `.opensprite/auth.json`，並使用 `.opensprite/config/credential.key` 中每次安裝隨機產生的金鑰。
+- 不得以明文持久化憑證、退回使用作業系統金鑰圈、使用全應用程式共用的固定加密金鑰、將機密寫入日誌，或在 API 回應中包含原始憑證。整個 `.opensprite` 根目錄都必須視為敏感資料，因為同時持有加密資料與 `credential.key` 即可解密。
+- 備份、還原、移動或刪除時，必須一併處理 `auth.json` 與 `credential.key`。
+- 同一個使用者資料根目錄只能由一個桌面後端程序寫入；不得讓多個 Uvicorn worker 或自動重新載入器使用同一個 `.opensprite`。
+- 已實作的功能首次真正寫入資料前，不得預先建立保留目錄。
 
-## Change workflow
+## 變更流程
 
-1. Keep each change focused on one approved objective.
-2. Update or add a matching record under `docs/changes/` in the same commit.
-3. Add abstractions only when current behavior requires them.
-4. Run the narrowest real verification that exists, followed by broader checks when available.
-5. Use English Conventional Commit subjects and create one independently reviewable commit per slice.
+1. 每次變更只處理一個經核准的目標。
+2. 在同一個 commit 中，更新或新增對應的 `docs/changes/` 紀錄。
+3. 只有目前行為確實需要時，才新增抽象層。
+4. 先執行現有、範圍最小的實際驗證，再執行可用的較廣泛檢查。
+5. Commit 主旨使用英文 Conventional Commits 格式；每個實作階段各自建立一個可獨立審查的 commit。
 
-Do not add compatibility aliases, disabled legacy paths, keyword-based task routing, or speculative lifecycle layers unless a new approved requirement explicitly needs them.
+### 每次 commit 都必須增加版本
 
-## Current verification
+- 每個 commit 都必須提高 OpenSprite 的產品版本，包括只修改文件、測試、安裝器或維護程式碼的 commit。
+- 預設遞增修訂版本（patch），例如從 `0.21.16` 升到 `0.21.17`；使用者明確指定其他版本，或要求增加次版本（minor）／主版本（major）時，依使用者指示處理。
+- 以 `backend/pyproject.toml` 的 `project.version` 為版本唯一依據。在同一個 commit 中，同步更新 `backend/uv.lock` 的 `opensprite-backend` 對應項目，以及 `README.md` 的目前產品版本說明。
+- 在該 commit 對應的 `docs/changes/` 紀錄中列出舊版本與新版本。先前變更紀錄中的歷史版本應保留原值。
+- Commit 前必須確認版本一致，並在 `backend/` 執行 `uv lock --check --offline`。版本遞增必須與變更一起提交，不得延後到另一個 commit，也不得讓多個 commit 共用同一次版本遞增。
 
-The frontend now contains a runnable fake-data demo. Run these frontend checks:
+除非新的已核准需求明確要求，否則不得新增相容性別名、停用的舊版路徑、依關鍵字分派任務的機制，或預先設想的生命週期管理層。
+
+## 目前驗證方式
+
+前端目前包含可執行的假資料示範。請執行以下前端檢查：
 
 ```powershell
 cd frontend
@@ -64,7 +62,7 @@ npm run build
 npm run dev
 ```
 
-Backend checks:
+後端檢查：
 
 ```powershell
 cd backend
@@ -75,114 +73,82 @@ uv lock --check --offline
 uv pip check
 ```
 
-Repository checks:
+儲存庫檢查：
 
 ```powershell
 git diff --check
 git status --short --branch
 ```
 
-Windows installer checks:
+Windows 安裝器檢查：
 
 ```powershell
 ./installers/windows/test.ps1
 ```
 
-Linux installer checks (non-root Linux user with npm, uv, Python and a systemd
-user manager):
+Linux 安裝器檢查：使用非 root 的 Linux 帳號，並備妥 npm、uv、Python 與 systemd 使用者服務管理器。
 
 ```bash
 uv sync --project backend --dev
 uv run --project backend bash installers/linux/test.sh
 ```
 
-The Linux check builds an isolated installation in a temporary path containing
-spaces and validates its generated systemd unit. It does not start or uninstall
-the real user service; verify that lifecycle separately in a disposable Linux
-account. Browser verification remains manual against the local Vite server or
-installed single-origin runtime.
+Linux 檢查會在含有空白字元的暫存路徑中建置隔離安裝，並驗證產生的 systemd 服務單元。此檢查不會啟動或解除安裝真正的使用者服務；完整生命週期必須另以可拋棄的 Linux 測試帳號驗證。瀏覽器驗證仍須針對本機 Vite 伺服器或安裝後的同源執行環境手動進行。
 
-## Generated and local files
+## 產生檔案與本機檔案
 
-- Commit `frontend/package-lock.json` whenever frontend dependencies change.
-- Never commit `node_modules`, `dist`, Python virtual environments, caches,
-  logs, `.opensprite`, `auth.json`, `credential.key`, raw credentials, `.codex`,
-  or `.codegraph`.
-- `.agents/` is intentionally not ignored so future repository skills can be reviewed and committed deliberately.
-- Never delete user data, credentials, databases, or installation directories without explicit approval and verified absolute paths.
+- 前端相依套件異動時，必須一併提交 `frontend/package-lock.json`。
+- 絕對不得提交 `node_modules`、`dist`、Python 虛擬環境、快取、日誌、`.opensprite`、`auth.json`、`credential.key`、原始憑證、`.codex` 或 `.codegraph`。
+- `.agents/` 刻意不加入忽略清單，讓未來的儲存庫技能可以經過審查後明確提交。
+- 未取得明確核准並驗證絕對路徑前，不得刪除使用者資料、憑證、資料庫或安裝目錄。
 
-## Frontend engineering, UI/UX, and design standards
+## 前端工程、UI／UX 與設計標準
 
-This section consolidates the user-provided 85-rule frontend standard. It is
-the canonical project frontend guidance, not optional visual inspiration.
-The numbered sections below preserve its requirements while combining repeated
-rules; the source-to-section mapping is recorded at the end of this section.
+本節整合使用者提供的 85 條前端標準，是專案正式的前端規範，不是可選用的視覺靈感。以下編號章節在合併重複規則的同時保留其要求；原始規則與章節的對應表列於本節末尾。
 
-These rules apply to all AI coding agents (including Codex) and human developers
-creating, modifying, refactoring, or reviewing frontend code unless explicitly
-instructed otherwise.
+除非另有明確指示，所有建立、修改、重構或審查前端程式碼的 AI 程式代理（包含 Codex）與開發者，都必須遵守這些規則。
 
-### 1. Product philosophy
+### 1. 產品理念
 
-Use React, TypeScript, and Ant Design. Aim for a mature enterprise application,
-operational tool, dashboard, admin interface, or professional SaaS product:
-quiet, precise, modern, compact, information-dense, fast, clear, work-focused,
-visually restrained, consistent, and suitable for daily use.
+使用 React、TypeScript 與 Ant Design。目標是成熟的企業應用程式、營運工具、儀表板、管理介面或專業 SaaS 產品，具備安靜、精準、現代、緊湊、資訊密度高、快速、清楚、專注工作、視覺克制、一致且適合每日使用的特性。
 
-The formula is **Stripe data discipline + Linear visual restraint + Ant Design
-implementation**.
+核心方向是：**Stripe 的資料呈現紀律＋Linear 的視覺克制＋Ant Design 的實作方式**。
 
-- Reference Stripe for tables, forms, settings, billing-like layouts, data,
-  statuses, details, KPI, and structured workflows.
-- Reference Linear for sidebar, navigation, toolbar, lists, typography, spacing,
-  interaction density, keyboard efficiency, and low-noise layouts.
-- Use only interaction, hierarchy, layout, and information-design principles.
-  Do not copy proprietary logos, branding, illustrations, trademarks, or copy.
-- Prefer productivity over decoration. Do not turn the product into a marketing
-  landing page, AI startup homepage, Dribbble concept, neon/gaming UI, or
-  glassmorphism demo.
+- 表格、表單、設定、帳務類版面、資料、狀態、詳細資訊、KPI 與結構化流程，參考 Stripe。
+- 側欄、導覽、工具列、清單、文字排版、間距、互動密度、鍵盤操作效率與低干擾版面，參考 Linear。
+- 只採用互動、層級、版面與資訊設計原則，不得複製專有標誌、品牌識別、插畫、商標或文案。
+- 生產力優先於裝飾。不得把產品做成行銷到達頁、AI 新創首頁、Dribbble 概念稿、霓虹／遊戲介面或毛玻璃效果示範。
 
-### 2. Ant Design and component reuse
+### 2. Ant Design 與元件重用
 
-Use Ant Design whenever an appropriate component exists:
+只要 Ant Design 有合適的元件，就應使用：
 
-- Controls: Button, Input, Input.Search, InputNumber, Select, AutoComplete,
-  Checkbox, Radio, Switch, Slider, DatePicker, TimePicker, Upload.
-- Data/forms: Form, Table, Pagination.
-- Overlays: Modal, Drawer, Popconfirm, Popover, Tooltip, Dropdown.
-- Navigation: Menu, Tabs, Steps, Breadcrumb.
-- Feedback/presentation: Alert, Tag, Badge, Avatar, Empty, Result, Skeleton,
-  Spin, Progress, notification, message.
+- 控制項：Button、Input、Input.Search、InputNumber、Select、AutoComplete、Checkbox、Radio、Switch、Slider、DatePicker、TimePicker、Upload。
+- 資料／表單：Form、Table、Pagination。
+- 浮層：Modal、Drawer、Popconfirm、Popover、Tooltip、Dropdown。
+- 導覽：Menu、Tabs、Steps、Breadcrumb。
+- 回饋／呈現：Alert、Tag、Badge、Avatar、Empty、Result、Skeleton、Spin、Progress、notification、message。
 
-Do not recreate buttons, inputs, selects, modals, tables, forms, dropdowns, or
-date pickers unless a clear requirement cannot be satisfied by Ant Design.
+除非有明確需求無法透過 Ant Design 滿足，否則不得自行重做按鈕、輸入框、選單、對話框、表格、表單、下拉選單或日期選擇器。
 
-Do not introduce another major UI library without an explicit request, including
-Material UI, shadcn/ui, Chakra UI, Mantine, Bootstrap UI, PrimeReact, or Semantic UI.
-Avoid duplicated controls, inconsistent appearance/UX/theming, bundle growth,
-and unnecessary maintenance.
+未經明確要求，不得引入另一套大型 UI 函式庫，包括 Material UI、shadcn/ui、Chakra UI、Mantine、Bootstrap UI、PrimeReact 或 Semantic UI。應避免控制項重複、外觀／操作體驗／主題不一致、打包體積增加與不必要的維護成本。
 
-Before creating components, search for existing page headers, table/form wrappers,
-toolbars, status tags, modal/drawer patterns, empty states, and layouts. Reuse
-reasonable patterns. Keep one-off implementations simple; extract repeated
-patterns when useful, not prematurely. Avoid universal, overly flexible components.
+建立元件前，先搜尋既有的頁面標頭、表格／表單封裝、工具列、狀態標籤、對話框／抽屜模式、空白狀態與版面。合理的既有模式應重用。一次性實作保持簡單；重複模式有實際價值時才抽取，不要過早抽象化。避免通用到過度彈性的元件。
 
-### 3. Theme and styling authority
+### 3. 主題與樣式依據
 
-Inspect and reuse the existing theme first. Preserve intentional brand decisions
-and equivalent tokens. Do not duplicate theme configurations or blindly overwrite
-them. The blue example below is a fallback, not an instruction to recolor OpenSprite.
+先檢查並重用既有主題，保留有意識的品牌決策與對應的設計變數（token）。不得重複建立主題設定或直接覆蓋既有設定。下方藍色範例只是在沒有既有主題時的備用方向，不代表可以替 OpenSprite 重新配色。
 
-Prefer styling in this order:
+樣式設定依以下順序優先採用：
 
-1. Ant Design ConfigProvider.
-2. Global design tokens.
-3. Component tokens.
-4. Ant Design component props.
-5. Existing shared style system.
-6. Component-level CSS when necessary.
+1. Ant Design ConfigProvider。
+2. 全域設計變數。
+3. 元件設計變數。
+4. Ant Design 元件屬性（props）。
+5. 既有共用樣式系統。
+6. 必要時才使用元件層級的 CSS。
 
-If no equivalent theme exists, use this default direction:
+若沒有對應的既有主題，採用以下預設方向：
 
 ```tsx
 import type { ThemeConfig } from 'antd';
@@ -214,233 +180,145 @@ export const appTheme: ThemeConfig = {
 };
 ```
 
-Avoid repeated hardcoded token equivalents, excessive inline styles, and broad
-or deep Ant Design internal `.ant-*` overrides. Small one-off layout adjustments
-may be acceptable; reusable styling belongs in the existing style system.
+避免重複硬編碼與設計變數等效的數值、過多行內樣式，以及大範圍或深層覆寫 Ant Design 內部 `.ant-*` 樣式。少量一次性的版面調整可以接受；可重用的樣式應放回既有樣式系統。
 
-Avoid `!important` unless no cleaner option exists. Repeated need for it requires
-investigating selectors, theme configuration, component misuse, or style
-architecture and fixing the underlying cause.
+除非沒有更簡潔的做法，否則避免使用 `!important`。若反覆需要使用，應檢查選擇器、主題設定、元件誤用或樣式架構，修正根本原因。
 
-### 4. Visual foundations
+### 4. 視覺基礎
 
-- Prefer white surfaces, light neutral backgrounds, neutral gray borders, dark
-  primary text, muted secondary text, and one controlled accent.
-- Approximate balance: 80% neutral, 15% structural hierarchy, 5% accent.
-- Use color for primary actions, selection, success, warning, error, information,
-  status, or meaningful highlights, not decoration. Status colors must be
-  consistent and restrained: subtle backgrounds, soft borders, muted text.
-- Create hierarchy in this order: typography, spacing, alignment, border,
-  background, color, shadow.
-- Prefer thin, subtle neutral borders/separators for tables, panels, toolbars,
-  input boundaries, and section hierarchy.
-- Reserve shadows for Modal, Dropdown, Popover, floating overlays, and context
-  menus. Normal content uses spacing, borders, background contrast, and type.
-  Avoid unnecessary border + heavy shadow + glow + gradient combinations.
-- Recommended radii: Button/Input/Select 6px; Dropdown/Card 6–8px; Modal about
-  8px. Avoid 16/20/24/32px as defaults and excessive pill shapes.
-- Reuse existing spacing; prefer 4, 8, 12, 16, 20, 24, 32, 40, 48 over arbitrary
-  values such as 13, 17, 19, 23, 29.
-- Typography: body 14–16px, secondary 12–14px, page titles 20–28px. Avoid
-  unnecessary 48/64/72px headings in enterprise tools.
-- Use page title, section, subsection, body, secondary, caption levels; combine
-  size, weight, color, and spacing instead of making every level bold.
-- Default to medium-to-high density without crowding. Avoid tall rows, oversized
-  controls/buttons, loose forms, large empty areas, and oversized headers.
+- 優先使用白色表面、淺中性色背景、中性灰邊框、深色主要文字、低彩度次要文字，以及一個節制使用的強調色。
+- 比例約為：80% 中性色、15% 結構層級、5% 強調色。
+- 色彩應用於主要操作、選取、成功、警告、錯誤、資訊、狀態或有意義的重點，不作為純裝飾。狀態色必須一致且克制，搭配淡背景、柔和邊框與低彩度文字。
+- 依序使用文字排版、間距、對齊、邊框、背景、色彩、陰影建立層級。
+- 表格、面板、工具列、輸入區邊界與章節層級，優先使用細緻的中性邊框或分隔線。
+- 陰影留給 Modal、Dropdown、Popover、浮動浮層與快顯選單。一般內容使用間距、邊框、背景對比與文字排版區分。避免不必要的邊框＋厚重陰影＋光暈＋漸層組合。
+- 建議圓角：Button／Input／Select 為 6px；Dropdown／Card 為 6–8px；Modal 約 8px。避免預設使用 16／20／24／32px 或過多膠囊形狀。
+- 重用既有間距，優先使用 4、8、12、16、20、24、32、40、48，避免任意採用 13、17、19、23、29 等數值。
+- 字級：內文 14–16px、次要文字 12–14px、頁面標題 20–28px。企業工具中避免不必要的 48／64／72px 大標題。
+- 建立頁面標題、章節、子章節、內文、次要文字與註解等層級；搭配字級、字重、色彩與間距，不要每個層級都只靠粗體。
+- 預設採中高資訊密度，同時避免擁擠。不要使用過高的列、過大的控制項／按鈕、鬆散表單、大面積空白或過大的標頭。
 
-Unless explicitly requested, avoid purple-blue/rainbow gradients, neon, glow,
-glassmorphism, large blur, decorative blobs/light orbs, oversized heroes,
-marketing banners, decorative illustrations, huge headings, excessive whitespace,
-card walls/nested cards, huge radii, excessive pills, heavy shadows, decorative
-animation, and emoji as primary UI icons.
+除非使用者明確要求，否則避免紫藍／彩虹漸層、霓虹、光暈、毛玻璃、大範圍模糊、裝飾性色塊／光球、過大的主視覺區、行銷橫幅、裝飾插畫、巨型標題、過多留白、滿版卡片／巢狀卡片、過大圓角、過多膠囊造型、厚重陰影、裝飾動畫，以及把 emoji 當成主要介面圖示。
 
-### 5. Layout and navigation
+### 5. 版面與導覽
 
-- Reuse page layouts rather than reinventing them. Typical management structure:
-  global navigation → page header → toolbar/actions → filters → main content →
-  pagination/footer. This pattern does not require an unnecessary top bar.
-- Keep sidebar navigation compact, quiet, hierarchical, and scannable; use
-  consistent icons/labels and muted group labels. Avoid colorful icons, per-item
-  cards, and heavy separators.
-- Prefer subtle neutral selection with stronger text, not saturated blocks with
-  white text/shadow unless branding requires it.
-- Keep top bars simple: breadcrumbs, search, global actions, user menu, and
-  notifications when useful.
-- Headers contain title, optional functional description, primary action, and
-  secondary actions; avoid promotional welcome messages.
-- Keep navigation predictable: users should know where they are, where they can
-  go, and what to do next. Do not change patterns for visual novelty.
-- Use compact, quiet toolbars and row-based lists with muted metadata, subtle
-  hover, fast scanning, and keyboard support when appropriate.
-- Prefer simple Ant Design Tabs; avoid huge, colorful, card, or pill tabs as
-  defaults.
+- 重用既有頁面版面。典型管理介面結構為：全域導覽 → 頁面標頭 → 工具列／操作 → 篩選 → 主要內容 → 分頁／頁尾。此模式不代表必須新增多餘的頂端列。
+- 側欄導覽應緊湊、安靜、層級清楚且容易掃讀；圖示／標籤需一致，群組標籤保持低調。避免彩色圖示、每個項目各自一張卡片，以及厚重分隔線。
+- 選取狀態優先使用淡中性色背景與較明顯的文字；除非品牌有要求，否則避免高飽和色塊搭配白字／陰影。
+- 頂端列保持簡單，視需要提供麵包屑、搜尋、全域操作、使用者選單與通知。
+- 標頭包含標題、選用的功能說明、主要操作與次要操作；避免宣傳式歡迎文案。
+- 導覽應可預期，讓使用者知道目前位置、可前往的地方與下一步操作。不要為了視覺新鮮感改變既有模式。
+- 工具列與列式清單應緊湊安靜，使用低調的中繼資料、輕微的滑鼠懸停效果、快速掃讀結構，並在適當情況下支援鍵盤操作。
+- 優先使用簡單的 Ant Design Tabs，避免預設使用巨大、鮮豔、卡片式或膠囊式分頁標籤。
 
-### 6. Actions, copy, and feedback
+### 6. 操作、文案與回饋
 
-- Usually provide one obvious primary action. Use default/text/link/dropdown
-  styles for secondary actions; prefer small/middle over large default controls.
-- Use Ant Design Icons or the existing icon library for refresh, settings,
-  close, more, filter, and other familiar actions. Add Tooltip when meaning is
-  unclear; do not use emoji as operational icons.
-- Make destructive actions (delete, disable, remove, reset, clear) explicit.
-  Use Popconfirm or confirmation Modal when appropriate; name the target and
-  consequences instead of only “Are you sure?”.
-- Async UI must handle loading, success, empty, and error states. Use button/table
-  loading, Skeleton, or Spin when necessary, not avoidable full-screen spinners.
-- Keep empty states simple and useful, with a relevant action when appropriate.
-- API errors should be specific and provide recovery when useful. Do not show
-  stack traces or vague errors when useful details are available.
-- Copy must be concise, direct, functional, non-marketing, and human-readable:
-  “Create API Key” and “No data”, not promotional slogans.
+- 通常提供一個明確的主要操作。次要操作使用預設、文字、連結或下拉選單樣式；控制項預設優先選擇 small／middle 尺寸，不使用 large。
+- 重新整理、設定、關閉、更多、篩選等熟悉操作，使用 Ant Design Icons 或既有圖示庫。意義不明確時加上 Tooltip；不要用 emoji 作為操作圖示。
+- 刪除、停用、移除、重設、清除等破壞性操作必須明確呈現。適當時使用 Popconfirm 或確認 Modal，指出目標與後果，不要只問「確定嗎？」。
+- 非同步介面必須處理載入、成功、空白與錯誤狀態。必要時使用按鈕／表格的載入狀態、Skeleton 或 Spin，避免可以省略的全畫面載入動畫。
+- 空白狀態應簡單實用，適當時提供相關操作。
+- API 錯誤應具體，必要時提供復原方式。有實用資訊時，不要只顯示模糊錯誤，也不要把堆疊追蹤直接呈現給使用者。
+- 文案應簡潔、直接、功能導向、非行銷式且容易理解，例如「建立 API 金鑰」、「沒有資料」，而非宣傳標語。
 
-### 7. Tables, filters, and data presentation
+### 7. 表格、篩選與資料呈現
 
-- Prefer Ant Design Table with compact, readable, structured, data-first rows;
-  neutral headers, subtle dividers, and restrained typography.
-- Avoid cards inside rows, large per-row buttons, excessive colored tags, and
-  meaningless decorative icons.
-- Align text left, numbers/currency right, actions right, and status left/center
-  according to context.
-- Keep visible row actions limited (for example Edit and More); put secondary
-  duplicate/disable/history/delete actions in a dropdown.
-- Set reasonable widths for long text; use ellipsis and Tooltip when helpful.
-  Prevent uncontrolled horizontal expansion.
-- Keep date formats consistent within an interface (for example
-  `2026-09-11 14:30`); relative time must be intentional.
-- Use consistent restrained Tag, Badge, or text for statuses.
-- Keep search/filters compact, preferably in one row; use Input.Search or Input
-  with a search icon. Put advanced filters in Drawer, Popover, or Collapse.
-  Do not give each filter a card or let filters dominate the page.
-- Present KPI with label, value, and relevant change. Avoid giant icons,
-  gradients, glow, oversized type, and illustrations.
-- Add a chart only if it answers a clear user question. Keep charts neutral,
-  minimal, readable, and purpose-driven; avoid 3D charts, rainbow palettes,
-  unnecessary gauges, and decorative animation.
+- 優先使用 Ant Design Table；資料列需緊湊、清楚、有結構並以資料為主，搭配中性表頭、細緻分隔線與克制的文字排版。
+- 避免在資料列中放卡片、每列放大型按鈕、使用過多彩色標籤，或加入沒有意義的裝飾圖示。
+- 文字靠左，數字／金額靠右，操作靠右；狀態依情境靠左或置中。
+- 限制直接顯示的資料列操作，例如只保留「編輯」與「更多」；複製、停用、歷史紀錄、刪除等次要操作放入下拉選單。
+- 長文字欄位設定合理寬度，必要時搭配省略號與 Tooltip，避免水平寬度失控。
+- 同一介面的日期格式保持一致，例如 `2026-09-11 14:30`；採用相對時間必須有明確目的。
+- 狀態使用一致且克制的 Tag、Badge 或文字。
+- 搜尋／篩選保持緊湊，優先放在同一列；使用 Input.Search 或帶搜尋圖示的 Input。進階篩選放入 Drawer、Popover 或 Collapse。不要讓每個篩選條件各自佔一張卡片，也不要讓篩選區喧賓奪主。
+- KPI 以標籤、數值與相關變化呈現，避免巨型圖示、漸層、光暈、過大字級與插畫。
+- 圖表必須能回答明確的使用者問題。維持中性、簡潔、清楚且有目的的呈現；避免 3D 圖表、彩虹配色、不必要的儀表與裝飾動畫。
 
-### 8. Forms, settings, details, and overlays
+### 8. 表單、設定、詳細資訊與浮層
 
-- Use Ant Design Form with explicit labels, helpful descriptions/tooltips,
-  logical groups, and specific validation. Placeholders never replace labels.
-- Prefer one column for simple forms; two for complex forms when useful.
-  Do not force three or more columns merely to fill width.
-- Ordinary forms typically use 480–720px width; complex settings may be wider.
-- Explain validation failures (for example “Email address is not valid”), not
-  merely “Invalid value” or “Error”.
-- Settings follow navigation, title/description, configuration, divider, next
-  section. Avoid decorative cards around every section.
-- Details organize header, status, metadata, actions, then tabs/details/activity/
-  history rather than KPI card walls.
-- Use Modal for confirmation, quick edits, short forms, and simple actions.
-  Use Drawer or dedicated pages for large forms, full details, and complex flows.
-- Keep Drawers focused on contextual details, quick edits, or secondary workflows,
-  not an entire application.
-- Cards suit isolated summaries, KPI, independent widgets, and distinct modules.
-  Avoid nested cards or cards used only because whitespace feels uncomfortable.
+- 使用 Ant Design Form，搭配明確標籤、實用說明／提示、合理分組與具體驗證。輸入提示文字不得取代欄位標籤。
+- 簡單表單優先使用單欄；複雜表單在有幫助時使用雙欄。不要只為填滿寬度而硬塞三欄以上。
+- 一般表單寬度通常為 480–720px，複雜設定可以更寬。
+- 說明驗證失敗的原因，例如「電子郵件地址格式不正確」，不要只顯示「無效值」或「錯誤」。
+- 設定頁依序安排導覽、標題／說明、設定內容、分隔線與下一章節。避免每一區都加上裝飾卡片。
+- 詳細資訊頁依序安排標頭、狀態、中繼資料、操作，再接分頁標籤／詳細內容／活動／歷史紀錄，避免堆滿 KPI 卡片。
+- 確認、快速編輯、短表單與簡單操作使用 Modal；大型表單、完整詳細資訊與複雜流程使用 Drawer 或獨立頁面。
+- Drawer 應專注於當前情境的詳細資訊、快速編輯或次要流程，不要把整個應用程式塞進抽屜。
+- 卡片適合獨立摘要、KPI、獨立小工具與明確模組。避免巢狀卡片，也不要只因為覺得空白不舒服就加卡片。
 
-### 9. Responsive and accessible interaction
+### 9. 響應式與無障礙互動
 
-- Desktop is primary, but tablet/mobile must work. Do not simply shrink desktop.
-- When needed: Sidebar → Drawer; filters → Collapse/Drawer; table → horizontal
-  scroll/priority columns; buttons → stacked layout.
-- Check text/buttons/tables, modal/drawer width, forms, headers, sidebar, filters,
-  and pagination for overflow, overlap, inaccessible controls, and viewport escape.
-- Support relevant default, hover, focus, active, disabled, and loading states.
-- Check keyboard navigation, visible focus, labels, appropriate ARIA, contrast,
-  and disabled/loading/error states. Do not convey state using color alone.
-- Support Enter, Escape, arrows, shortcuts, and command actions when appropriate,
-  without introducing an unnecessary complex shortcut system.
-- Keep interaction fast, subtle, functional. Use motion only to explain overlays,
-  Collapse, feedback, or state transitions; avoid long transitions, bounce,
-  parallax, floating movement, and decorative animation.
+- 以桌面為主要使用情境，但平板與手機也必須可用；不能只是把桌面版縮小。
+- 必要時調整：側欄改成 Drawer、篩選改成 Collapse／Drawer、表格支援水平捲動／優先欄位、按鈕改為垂直排列。
+- 檢查文字／按鈕／表格、Modal／Drawer 寬度、表單、標頭、側欄、篩選與分頁，避免溢出、重疊、無法操作的控制項或超出可視範圍。
+- 支援適用的預設、滑鼠懸停、焦點、作用中、停用與載入狀態。
+- 檢查鍵盤導覽、可見焦點、標籤、適當的 ARIA、對比，以及停用／載入／錯誤狀態。不得只靠顏色表達狀態。
+- 適當時支援 Enter、Escape、方向鍵、快捷鍵與指令操作，但不得引入不必要的複雜快捷鍵系統。
+- 互動應快速、細緻且具有功能意義。動態效果只用於說明浮層、Collapse、回饋或狀態切換；避免過長轉場、彈跳、視差、漂浮移動與裝飾動畫。
 
-### 10. Engineering boundaries
+### 10. 工程邊界
 
-- Keep component responsibilities understandable. Split when API calls, forms,
-  large tables, modals, business rules, navigation, and unrelated UI become hard
-  to reason about together; do not split trivial markup pointlessly.
-- Prefer explicit TypeScript interfaces, types, unions, and generics; avoid
-  unnecessary `any` and use enums only when appropriate.
-- Keep props and configuration APIs simple and readable.
-- Keep local UI state local (modal/drawer visibility, selected tab, temporary
-  form state). Use global state only when genuinely shared.
-- Modify only task-relevant code. Do not replace frameworks, directories, state
-  management, unrelated dependencies/components, or unrelated screens.
-- Inspect nearby/similar pages, layout, table/form patterns, theme, CSS, and
-  conventions before changes. Extend the existing product language.
+- 元件職責應清楚易懂。API 呼叫、表單、大型表格、對話框、業務規則、導覽與不相關介面混在一起而難以理解時，應拆分元件；不要無意義地拆分簡單標記。
+- 優先使用明確的 TypeScript 介面、型別、聯集與泛型；避免不必要的 `any`，只在適合時使用 enum。
+- Props 與設定 API 保持簡單易讀。
+- 區域介面狀態應留在區域，例如 Modal／Drawer 是否開啟、目前選取的分頁標籤、暫存表單狀態。只有確實需要共用時才使用全域狀態。
+- 只修改與任務相關的程式碼。不得替換框架、目錄、狀態管理方式、不相關的相依套件／元件或其他畫面。
+- 修改前先檢查鄰近／相似頁面、版面、表格／表單模式、主題、CSS 與慣例，延續既有產品的設計語言。
 
-### 11. Required frontend workflow
+### 11. 必須遵循的前端流程
 
-1. **Inspect:** existing/similar pages, components, theme, and shared patterns.
-2. **Understand:** page type, user goal, main information, navigation, primary and
-   secondary actions. Ask whether a card/modal is necessary and whether Ant Design
-   or the project already provides the component/page pattern.
-3. **Reuse:** existing components, layouts, tokens, and Ant Design.
-4. **Implement:** the smallest coherent solution, without unrelated redesign.
-5. **Run:** the application; compilation alone does not prove correct UI.
-6. **Visually inspect:** actual alignment, spacing, typography, borders, density,
-   hierarchy, overflow, and interaction states.
-7. **Responsive review:** desktop, tablet, and mobile.
-8. **Fix:** visual and interaction problems before declaring completion.
+1. **檢查：**既有／相似頁面、元件、主題與共用模式。
+2. **理解：**頁面類型、使用者目標、主要資訊、導覽、主要與次要操作。確認是否真的需要卡片／Modal，以及 Ant Design 或專案是否已有對應元件／頁面模式。
+3. **重用：**既有元件、版面、設計變數與 Ant Design。
+4. **實作：**採用最小且完整的方案，不進行無關的重新設計。
+5. **執行：**實際啟動應用程式；僅編譯成功不能證明介面正確。
+6. **視覺檢查：**實際確認對齊、間距、文字排版、邊框、密度、層級、溢出與互動狀態。
+7. **響應式檢查：**桌面、平板與手機。
+8. **修正：**完成前先處理視覺與互動問題。
 
-### 12. Review and definition of done
+### 12. 審查與完成條件
 
-All applicable conditions must be satisfied:
+所有適用條件都必須滿足：
 
-- Functionality works; relevant tests, TypeScript, and build pass; no obvious
-  console errors.
-- Ant Design/existing patterns are reused appropriately; no unnecessary
-  dependency or second UI library was added.
-- Product language, spacing, typography, and density remain consistent.
-- Data/tables are readable, structured, comparable; forms/settings clear;
-  statuses restrained.
-- Sidebar/toolbar/navigation are compact, quiet, predictable, and scannable;
-  primary actions obvious.
-- Loading, empty, error, destructive-action, keyboard, and focus states work.
-- Responsive layouts do not break.
-- The actual rendered interface was visually reviewed, not just compiled.
+- 功能正常；相關測試、TypeScript 檢查與建置通過；沒有明顯的主控台錯誤。
+- 適當重用 Ant Design 與既有模式；沒有新增不必要的相依套件或第二套 UI 函式庫。
+- 產品設計語言、間距、文字排版與密度保持一致。
+- 資料／表格容易閱讀、有結構且方便比較；表單／設定清楚；狀態呈現克制。
+- 側欄／工具列／導覽緊湊、安靜、可預期且容易掃讀；主要操作明確。
+- 載入、空白、錯誤、破壞性操作、鍵盤與焦點狀態皆正常。
+- 響應式版面不破版。
+- 已實際檢視渲染後的介面，不是只有編譯通過。
 
-Review Stripe qualities (readable data, structured tables, clear forms/settings,
-restrained status, comparable numbers), Linear qualities (compact sidebar,
-quiet toolbar, predictable navigation, restrained type, systematic spacing,
-fast scanning), and Ant Design usage (reuse, tokens, minimal internal overrides).
+檢查是否具備 Stripe 的特質：資料易讀、表格有結構、表單／設定清楚、狀態克制、數字方便比較；Linear 的特質：側欄緊湊、工具列安靜、導覽可預期、文字排版克制、間距有系統、容易快速掃讀；以及正確的 Ant Design 使用方式：重用元件、使用設計變數、盡量減少內部樣式覆寫。
 
-Ask whether the result is a mature production product or a generic AI dashboard.
-Warning signs include gradients, giant cards/headings, decorative icons, glow,
-oversized radii, excessive whitespace, random colors, cards everywhere, and
-marketing language. Simplify when these appear.
+確認成果是否像成熟的正式產品，而非制式的 AI 儀表板。警訊包括漸層、巨大卡片／標題、裝飾圖示、光暈、過大圓角、過多留白、隨意配色、到處放卡片與行銷文案；出現時應簡化。
 
-Final decision rule: choose **simpler, quieter, more compact, clearer, more
-consistent, and easier to work with**. Prefer fewer visual elements, existing
-components/patterns, Ant Design, clarity over decoration, and function over novelty.
+最終決策原則：選擇**更簡單、更安靜、更緊湊、更清楚、更一致、更容易操作**的方案。優先使用較少的視覺元素、既有元件／模式與 Ant Design；清楚優先於裝飾，功能優先於新奇。
 
-Before finishing significant frontend work, ask: “Does this interface feel like
-a mature working product inspired by Stripe and Linear, implemented consistently
-with Ant Design?” If not, continue improving it.
+完成重要前端工作前，請自問：「這個介面是否像以 Stripe 與 Linear 為參考，並以 Ant Design 一致實作的成熟工作產品？」若不是，請繼續改善。
 
-### 13. Original rule coverage
+### 13. 原始規則涵蓋對照
 
-The supplied frontend standard is recorded here as one maintained set of rules.
-Do not append a second competing copy or interpret its example palette/layout
-as permission to overwrite intentional product decisions.
+使用者提供的前端標準，在此維護為同一套規則。不得再附加另一份互相競爭的副本，也不得把範例配色／版面解讀為可以覆蓋既有產品設計決策的授權。
 
-| Original rules | Consolidated sections above |
+| 原始規則 | 上述整合章節 |
 | --- | --- |
-| 1–3: philosophy, formula, product type | 1 |
-| 4–5: Ant Design and UI library boundaries | 2 |
-| 6–8: theme values and implementation | 3 |
-| 9–19: palette, hierarchy, density, spacing, typography | 4 |
-| 20–23: layout, sidebar, top bar, page header | 5 |
-| 24–26: buttons and icons | 6 |
-| 27–36: tables, dates, statuses, filters, search | 7 |
-| 37–43: forms, settings, details | 8 |
-| 44–46: lists, toolbars, tabs | 5 |
-| 47–49: modals, drawers, cards | 8 |
-| 50–51: KPI and charts | 7 |
-| 52–55: empty, loading, error, destructive actions | 6 |
-| 56–61: responsive, accessibility, states, motion | 9 |
-| 62–64: copy, navigation, keyboard efficiency | 6, 5, 9 |
-| 65–67: CSS, important, internal overrides | 3 |
-| 68–69: reuse and abstraction | 2 |
-| 70–76: responsibilities, types, state, API, scope | 10, 6 |
-| 77–79: preparation, reference roles, workflow | 11, 1 |
-| 80–85: review, visual standard, completion, decisions | 12 |
+| 1–3：理念、核心方向、產品類型 | 1 |
+| 4–5：Ant Design 與 UI 函式庫邊界 | 2 |
+| 6–8：主題數值與實作 | 3 |
+| 9–19：配色、層級、密度、間距、文字排版 | 4 |
+| 20–23：版面、側欄、頂端列、頁面標頭 | 5 |
+| 24–26：按鈕與圖示 | 6 |
+| 27–36：表格、日期、狀態、篩選、搜尋 | 7 |
+| 37–43：表單、設定、詳細資訊 | 8 |
+| 44–46：清單、工具列、分頁標籤 | 5 |
+| 47–49：對話框、抽屜、卡片 | 8 |
+| 50–51：KPI 與圖表 | 7 |
+| 52–55：空白、載入、錯誤、破壞性操作 | 6 |
+| 56–61：響應式、無障礙、狀態、動態效果 | 9 |
+| 62–64：文案、導覽、鍵盤效率 | 6, 5, 9 |
+| 65–67：CSS、important、內部覆寫 | 3 |
+| 68–69：重用與抽象化 | 2 |
+| 70–76：職責、型別、狀態、API、範圍 | 10, 6 |
+| 77–79：準備、參考來源的用途、工作流程 | 11, 1 |
+| 80–85：審查、視覺標準、完成條件、決策 | 12 |
