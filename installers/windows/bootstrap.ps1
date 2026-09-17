@@ -202,7 +202,15 @@ function Invoke-OpenSpriteBootstrap {
         }
         $stage = 'installation'
         Write-Host "[4/6] Installing OpenSprite $resolved (startup and health checks included)"
-        & (Join-Path $source 'installers\windows\install.ps1') -SourceRoot $source -SkipBrowserLaunch:$SkipBrowserLaunch
+        $previousProcessPolicy = [Environment]::GetEnvironmentVariable('PSExecutionPolicyPreference', 'Process')
+        try {
+            # File-backed installers/helpers must run even when the caller uses
+            # Windows PowerShell's default Restricted policy. Group Policy wins.
+            Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop
+            & (Join-Path $source 'installers\windows\install.ps1') -SourceRoot $source -SkipBrowserLaunch:$SkipBrowserLaunch
+        } finally {
+            [Environment]::SetEnvironmentVariable('PSExecutionPolicyPreference', $previousProcessPolicy, 'Process')
+        }
         Write-Host '[5/6] Installation and health checks completed'
     } catch {
         $failed = $true

@@ -1,15 +1,22 @@
 [CmdletBinding()]
-param()
+param(
+    [string]$InstallerDirectory,
+    [switch]$SkipPolicyProcesses
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'bootstrap.ps1')
+if ([String]::IsNullOrWhiteSpace($InstallerDirectory)) { $InstallerDirectory = $PSScriptRoot }
+. ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $InstallerDirectory 'bootstrap.ps1'))))
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Assert-True($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
-function Assert-Rejected([scriptblock]$Action) {
+function Assert-Rejected([scriptblock]$Action, [string]$ExpectedMessage = '') {
     $rejected = $false
-    try { & $Action | Out-Null } catch { $rejected = $true }
+    try { & $Action | Out-Null } catch {
+        if ($ExpectedMessage -and -not $_.Exception.Message.Contains($ExpectedMessage)) { throw }
+        $rejected = $true
+    }
     Assert-True $rejected 'Expected operation to be rejected.'
 }
 function New-TestZip([string]$Path, [hashtable]$Files, [int]$Attributes = 0) {
@@ -25,11 +32,17 @@ function New-TestZip([string]$Path, [hashtable]$Files, [int]$Attributes = 0) {
 }
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('opensprite-download-' + [guid]::NewGuid().ToString('N'))
+$originalProcessPolicy = [Environment]::GetEnvironmentVariable('PSExecutionPolicyPreference', 'Process')
+$originalPolicies = Get-ExecutionPolicy -List | ConvertTo-Json -Compress
+function Assert-ExecutionPolicyPreserved {
+    Assert-True ([Environment]::GetEnvironmentVariable('PSExecutionPolicyPreference', 'Process') -ceq $originalProcessPolicy) 'Process execution policy was not restored.'
+    Assert-True ((Get-ExecutionPolicy -List | ConvertTo-Json -Compress) -ceq $originalPolicies) 'Execution policy scopes changed.'
+}
 New-Item -ItemType Directory -Path $root | Out-Null
 try {
     foreach ($file in @('bootstrap.ps1','package.ps1','install.ps1')) {
         $tokens = $null; $errors = $null
-        [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors) | Out-Null
+        [Management.Automation.Language.Parser]::ParseFile((Join-Path $InstallerDirectory $file), [ref]$tokens, [ref]$errors) | Out-Null
         Assert-True ($errors.Count -eq 0) "Parser errors in $file : $errors"
     }
     Assert-DownloadUri ([uri]'https://github.com/HsinPu/OpenSprite/releases/latest')
@@ -73,7 +86,8 @@ try {
     $manifest = @{ version='1.2.3'; revision=('a' * 40) } | ConvertTo-Json
     New-TestZip $script:fixture @{
         'release-source.json'=$manifest
-        'installers/windows/install.ps1'='param($SourceRoot, [switch]$SkipBrowserLaunch) Write-Output "TEST-INSTALL-OK"'
+        'installers/windows/install.ps1'='param($SourceRoot, [switch]$SkipBrowserLaunch) . (Join-Path $PSScriptRoot "access.ps1"); if (-not (Confirm-TestAccess)) { throw "Nested helper was not loaded." }; Write-Output "TEST-INSTALL-OK"'
+        'installers/windows/access.ps1'='function Confirm-TestAccess { return $true }'
     }
     $script:downloadRoots = @()
     function Ensure-BootstrapPrerequisites([bool]$Consent, [bool]$Quiet) { }
@@ -88,6 +102,7 @@ try {
     $Version = '1.2.3'
     $output = Invoke-OpenSpriteBootstrap
     Assert-True ($output -contains 'TEST-INSTALL-OK') 'Installer was not invoked.'
+    Assert-ExecutionPolicyPreserved
     foreach ($path in $script:downloadRoots) { Assert-True (-not (Test-Path -LiteralPath $path)) 'Download temporary root was not removed.' }
     $Version = '9.9.9'
     Assert-Rejected { Invoke-OpenSpriteBootstrap }
@@ -109,13 +124,40 @@ try {
     function Save-ReleaseDownload { throw 'Source mode must not use Release assets.' }
     $output = Invoke-OpenSpriteBootstrap
     Assert-True ($output -contains 'TEST-INSTALL-OK') 'Source installer was not invoked.'
+    Assert-ExecutionPolicyPreserved
     foreach ($path in $script:downloadRoots) { Assert-True (-not (Test-Path -LiteralPath $path)) 'Source temporary root was not removed.' }
     $Version = '1.2.3'
     Assert-Rejected { Invoke-OpenSpriteBootstrap }
     $Version = 'latest'
+    $script:fixture = Join-Path $root 'installer-failure.zip'
+    New-TestZip $script:fixture @{ 'installers/windows/install.ps1'='param($SourceRoot, [switch]$SkipBrowserLaunch) throw "Injected installation failure"' }
+    Assert-Rejected { Invoke-OpenSpriteBootstrap } 'Injected installation failure'
+    Assert-ExecutionPolicyPreserved
+    foreach ($path in ($script:downloadRoots | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $path) {
+            Assert-True ((Get-Content -LiteralPath (Join-Path $path 'failure.txt') -Raw).Contains('during: installation.')) 'Missing installer failure stage.'
+            Remove-BootstrapTemp $path
+        }
+    }
     function Get-OpenSpriteSource([string]$Destination) { $script:failedSourceRoot = Split-Path -Parent $Destination; throw 'Injected clone failure' }
     Assert-Rejected { Invoke-OpenSpriteBootstrap }
     Assert-True (Test-Path (Join-Path $script:failedSourceRoot 'failure.txt')) 'Missing clone failure stage report.'
     Remove-BootstrapTemp $script:failedSourceRoot
     Write-Host 'Bootstrap safety and orchestration checks passed.'
 } finally { Remove-BootstrapTemp $root }
+
+if (-not $SkipPolicyProcesses) {
+    $testScript = (Join-Path $InstallerDirectory 'test-bootstrap.ps1').Replace("'", "''")
+    $directory = $InstallerDirectory.Replace("'", "''")
+    foreach ($policy in @('Restricted', 'AllSigned', 'Undefined')) {
+        $command = @"
+`$ErrorActionPreference = 'Stop'
+if ('$policy' -eq 'Undefined') { [Environment]::SetEnvironmentVariable('PSExecutionPolicyPreference', `$null, 'Process') }
+if ((Get-ExecutionPolicy -Scope Process) -ne '$policy') { throw 'Policy regression requires process policy $policy.' }
+if ('$policy' -ne 'Undefined' -and (Get-ExecutionPolicy) -ne '$policy') { throw 'Policy regression requires effective $policy.' }
+& ([scriptblock]::Create([IO.File]::ReadAllText('$testScript'))) -InstallerDirectory '$directory' -SkipPolicyProcesses
+"@
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy $policy -Command $command
+        if ($LASTEXITCODE -ne 0) { throw "Bootstrap execution-policy regression failed under $policy." }
+    }
+}

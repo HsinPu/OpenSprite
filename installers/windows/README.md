@@ -15,6 +15,13 @@ or manual checkout. Rerun to update while preserving personal data/access mode.
 The source is trusted through GitHub HTTPS; it is not a checksum-verified release.
 Source mode cannot be combined with a numbered release version.
 
+When the in-memory bootstrap invokes the downloaded installer and its script
+helpers, it temporarily sets execution policy to `Bypass` at `Process` scope.
+It restores the previous process value, including an unset value, on success
+or failure. `CurrentUser` and `LocalMachine` policies are unchanged; Group
+Policy still takes precedence. This supports ordinary Windows PowerShell
+sessions whose effective policy defaults to `Restricted`.
+
 
 ## Download installer (release assets must be published first)
 
