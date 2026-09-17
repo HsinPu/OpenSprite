@@ -149,9 +149,12 @@ try {
         $quarantinedRuntimes += $quarantinedRuntime
     }
 
-    & $uninstallScript -InstallRoot $installRoot -AllowCustomInstallRoot -StartupName ("OpenSprite-Test-" + [Guid]::NewGuid().ToString("N")) -Confirm:$false | Out-Null
+    & $uninstallScript -InstallRoot $installRoot -DataRoot $userDataRoot -AllowCustomInstallRoot -AllowCustomDataRoot -StartupName ("OpenSprite-Test-" + [Guid]::NewGuid().ToString("N")) -Confirm:$false | Out-Null
     if (Test-Path -LiteralPath $installRoot) {
         throw "Isolated uninstall did not remove the application root."
+    }
+    foreach ($preserved in @("config\settings.json", "data\opensprite.db", "logs\keep.log")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $userDataRoot $preserved) -PathType Leaf)) { throw "Isolated uninstall removed preserved data: $preserved" }
     }
 }
 finally {

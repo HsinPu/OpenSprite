@@ -222,6 +222,7 @@ function Invoke-OpenSpriteBootstrap {
             Write-Host '[6/6] Cleaning download temporary files'
             try {
                 Remove-BootstrapTemp $temp
+                Write-Host "Download temporary files removed: $temp"
                 if ($failed) {
                     New-Item -ItemType Directory -Path $temp | Out-Null
                     [IO.File]::WriteAllText((Join-Path $temp 'failure.txt'), "OpenSprite installation failed during: $stage. See console for recovery warnings. No credentials are recorded.")

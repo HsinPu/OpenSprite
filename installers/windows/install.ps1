@@ -421,6 +421,23 @@ try {
         try { Clear-PreviousInstallations $installParent $previousRoot }
         catch { Write-Warning 'Installation is healthy; older backup cleanup could not be completed.' }
     }
+    Write-Host ''
+    Write-Host 'OpenSprite installation summary'
+    Write-Host "  Application (frontend, backend and Python environment): $installRootPath"
+    Write-Host "  User data: $userDataRootPath"
+    Write-Host '    config\: settings, local access and encryption key'
+    Write-Host '    auth.json: encrypted provider credentials (back up with config\credential.key)'
+    Write-Host '    data\opensprite.db: conversations, runs and schedules'
+    Write-Host '    workspace\: managed workspaces and their files'
+    Write-Host '    skills\, agents\, archive\: installed definitions and archived copies'
+    Write-Host '    logs\, state\, cache\: logs, runtime state and cache'
+    Write-Host '  Data locations are created as needed; this list does not mean they all exist.'
+    if ($SkipStartupRegistration) {
+        Write-Host '  Startup registration: skipped'
+    } else {
+        Write-Host "  Startup entry: HKCU:\Software\Microsoft\Windows\CurrentVersion\Run [$StartupName]"
+    }
+    Write-Host '  Updates preserve user data. Git, Node.js, uv and their shared caches are separate.'
     [pscustomobject]@{
         InstallRoot = $installRootPath
         StartupName = if ($SkipStartupRegistration) { $null } else { $StartupName }

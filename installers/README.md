@@ -5,6 +5,10 @@
 
 兩個平台必須維持相同行為：安裝依賴、部署前後端、建立背景啟動方式、執行健康檢查，以及預設保留使用者資料的安全解除安裝。
 
+安裝完成時列出程式、使用者資料與自動啟動設定的位置，以及資料子目錄的用途；此摘要不會預先建立目錄或讀取憑證內容。
+解除安裝結束時依實際存在狀態顯示 `Removed`（已刪除）、`Retained`（仍保留）或 `Already absent`（原本不存在）；中途失敗也顯示目前狀態並保留失敗結果。
+完整位置表與保留範圍見主 [README](../README.md)。
+
 安裝器必須遵守 [`../docs/architecture/local-data-layout.md`](../docs/architecture/local-data-layout.md)：
 
 - Windows 程式安裝於 `%LOCALAPPDATA%\OpenSprite\app`，使用者資料固定在

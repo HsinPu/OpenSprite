@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+python3 "$(dirname "${BASH_SOURCE[0]}")/test-uninstall.py"
 ROOT="$(mktemp -d "${TMPDIR:-/tmp}/opensprite-installer-test-space XXXXXX")"; trap 'rm -rf -- "$ROOT"' EXIT
 python3 - "$ROOT" "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" <<'PY'
 import importlib.util, io, json, pathlib, sys

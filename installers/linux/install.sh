@@ -190,3 +190,17 @@ fi
 rm -rf -- "$PREVIOUS"
 cutover=0
 printf 'OpenSprite installed. mode=%s url=http://localhost:%s/\n' "$ACCESS_MODE" "$PORT"
+printf '\nOpenSprite installation summary\n'
+printf '  Application (frontend, backend and Python environment): %s\n' "$INSTALL_ROOT"
+printf '  User data: %s\n' "$USER_DATA_ROOT"
+printf '%s\n' \
+  '    config/: settings, local access and encryption key' \
+  '    auth.json: encrypted provider credentials (back up with config/credential.key)' \
+  '    data/opensprite.db: conversations, runs and schedules' \
+  '    workspace/: managed workspaces and their files' \
+  '    skills/, agents/, archive/: installed definitions and archived copies' \
+  '    logs/, state/, cache/: logs, runtime state and cache' \
+  '  Data locations are created as needed; this list does not mean they all exist.'
+printf '  User service file: %s\n' "$UNIT_FILE"
+if ((SKIP_SERVICE == 1)); then printf '  Service registration: skipped (isolated test)\n'; fi
+printf '  Updates preserve user data. Git, Node.js, uv and their shared caches are separate.\n'

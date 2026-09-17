@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.21.20`。
+目前產品版本為 `0.21.21`。
 
 ## Windows 安裝與更新
 
@@ -106,6 +106,41 @@ bash "${XDG_DATA_HOME:-$HOME/.local/share}/opensprite/app/installers/linux/unins
 ```
 
 更多平台說明見 [Windows 安裝說明](installers/windows/README.md)及 [Linux 安裝說明](installers/linux/README.md)。
+
+### 安裝與解除安裝完成摘要
+
+安裝完成時，終端機會列出程式、個人資料及自動啟動設定的實際位置。
+Windows 一行安裝也會顯示已清理的下載暫存路徑；無法清理時會顯示保留位置。
+
+| 項目 | Windows | Linux |
+| --- | --- | --- |
+| 程式、前端及 Python 執行環境 | `%LOCALAPPDATA%\OpenSprite\app` | `${XDG_DATA_HOME:-$HOME/.local/share}/opensprite/app` |
+| 個人資料根目錄 | `%USERPROFILE%\.opensprite` | `~/.opensprite` |
+| 自動啟動設定 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `OpenSprite` 項目 | `${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opensprite.service` |
+
+個人資料都放在 `.opensprite` 之下，各項用途如下；只有實際使用功能時才會建立對應檔案或目錄：
+
+| 相對位置 | 內容 |
+| --- | --- |
+| `config/` | AI、供應商、工作區等設定、本機存取設定與加密金鑰 |
+| `auth.json` ＋ `config/credential.key` | 加密的供應商憑證及解密金鑰；備份、搬移或刪除時必須一起處理 |
+| `data/opensprite.db` | 對話、執行與排程等資料 |
+| `workspace/` | OpenSprite 管理的工作區及其檔案 |
+| `skills/`、`agents/`、`archive/` | 安裝的技能、代理定義及封存副本 |
+| `logs/`、`state/`、`cache/` | 日誌、執行狀態及快取 |
+
+解除安裝最後會依實際狀態列出程式、自動啟動設定及個人資料的位置：
+
+- `Removed`：本次已刪除。
+- `Retained`：仍保留，例如預設保留個人資料，或未確認移除。
+- `Already absent`：執行前就不存在，沒有算成本次刪除。
+
+預設解除安裝會移除程式與自動啟動設定，保留整個 `.opensprite`。
+選擇刪除個人資料並確認後，上表中的設定、憑證、對話、排程、受管理工作區檔案與日誌等都會一起移除。
+若途中失敗，摘要會顯示目前仍存在的項目並提示未完成；仍存在的目錄可能已有部分內容被刪除。
+Windows 的 `-WhatIf` 會標示僅預覽。
+
+Git、Node.js、uv、工具共用快取、另外下載或 clone 的原始碼，以及外部掛載的工作區資料夾，都不會由解除安裝器移除。
 
 ## 近期調整
 
