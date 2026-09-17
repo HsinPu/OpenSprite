@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.21.19`。
+目前產品版本為 `0.21.20`。
 
 ## Windows 安裝與更新
 
@@ -65,6 +65,47 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\OpenSprite-install.ps1
 - 程式安裝於 `%LOCALAPPDATA%\OpenSprite\app`；個人資料保存於 `%USERPROFILE%\.opensprite`，更新不清除對話、設定、金鑰或既有存取模式。
 
 完整參數、解除安裝、失敗處理及 Release 發布流程見 [Windows 安裝說明](installers/windows/README.md)。
+
+## 解除安裝（Uninstall）
+
+安裝時已附帶解除安裝腳本，不需要重新下載或 clone 專案。請使用原本安裝 OpenSprite 的帳號執行。
+預設只停止 OpenSprite、移除自動啟動設定與程式檔案，保留個人資料；Git、Node.js 與 uv 不會一起移除。
+
+### Windows
+
+在任意目錄開啟 PowerShell，貼上：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\OpenSprite\app\installers\windows\uninstall.ps1"
+```
+
+依畫面提示確認後，移除 `%LOCALAPPDATA%\OpenSprite\app` 與目前帳號的自動啟動項目。
+對話、設定及供應商金鑰等資料保留在 `%USERPROFILE%\.opensprite`，重新安裝後可繼續使用。
+
+若要在解除安裝時**一併永久刪除所有個人資料**，請改用以下指令並確認提示；刪除後無法復原：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\OpenSprite\app\installers\windows\uninstall.ps1" -RemoveUserData
+```
+
+### Linux
+
+在終端機執行，**不要使用 `sudo`**：
+
+```bash
+bash "${XDG_DATA_HOME:-$HOME/.local/share}/opensprite/app/installers/linux/uninstall.sh"
+```
+
+解除安裝會停止並移除目前帳號的 `opensprite.service`，刪除程式目錄，保留 `~/.opensprite`。
+若安裝時設定過 `XDG_DATA_HOME` 或 `XDG_CONFIG_HOME`，解除安裝時請使用相同設定。
+
+若要在解除安裝時**一併永久刪除所有個人資料**，請改用以下指令，並在提示時輸入 `DELETE`；刪除後無法復原：
+
+```bash
+bash "${XDG_DATA_HOME:-$HOME/.local/share}/opensprite/app/installers/linux/uninstall.sh" --remove-user-data
+```
+
+更多平台說明見 [Windows 安裝說明](installers/windows/README.md)及 [Linux 安裝說明](installers/linux/README.md)。
 
 ## 近期調整
 
