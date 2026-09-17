@@ -85,7 +85,7 @@ def test_ai_settings_schema_persists_model_response_continuation_and_delivery() 
     assert schemas["OutputContinuation"]["enum"] == ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
     assert schemas["ResponseDelivery"]["enum"] == ["stream", "complete"]
     assert settings["properties"]["logFullPrompts"]["type"] == "boolean"
-    assert schemas["ResponseMode"]["enum"] == ["low", "medium", "high", "xhigh", "max", "ultra"]
+    assert schemas["ResponseMode"]["enum"] == ["default", "low", "medium", "high", "xhigh", "max", "ultra"]
     assert schemas["ErrorCode"]["enum"] == [
         "invalid_request",
         "not_connected",

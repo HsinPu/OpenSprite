@@ -695,6 +695,7 @@ export const jaMessages = {
   "models.response.minimal": "最小",
   "models.response.exact": "このモデルは「{effective}」を使用します。",
   "models.response.fallback": "このモデルは「{requested}」に対応していないため、対応する最高レベル「{effective}」を使用します。",
+  "models.response.defaultDescription": "推論レベルを指定せず、モデルの既定の動作を使用します。",
   "models.response.providerDefault": "このモデルは既定の動作を使用します。",
   "models.response.unknown": "対応レベルを確認できないため、モデルの既定の動作を使用します。",
   "models.response.selectModel": "モデルを選択すると、実際に使用するレベルが表示されます。",

@@ -1,9 +1,9 @@
 import { apiFetch } from "./http";
 import type { ProviderId } from "./providerConnections";
 
-export const responseModes = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+export const responseModes = ["default", "low", "medium", "high", "xhigh", "max", "ultra"] as const;
 export type ResponseMode = typeof responseModes[number];
-export const historicalResponseModes = ["default", "fast", "balanced", "deep", ...responseModes] as const;
+export const historicalResponseModes = ["fast", "balanced", "deep", ...responseModes] as const;
 export type HistoricalResponseMode = typeof historicalResponseModes[number];
 export const nativeEfforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningResolution = {

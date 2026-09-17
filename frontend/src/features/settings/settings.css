@@ -411,14 +411,5 @@
   .settings-category-drawer .settings-category small { display: inline; }
 }
 
-.settings-response-preference { padding-bottom: 12px; border-bottom: 1px solid var(--settings-border); }
-.settings-response-preference .settings-preference-row { border-bottom: 0; flex-wrap: wrap; gap: 12px; }
-.settings-response-modes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; max-width: 100%; }
-.settings-response-modes .ant-radio-wrapper { margin: 0; white-space: nowrap; }
+.settings-response-preference .settings-select-row { border-bottom: 0; }
 .response-mode-hint { margin: 0; color: var(--settings-muted); font-size: 13px; line-height: 1.5; }
-@container (max-width: 620px) {
-  .settings-response-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; row-gap: 12px; }
-}
-@container (max-width: 340px) {
-  .settings-response-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}

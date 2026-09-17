@@ -22,7 +22,7 @@ export function useAiSettings(
 ) {
   const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
-  const [responseMode, setResponseMode] = useState<ResponseMode>("medium");
+  const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [outputContinuation, setOutputContinuation] = useState<OutputContinuation>("2");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
   const [logFullPrompts, setLogFullPrompts] = useState(false);

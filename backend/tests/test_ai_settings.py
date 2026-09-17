@@ -116,7 +116,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == AiSettings(model=None, responseMode="medium", outputContinuation="5", responseDelivery="stream")
+    assert store.get() == AiSettings(model=None, responseMode="default", outputContinuation="5", responseDelivery="stream")
     assert not paths.home.exists()
     saved = settings(model=selection(), response_mode=ResponseMode.HIGH, response_delivery=ResponseDelivery.COMPLETE)
     store.set(saved)
@@ -339,7 +339,7 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
             json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "high", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "medium", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
+    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
     assert saved.status_code == 200
     assert saved.json() == {
         "providerToolPolicies": {},
@@ -396,7 +396,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "medium", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
+        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()

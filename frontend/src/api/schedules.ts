@@ -7,6 +7,7 @@ import type {
   ResponseMode,
 } from "./aiSettings";
 import { apiFetch } from "./http";
+import { responseModes } from "./responseModes";
 
 export type ScheduleStatus = "active" | "paused" | "completed";
 export type OccurrenceStatus = "pending" | "running" | "completed" | "failed" | "skipped";
@@ -74,7 +75,6 @@ export class ScheduleApiError extends Error {
 }
 
 const identifier = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const responseModes = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
 const continuations = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const;

@@ -353,16 +353,17 @@ describe("persisted AI settings", () => {
 
     await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
-    const deep = await screen.findByRole("radio", { name: "高" });
-    expect((deep as HTMLInputElement).checked).toBe(true);
+    const select = await screen.findByRole("combobox", { name: "回應模式" });
+    expect(select.parentElement?.textContent).toContain("高");
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).parentElement?.textContent).toContain("一次回答");
-    fireEvent.click(screen.getByRole("radio", { name: "低" }));
+    fireEvent.mouseDown(select);
+    fireEvent.click(screen.getByText("預設", { exact: true }).closest(".ant-select-item-option")!);
 
-    await waitFor(() => expect((screen.getByRole("radio", { name: "低" }) as HTMLInputElement).checked).toBe(true));
+    await waitFor(() => expect(select.parentElement?.textContent).toContain("預設"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "low", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "default", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
     });
   });
 
@@ -378,13 +379,13 @@ describe("persisted AI settings", () => {
 
     await openSettingsMenu();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
-    const balanced = await screen.findByRole("radio", { name: "中" });
-    await waitFor(() => expect((balanced as HTMLInputElement).checked).toBe(true));
-    fireEvent.click(screen.getByRole("radio", { name: "高" }));
+    const select = await screen.findByRole("combobox", { name: "回應模式" });
+    await waitFor(() => expect(select.parentElement?.textContent).toContain("中"));
+    fireEvent.mouseDown(select);
+    fireEvent.click(screen.getByText("高", { exact: true }).closest(".ant-select-item-option")!);
 
     expect((await screen.findByRole("alert")).textContent).toContain("AI 設定暫時無法讀取或儲存");
-    expect((balanced as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByRole("radio", { name: "高" }) as HTMLInputElement).checked).toBe(false);
+    expect(select.parentElement?.textContent).toContain("中");
   });
 });
 

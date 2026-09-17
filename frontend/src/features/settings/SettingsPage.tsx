@@ -1,4 +1,4 @@
-import { Button, Collapse, Drawer, Dropdown, Input, Modal, Radio, Select, Switch, Tooltip } from "antd";
+import { Button, Collapse, Drawer, Dropdown, Input, Modal, Select, Switch, Tooltip } from "antd";
 import { ArrowLeftOutlined, EllipsisOutlined, MenuOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
@@ -495,10 +495,10 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-response-preference">
-          <div className="settings-preference-row"><span id="settings-response-mode-label">{t("models.responseMode")}</span>
-            <Radio.Group className="settings-response-modes" name="response-mode" aria-labelledby="settings-response-mode-label" aria-busy={aiSettingsSaving} value={responseMode} disabled={!aiSettingsLoaded} onChange={(event) => void onResponseModeChange(event.target.value as ResponseMode)} options={responseModes.map((value) => ({ value, label: t(`models.response.${value}`) }))} />
+          <div className="settings-select-row"><label htmlFor="settings-response-mode">{t("models.responseMode")}</label>
+            <Select id="settings-response-mode" aria-describedby="settings-response-mode-hint" value={responseMode} disabled={!aiSettingsLoaded || aiSettingsSaving} getPopupContainer={getSettingsPopupContainer} onChange={(value: ResponseMode) => void onResponseModeChange(value)} options={responseModes.map((value) => ({ value, label: t(`models.response.${value}`) }))} />
           </div>
-          <ResponseModeHint providerId={modelSelection?.providerId} modelId={modelSelection?.modelId} mode={responseMode} enabled={aiSettingsLoaded} />
+          <ResponseModeHint id="settings-response-mode-hint" providerId={modelSelection?.providerId} modelId={modelSelection?.modelId} mode={responseMode} enabled={aiSettingsLoaded} />
         </div>
       </SettingsCard>
       <SettingsCard icon="settings" title={t("models.replySettings")}>

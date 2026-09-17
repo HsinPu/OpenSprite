@@ -147,3 +147,14 @@ def test_schedule_routes_are_authentication_protected(tmp_path: Path) -> None:
         response = client.get("/api/schedules")
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "authentication_required"
+
+
+def test_schedule_can_save_and_reload_default_response_mode(tmp_path):
+    payload = _payload()
+    payload["executionProfile"]["responseMode"] = "default"
+    with _client(tmp_path) as client:
+        created = client.post("/api/schedules", json=payload)
+        assert created.status_code == 201
+        assert created.json()["executionProfile"]["responseMode"] == "default"
+        listed = client.get("/api/schedules", params={"limit": 10})
+        assert listed.json()["schedules"][0]["executionProfile"]["responseMode"] == "default"

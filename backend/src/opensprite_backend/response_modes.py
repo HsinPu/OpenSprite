@@ -6,6 +6,7 @@ from typing import Literal
 
 
 class ResponseMode(StrEnum):
+    DEFAULT = "default"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -14,16 +15,16 @@ class ResponseMode(StrEnum):
     ULTRA = "ultra"
 
 
-ResponseModeValue = Literal["low", "medium", "high", "xhigh", "max", "ultra"]
+ResponseModeValue = Literal["default", "low", "medium", "high", "xhigh", "max", "ultra"]
 HistoricalResponseMode = Literal["default", "fast", "balanced", "deep", "low", "medium", "high", "xhigh", "max", "ultra"]
 RESPONSE_MODES = tuple(mode.value for mode in ResponseMode)
-LEGACY_RESPONSE_MODES = {"default": "medium", "fast": "low", "balanced": "medium", "deep": "high"}
+LEGACY_RESPONSE_MODES = {"fast": "low", "balanced": "medium", "deep": "high"}
 HISTORICAL_RESPONSE_MODES = (*LEGACY_RESPONSE_MODES, *RESPONSE_MODES)
 NATIVE_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 
 def migrate_response_mode(value: object) -> str:
-    """Only storage migrations accept the retired preference names."""
+    """Storage migrations preserve default and translate retired preference names."""
     if not isinstance(value, str) or value not in HISTORICAL_RESPONSE_MODES:
         raise ValueError("invalid response mode")
     return LEGACY_RESPONSE_MODES.get(value, value)

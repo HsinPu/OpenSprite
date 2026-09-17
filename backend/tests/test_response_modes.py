@@ -26,19 +26,19 @@ from test_inference_adapters import response
 
 
 @pytest.mark.parametrize("mode", RESPONSE_MODES)
-def test_six_modes_round_trip_and_reject_old_writes(tmp_path, mode):
+def test_modes_round_trip_and_reject_retired_writes(tmp_path, mode):
     store = JsonAiSettingsStore(tmp_path / "settings.json")
     with TestClient(create_app(RecordingConnections(), ai_settings=AiSettingsService(store, RecordingConnections()))) as client:
         payload = {"model": None, "responseMode": mode, "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False}
         assert client.put("/api/settings/ai", json=payload).status_code == 200
         assert client.get("/api/settings/ai").json()["responseMode"] == mode
-        for old in ("default", "fast", "balanced", "deep", "medim"):
+        for old in ("fast", "balanced", "deep", "medim"):
             assert client.put("/api/settings/ai", json={**payload, "responseMode": old}).status_code == 400
     assert JsonAiSettingsStore(store._path).get().responseMode == mode
     assert json.loads(store._path.read_text())["version"] == 10
 
 
-@pytest.mark.parametrize(("old", "new"), [("default", "medium"), ("fast", "low"), ("balanced", "medium"), ("deep", "high")])
+@pytest.mark.parametrize(("old", "new"), [("default", "default"), ("fast", "low"), ("balanced", "medium"), ("deep", "high")])
 def test_v9_read_migration_preserves_file_and_policies(tmp_path, old, new):
     path = tmp_path / "settings.json"
     payload = {"version": 9, "model": None, "responseMode": old, "outputContinuation": "5", "responseDelivery": "complete", "logFullPrompts": False, "providerToolPolicies": {"openai": {"toolsEnabled": False, "transport": "stream", "disabledModels": []}}}
@@ -50,8 +50,11 @@ def test_v9_read_migration_preserves_file_and_policies(tmp_path, old, new):
     assert not result.providerToolPolicies["openai"].toolsEnabled
     assert path.read_bytes() == before
     path.write_text(json.dumps({**payload, "version": 10}))
-    with pytest.raises(SettingsStoreError):
-        store.get()
+    if old == "default":
+        assert store.get().responseMode == "default"
+    else:
+        with pytest.raises(SettingsStoreError):
+            store.get()
 
 
 def test_highest_fallback_is_not_nearest_and_unknown_is_not_unsupported():
@@ -59,6 +62,24 @@ def test_highest_fallback_is_not_nearest_and_unknown_is_not_unsupported():
     assert resolve_response_mode("xhigh", ("low", "medium", "high", "max")).effective == "max"
     assert resolve_response_mode("ultra", None).status == "unknown"
     assert resolve_response_mode("ultra", ()).status == "provider_default"
+
+
+def test_default_preview_never_queries_provider_capabilities(tmp_path):
+    class UnavailableConnections:
+        async def list_openrouter_models(self):
+            pytest.fail("Default must not query provider capabilities")
+
+    service = AiSettingsService(JsonAiSettingsStore(tmp_path / "settings.json"), UnavailableConnections())
+    with TestClient(create_app(ai_settings=service)) as client:
+        result = client.get("/api/settings/ai/response-mode", params={"providerId": "openrouter", "modelId": "any/model", "responseMode": "default"})
+        assert result.status_code == 200
+        assert result.json() == {"requested": "default", "effective": None, "status": "provider_default"}
+
+
+def test_current_settings_keep_an_existing_explicit_level(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"version": 10, "model": None, "responseMode": "medium", "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False, "providerToolPolicies": {}}))
+    assert JsonAiSettingsStore(path).get().responseMode == "medium"
 
 
 @pytest.mark.parametrize("mode", RESPONSE_MODES)
@@ -79,7 +100,7 @@ def test_adapter_payload_matches_resolved_level(provider, model, supported, mode
         if provider == "anthropic":
             return response(outbound, {"type": "message_start", "message": {"usage": {"input_tokens": 1}}}, {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}}, {"type": "message_stop"})
         return response(outbound, {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}, "[DONE]")
-    expected = None if not supported else mode if mode in supported else supported[-1]
+    expected = None if mode == "default" or not supported else mode if mode in supported else supported[-1]
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter = {"openai": OpenAIInferenceAdapter, "anthropic": AnthropicInferenceAdapter, "openrouter": OpenRouterInferenceAdapter}[provider](client)
@@ -114,7 +135,8 @@ def test_openrouter_discovery_preserves_capability_states(reasoning, expected):
     assert model.reasoning_efforts == expected
 
 
-def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path):
+@pytest.mark.parametrize(("old_mode", "expected_mode"), [("default", "default"), ("fast", "low"), ("balanced", "medium"), ("deep", "high")])
+def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path, old_mode, expected_mode):
     # Seed real current data, then copy into the actual preceding table definition.
     source = SqliteConversationRepository(tmp_path / "source.db")
     old = source.start_run(conversation_id=None, client_request_id=str(uuid4()), message="old", provider_id="openai", model_id="gpt-5.6", response_mode="deep")
@@ -128,7 +150,7 @@ def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path):
             columns = [row[1] for row in target.execute(f"PRAGMA table_info({table})")]
             names = ",".join(columns)
             target.executemany(f"INSERT INTO {table} ({names}) VALUES ({','.join('?' for _ in columns)})", original.execute(f"SELECT {names} FROM {table}"))
-        target.execute("INSERT INTO schedules(id,name,prompt,cadence_type,local_time,time_zone,provider_id,model_id,response_mode,context_budget,output_budget,output_continuation,status,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (str(uuid4()), "old schedule", "hello", "daily", "09:00", "UTC", "openai", "gpt-5.6", "balanced", "auto", "auto", "5", "paused", 1, "2026-09-17T00:00:00Z", "2026-09-17T00:00:00Z"))
+        target.execute("INSERT INTO schedules(id,name,prompt,cadence_type,local_time,time_zone,provider_id,model_id,response_mode,context_budget,output_budget,output_continuation,status,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (str(uuid4()), "old schedule", "hello", "daily", "09:00", "UTC", "openai", "gpt-5.6", old_mode, "auto", "auto", "5", "paused", 1, "2026-09-17T00:00:00Z", "2026-09-17T00:00:00Z"))
         target.commit()
     upgraded = SqliteConversationRepository(path)
     upgraded.interrupt_incomplete_runs()
@@ -137,7 +159,7 @@ def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path):
     assert upgraded.list_run_events(old.run.id, after_sequence=0, limit=100) == source.list_run_events(old.run.id, after_sequence=0, limit=100)
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
-        assert connection.execute("SELECT response_mode FROM schedules").fetchone()[0] == "medium"
+        assert connection.execute("SELECT response_mode FROM schedules").fetchone()[0] == expected_mode
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     run = upgraded.start_run(conversation_id=old.run.conversation_id, client_request_id=str(uuid4()), message="new", provider_id="openai", model_id="gpt-5.6", response_mode="ultra").run
     upgraded.mark_run_started(run.id)

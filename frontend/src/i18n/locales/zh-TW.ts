@@ -845,6 +845,7 @@ export const zhTWMessages = {
   "models.response.minimal": "最低",
   "models.response.exact": "此模型使用「{effective}」。",
   "models.response.fallback": "此模型不支援「{requested}」，將使用最高支援等級「{effective}」。",
+  "models.response.defaultDescription": "不送出思考等級，使用模型預設行為。",
   "models.response.providerDefault": "此模型使用自身預設模式。",
   "models.response.unknown": "尚無法確認支援等級，將使用模型預設模式。",
   "models.response.selectModel": "選擇模型後，會顯示實際使用的等級。",

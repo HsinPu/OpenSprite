@@ -51,7 +51,7 @@ class AiSettingsOperations(Protocol):
 def default_ai_settings() -> AiSettings:
     return AiSettings(
         model=None,
-        responseMode="medium",
+        responseMode="default",
         outputContinuation="5",
         responseDelivery="stream",
         logFullPrompts=False,
@@ -258,6 +258,8 @@ class AiSettingsService:
         return self._store.get()
 
     async def resolve_mode(self, provider_id: str, model_id: str, mode: ResponseModeValue) -> ReasoningResolution:
+        if mode == "default":
+            return resolve_response_mode(mode, None)
         from .agent.context.capability_resolver import ModelCapabilityNotFound, ModelCapabilityProviderError
         try:
             capability = await self._capability_resolver.resolve(provider_id, model_id)

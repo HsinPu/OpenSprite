@@ -96,7 +96,7 @@
       "get": {
         "operationId": "getAiSettings",
         "summary": "Read AI settings",
-        "description": "Returns a null model, medium response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
+        "description": "Returns a null model, default response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
         "tags": ["ai-settings"],
         "responses": {
           "200": {
@@ -143,6 +143,7 @@
           "requested": {
             "type": "string",
             "enum": [
+              "default",
               "low",
               "medium",
               "high",
@@ -183,6 +184,7 @@
       "ResponseMode": {
         "type": "string",
         "enum": [
+          "default",
           "low",
           "medium",
           "high",
@@ -190,7 +192,7 @@
           "max",
           "ultra"
         ],
-        "description": "Requested reasoning preference. Unsupported levels use the highest supported native effort; ultra is resolved to the highest available effort. Unknown or unavailable effort control omits the provider parameter."
+        "description": "Requested reasoning preference. default omits the reasoning effort parameter and uses provider defaults; it does not force reasoning off. Unsupported levels use the highest supported native effort; ultra is resolved to the highest available effort. Unknown or unavailable effort control omits the provider parameter."
       },
       "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
       "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]},

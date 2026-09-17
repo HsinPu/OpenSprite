@@ -6,9 +6,18 @@ import { createTranslator } from "../src/i18n/catalog";
 
 afterEach(() => vi.unstubAllGlobals());
 
-it("keeps all six ordered levels translated in Chinese and English", () => {
-  expect(responseModes.map(mode => createTranslator("zh-TW")(`models.response.${mode}`))).toEqual(["低", "中", "高", "極高", "最高", "極致"]);
-  expect(responseModes.map(mode => createTranslator("en")(`models.response.${mode}`))).toEqual(["Low", "Medium", "High", "Extra High", "Max", "Ultra"]);
+it("explains default without looking up model capabilities", () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  render(<ResponseModeHint providerId="openrouter" modelId="any/model" mode="default" />);
+  expect(screen.getByRole("status").textContent).toBe("不送出思考等級，使用模型預設行為。");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(responseModeResolutionText({ requested: "default", effective: null, status: "provider_default" }, createTranslator("en"))).toContain("No reasoning effort is sent");
+});
+
+it("keeps default and all six ordered levels translated in Chinese and English", () => {
+  expect(responseModes.map(mode => createTranslator("zh-TW")(`models.response.${mode}`))).toEqual(["預設", "低", "中", "高", "極高", "最高", "極致"]);
+  expect(responseModes.map(mode => createTranslator("en")(`models.response.${mode}`))).toEqual(["Default", "Low", "Medium", "High", "Extra High", "Max", "Ultra"]);
 });
 
 it("uses an encoded read-only preview and rejects a mismatched decision", async () => {

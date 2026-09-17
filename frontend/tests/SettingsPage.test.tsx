@@ -206,7 +206,7 @@ describe("provider settings", () => {
     render(<SettingsHarness />);
     await screen.findByRole("button", { name: "OpenAI 操作" });
     expect(screen.getAllByRole("heading", { level: 3 }).map((item) => item.textContent)).toEqual(["供應商連線", "預設模型", "回覆設定"]);
-    expect(within(screen.getByRole("region", { name: "預設模型" })).getByRole("radiogroup", { name: "回應模式" })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "預設模型" })).getByRole("combobox", { name: "回應模式" })).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "回覆設定" })).getByLabelText("對話內容上限")).toBeTruthy();
     expect(screen.queryByText("••••1234")).toBeNull();
     expect(screen.queryByRole("switch", { name: "記錄完整送出 Prompt" })).toBeNull();
@@ -274,15 +274,18 @@ describe("provider settings", () => {
     saveToolEnabled.mockClear();
   });
 
-  it("presents and saves all six response modes", async () => {
+  it("presents a dropdown with default and all six response modes", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
 
-    const group = screen.getByRole("radiogroup", { name: "回應模式" });
-    expect((within(group).getByRole("radio", { name: "中" }) as HTMLInputElement).checked).toBe(true);
-    expect(within(group).getAllByRole("radio")).toHaveLength(6);
-    fireEvent.click(within(group).getByRole("radio", { name: "高" }));
-    await waitFor(() => expect((within(group).getByRole("radio", { name: "高" }) as HTMLInputElement).checked).toBe(true));
+    const select = screen.getByRole("combobox", { name: "回應模式" });
+    expect(select.parentElement?.textContent).toContain("中");
+    fireEvent.mouseDown(select);
+    const options = document.querySelectorAll(".ant-select-item-option");
+    expect(Array.from(options).map(option => option.textContent)).toEqual(["預設", "低", "中", "高", "極高", "最高", "極致"]);
+    fireEvent.click(screen.getByText("預設", { exact: true }).closest(".ant-select-item-option")!);
+    await waitFor(() => expect(select.parentElement?.textContent).toContain("預設"));
+    expect(screen.getByText("不送出思考等級，使用模型預設行為。")).toBeTruthy();
   });
 
   it("keeps AI settings controls disabled until the initial settings load finishes", async () => {
@@ -290,8 +293,8 @@ describe("provider settings", () => {
     render(<SettingsHarness aiSettingsLoaded={false} />);
 
     expect(await screen.findByText("正在讀取 AI 設定…")).toBeTruthy();
-    const responseModes = screen.getByRole("radiogroup", { name: "回應模式" });
-    expect(responseModes.querySelectorAll("input:not(:disabled)")).toHaveLength(0);
+    const responseModes = screen.getByRole("combobox", { name: "回應模式" });
+    expect((responseModes as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
     expect(screen.getByRole("combobox", { name: "自動續接過長回覆" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "進階與除錯" }));

@@ -32,7 +32,7 @@ def migrate(connection: sqlite3.Connection) -> None:
         if "reasoning_resolution_json" not in {row[1] for row in connection.execute("PRAGMA table_info(runs)")}:
             connection.execute("ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN)
         connection.execute("""UPDATE schedules SET response_mode = CASE response_mode
-            WHEN 'default' THEN 'medium' WHEN 'fast' THEN 'low'
+            WHEN 'fast' THEN 'low'
             WHEN 'balanced' THEN 'medium' WHEN 'deep' THEN 'high' ELSE response_mode END""")
         if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
             raise ValueError("response mode migration integrity failure")

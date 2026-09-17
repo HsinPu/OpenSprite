@@ -695,6 +695,7 @@ export const enMessages = {
   "models.response.minimal": "Minimal",
   "models.response.exact": "This model uses {effective}.",
   "models.response.fallback": "{requested} is unavailable for this model. {effective}, its highest supported level, will be used.",
+  "models.response.defaultDescription": "No reasoning effort is sent. The model uses its default behavior.",
   "models.response.providerDefault": "This model uses its default behavior.",
   "models.response.unknown": "Supported levels are unknown. The model’s default behavior will be used.",
   "models.response.selectModel": "Select a model to see the effective level.",
