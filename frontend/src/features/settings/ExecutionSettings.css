@@ -1,0 +1,7 @@
+.execution-settings.settings-form-stack { max-width: 720px; width: 100%; }
+.execution-settings .settings-intro { margin-bottom: 0; }
+.execution-settings__error { margin-bottom: 16px; }
+.execution-settings__details .settings-helper-text { margin: 0 0 8px; }
+.execution-settings__metadata { color: var(--settings-muted); font-size: 12px; }
+.execution-settings__scope { margin: 0 0 16px; }
+.execution-settings .settings-save-status { margin: 0; }

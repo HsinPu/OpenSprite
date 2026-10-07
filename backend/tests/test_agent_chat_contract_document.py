@@ -139,6 +139,7 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
 
     assert event_types == [
         "run.started",
+        "execution.selected",
         "context.compaction.started",
         "context.compaction.completed",
         "context.compaction.failed",

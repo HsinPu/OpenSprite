@@ -11,6 +11,8 @@ from typing import Protocol
 from fastapi import FastAPI
 
 from .agent import AgentLoop, RunManager
+from .agent.plugin_catalog import ExecutionPluginCatalog
+from .execution_settings import ExecutionSettingsOperations, ExecutionSettingsService, UnavailableExecutionSettings
 from .application import (
     AgentChatOperations,
     AgentChatService,
@@ -96,6 +98,7 @@ class LocalProviderRuntime(Protocol):
 class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     ai_settings: AiSettingsOperations
     general_settings: GeneralSettingsOperations
+    execution_settings: ExecutionSettingsOperations
     conversation_settings: ConversationSettingsOperations
     tool_settings: ToolSettingsOperations
     mcp_connections: McpConnections
@@ -129,6 +132,7 @@ class _SystemRuntime:
         child_executions: ChildExecutionRepository,
         delegation: DelegationCoordinator,
         provider_mutations=None,
+        execution_settings: ExecutionSettingsOperations | None = None,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -136,6 +140,7 @@ class _SystemRuntime:
         self.provider_mutations = provider_mutations
         self.provider_http_client = getattr(provider_runtime, "http_client", None)
         self.ai_settings = ai_settings
+        self.execution_settings = execution_settings if execution_settings is not None else UnavailableExecutionSettings()
         self.general_settings = general_settings
         self.conversation_settings = conversation_settings
         self.tool_settings = tool_settings
@@ -192,6 +197,8 @@ def create_system_runtime(
         workspace_mutation_gate,
     )
     general_settings = create_general_settings_service(paths)
+    execution_plugins = ExecutionPluginCatalog()
+    execution_settings = ExecutionSettingsService(paths, execution_plugins)
     conversation_settings = create_conversation_settings_service(paths)
     event_notifier = RunEventNotifier()
     repository = SqliteConversationRepository(
@@ -266,6 +273,8 @@ def create_system_runtime(
         skills=skills,
         custom_agents=custom_agents,
         custom_providers=provider_runtime.custom_providers,
+        execution_settings=execution_settings,
+        execution_plugins=execution_plugins,
     )
     schedule_repository = SqliteScheduleRepository(paths.database_file)
     schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
@@ -296,6 +305,7 @@ def create_system_runtime(
         child_executions,
         delegation,
         provider_mutations,
+        execution_settings,
     )
 
 
@@ -339,6 +349,7 @@ def create_system_app(
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
+            app.state.execution_settings = UnavailableExecutionSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
             app.state.mcp_connections = UnavailableMcpConnections()
@@ -356,6 +367,7 @@ def create_system_app(
             app.state.provider_http_client = getattr(runtime, "provider_http_client", None)
             app.state.ai_settings = runtime.ai_settings
             app.state.general_settings = runtime.general_settings
+            app.state.execution_settings = getattr(runtime, "execution_settings", UnavailableExecutionSettings())
             app.state.conversation_settings = runtime.conversation_settings
             app.state.tool_settings = getattr(
                 runtime,
@@ -403,6 +415,7 @@ def create_system_app(
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
+            app.state.execution_settings = UnavailableExecutionSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
             app.state.mcp_connections = UnavailableMcpConnections()

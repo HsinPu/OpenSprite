@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from opensprite_backend.agent.plugin_catalog import ExecutionPluginSelection
 
 from opensprite_backend.conversations.models import RunSnapshot
 from opensprite_backend.skills.models import SkillExecutionSnapshot
@@ -29,6 +33,7 @@ class ParentDelegation:
     tools: ToolRegistry = field(repr=False)
     availability: ToolAvailabilitySnapshot
     base_system_prompt: str = field(repr=False)
+    execution_plugins: "ExecutionPluginSelection | None" = field(default=None, repr=False)
 
 
 class DelegationCoordinator:
@@ -63,6 +68,7 @@ class DelegationCoordinator:
             tools=context.tools, availability=context.availability,
             base_system_prompt=context.base_system_prompt, cancellation_event=asyncio.Event(),
             **({"provider_endpoint": endpoint} if endpoint is not None else {}),
+            **({"execution_plugins": context.execution_plugins} if context.execution_plugins is not None else {}),
         )
 
     async def _observe(self, parent_id, child_id):

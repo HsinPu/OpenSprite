@@ -12,7 +12,7 @@ const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed1
 import { validCompactionPayload } from "./compactionEvents";
 import { validAttemptPayload } from "./attemptEvents";
 
-export const runEventTypes = ["run.started", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
 export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
@@ -285,6 +285,7 @@ export async function cancelRun(runId: string): Promise<CancelRunResult> {
 function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   let data = value.data;
+  if (expectedType === "execution.selected" && (!exactKeys(data, ["loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"]) || data.apiVersion !== 1 || ![data.loopId, data.policyId].every(id => typeof id === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(id)) || !boundedString(data.loopVersion, 1, 64) || !boundedString(data.policyVersion, 1, 64))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "skill.loaded" || expectedType === "skill.load_failed") {
     const keys = ["skillId", "scope", "name", "revision", "contentHash", "source"];
     if (expectedType === "skill.load_failed") keys.push("errorCode");

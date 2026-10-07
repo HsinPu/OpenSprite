@@ -15,6 +15,7 @@ from typing import Final
 
 from opensprite_backend.agent.context import ModelCapabilityResolver
 from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.plugin_catalog import ExecutionPluginSelection
 from opensprite_backend.agent.prompt import StaticSystemPromptProvider
 from opensprite_backend.conversations.models import RunSnapshot
 from opensprite_backend.custom_agents.child_context import ChildContextRepository
@@ -110,6 +111,7 @@ class ChildAgentExecutor:
         base_system_prompt: str,
         cancellation_event: asyncio.Event,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
+        execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         """Execute ``task`` using only the snapshots accepted by the parent.
 
@@ -142,6 +144,7 @@ class ChildAgentExecutor:
             workspace=workspace,
             skills=child_skills,
             provider_endpoint=provider_endpoint,
+            execution_plugins=execution_plugins,
         )
 
 

@@ -5,7 +5,7 @@ from opensprite_backend.custom_agents.child_schema import CHILD_SCHEMA_STATEMENT
 from opensprite_backend.workspaces import EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH, DEFAULT_WORKSPACE_ID
 from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_NAME
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 SCHEMA_SQL = """
 BEGIN IMMEDIATE;
@@ -709,6 +709,10 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
     if version == 18:
         from .response_mode_migration import migrate
         migrate(connection)
+        version = 19
+    if version == 19:
+        from .execution_event_migration import migrate
+        migrate(connection)
 
 
 from .provider_id_migration import OLD_CHECK, NEW_CHECK
@@ -721,3 +725,4 @@ SCHEMA_SQL = SCHEMA_SQL.replace("'model.started'", "'model.started', 'model.atte
 
 from .response_mode_migration import OLD_CHECK as OLD_MODE_CHECK, NEW_CHECK as NEW_MODE_CHECK, RESOLUTION_COLUMN
 SCHEMA_SQL = SCHEMA_SQL.replace(OLD_MODE_CHECK, NEW_MODE_CHECK).replace("PRAGMA user_version = 18;", "ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN + ";\nPRAGMA user_version = 19;")
+SCHEMA_SQL = SCHEMA_SQL.replace("'run.started'", "'run.started', 'execution.selected'").replace("PRAGMA user_version = 19;", "PRAGMA user_version = 20;")

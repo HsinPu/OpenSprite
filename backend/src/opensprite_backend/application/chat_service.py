@@ -15,6 +15,8 @@ from enum import StrEnum
 from typing import Protocol
 
 from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError
+from opensprite_backend.execution_settings import ExecutionSettingsOperations, ExecutionSettingsError
 from opensprite_backend.ai_settings import AiSettingsOperations, SettingsStoreError
 from opensprite_backend.conversations.models import (
     ConversationPage,
@@ -220,6 +222,8 @@ class AgentChatService:
         skills: SkillsService | None = None,
         custom_agents: CustomAgentsService | None = None,
         custom_providers: CustomProviderService | None = None,
+        execution_settings: ExecutionSettingsOperations | None = None,
+        execution_plugins: ExecutionPluginCatalog | None = None,
         event_poll_seconds: float = 0.05,
         event_wait_seconds: float = 5.0,
     ) -> None:
@@ -235,6 +239,8 @@ class AgentChatService:
         self._skills = skills
         self._custom_agents = custom_agents
         self._custom_providers = custom_providers
+        self._execution_settings = execution_settings
+        self._execution_plugins = execution_plugins
         self._workspace_mutation_gate = workspace_mutation_gate
         self._event_poll_seconds = event_poll_seconds
         self._event_wait_seconds = event_wait_seconds
@@ -490,6 +496,13 @@ class AgentChatService:
                                 continue
                     agent_snapshot = AgentExecutionSnapshot(agent_snapshot.available, tuple(endpoints.values()))
                 skill_snapshot = self._skills.snapshot(workspace_id, skill_ids) if self._skills else SkillExecutionSnapshot()
+                execution_binding = None
+                if self._execution_settings is not None and self._execution_plugins is not None:
+                    try:
+                        selected_loop, selected_policy = await asyncio.to_thread(self._execution_settings.selection)
+                        execution_binding = await asyncio.to_thread(self._execution_plugins.resolve, selected_loop, selected_policy)
+                    except (ExecutionPluginError, ExecutionSettingsError):
+                        raise AgentChatError(ChatErrorCode.SETTINGS_STORE_UNAVAILABLE) from None
                 if skill_ids and self._skills is None:
                     raise SkillError("skill_unavailable")
                 accepted = await asyncio.to_thread(
@@ -518,7 +531,9 @@ class AgentChatService:
             except ConversationStoreError as error:
                 raise _store_error(error) from error
             if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
-                if provider_endpoint is not None:
+                if execution_binding is not None:
+                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot, provider_endpoint, execution_plugins=execution_binding)
+                elif provider_endpoint is not None:
                     await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot, provider_endpoint)
                 elif self._custom_agents is not None:
                     await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot)

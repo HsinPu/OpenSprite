@@ -25,6 +25,8 @@ from .api.general_settings_routes import (
     general_settings_error_response,
     router as general_settings_router,
 )
+from .api.execution_settings_routes import execution_settings_error_response, router as execution_settings_router
+from .execution_settings import ExecutionSettingsError, ExecutionSettingsErrorCode, ExecutionSettingsOperations, UnavailableExecutionSettings
 from .api.local_path_routes import (
     local_path_error_response,
     router as local_path_router,
@@ -132,6 +134,7 @@ def create_app(
     *,
     ai_settings: AiSettingsOperations | None = None,
     general_settings: GeneralSettingsOperations | None = None,
+    execution_settings: ExecutionSettingsOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
     tool_settings: ToolSettingsOperations | None = None,
     mcp_connections: McpConnections | None = None,
@@ -174,6 +177,7 @@ def create_app(
         else UnavailableGeneralSettings()
     )
     app.state.app_info = resolved_app_info
+    app.state.execution_settings = execution_settings if execution_settings is not None else UnavailableExecutionSettings()
     app.state.conversation_settings = (
         conversation_settings
         if conversation_settings is not None
@@ -224,6 +228,8 @@ def create_app(
         exc: RequestValidationError,
     ) -> JSONResponse:
         del exc
+        if request.url.path == "/api/settings/execution":
+            return execution_settings_error_response(ExecutionSettingsErrorCode.INVALID_REQUEST)
         if request.url.path.startswith("/api/auth/"):
             return auth_error_response("invalid_request")
         if request.url.path == "/api/local-paths/pick":
@@ -358,6 +364,11 @@ def create_app(
             return workspace_error_response(WorkspaceFailure.INTERNAL_ERROR)
         return provider_error_response(ErrorCode.INTERNAL_ERROR)
 
+    async def execution_settings_error_handler(request: Request, exc: ExecutionSettingsError) -> JSONResponse:
+        del request
+        return execution_settings_error_response(exc.code)
+
+    app.add_exception_handler(ExecutionSettingsError, cast(ExceptionHandler, execution_settings_error_handler))
     app.add_exception_handler(
         RequestValidationError,
         cast(ExceptionHandler, validation_error_handler),
@@ -436,6 +447,7 @@ def create_app(
     app.include_router(auth_router)
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
+    app.include_router(execution_settings_router)
     app.include_router(conversation_settings_router)
     app.include_router(tool_settings_router)
     app.include_router(mcp_router)

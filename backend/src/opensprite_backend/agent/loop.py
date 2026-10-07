@@ -1,4 +1,4 @@
-"""One deterministic bounded path for every user-message Agent run."""
+"""Core Run lifecycle and context services for replaceable Agent drivers."""
 
 from __future__ import annotations
 
@@ -8,14 +8,12 @@ import logging
 from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.skills.models import SkillExecutionSnapshot
-from .skill_phase import handle_skill_call
 from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool, DiscoverSkillsTool
 from datetime import UTC, datetime
-from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
 from dataclasses import dataclass, replace
-from typing import Final, TypeVar
+from typing import TYPE_CHECKING, Final, TypeVar
 from uuid import uuid4
 
 from opensprite_backend.conversations.models import (
@@ -50,9 +48,8 @@ from opensprite_backend.tools.availability import (
     ToolAvailabilityProvider,
     ToolAvailabilitySnapshot,
 )
-from opensprite_backend.tools.definition import ToolContext
 from opensprite_backend.tools.dynamic import DynamicToolProvider
-from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
+from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.workspaces import (
     DEFAULT_WORKSPACE_ID,
     DefaultWorkspaceResolver,
@@ -86,6 +83,15 @@ from .prompt import StaticSystemPromptProvider, SystemPromptProvider
 from ..prompt_logging import PromptLogError, PromptLogWriter
 from .request_trace import Attempt, TracedGateway
 from .context.receipt import ReceiptSources
+
+
+from .driver import AgentDriverFactory, DriverResult
+from .execution_host import LoopExecutionHost, _ExecutionFailed
+from .standard_driver import StandardDriverFactory
+from .strategies import ContextRetryState, ExecutionStrategy, StandardExecutionStrategy
+
+if TYPE_CHECKING:
+    from .plugin_catalog import ExecutionPluginSelection
 
 
 class _RunCancelled(Exception):
@@ -186,6 +192,8 @@ class AgentLoop:
         prompt_log_writer: PromptLogWriter | None = None,
         allow_tool_approval: bool = True,
         delegation: DelegationCoordinator | None = None,
+        driver_factory: AgentDriverFactory | None = None,
+        execution_strategy: ExecutionStrategy | None = None,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
@@ -219,6 +227,10 @@ class AgentLoop:
         self._prompt_log_writer = prompt_log_writer
         self._allow_tool_approval = allow_tool_approval
         self._delegation = delegation
+        self._driver_factory = driver_factory if driver_factory is not None else StandardDriverFactory()
+        self._execution_strategy = (
+            execution_strategy if execution_strategy is not None else StandardExecutionStrategy()
+        )
 
     async def execute(
         self, run_id: str, cancellation_event: asyncio.Event,
@@ -226,9 +238,11 @@ class AgentLoop:
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
+        *, execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         try:
-            return await self._execute(run_id, cancellation_event, workspace, skills, agents, provider_endpoint)
+            return await self._execute(run_id, cancellation_event, workspace, skills, agents, provider_endpoint,
+                                       execution_plugins=execution_plugins)
         finally:
             if self._delegation is not None:
                 cleanup = asyncio.create_task(self._delegation.release(run_id))
@@ -251,6 +265,7 @@ class AgentLoop:
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
+        *, execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -265,6 +280,11 @@ class AgentLoop:
             workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
+            driver_factory = execution_plugins.driver_factory if execution_plugins else self._driver_factory
+            try:
+                execution_strategy = execution_plugins.make_strategy() if execution_plugins else self._execution_strategy
+            except Exception:
+                raise _ExecutionFailed(INTERNAL_ERROR) from None
             if (
                 workspace.id != run.workspace_id
                 or workspace.revision != run.workspace_revision
@@ -289,6 +309,9 @@ class AgentLoop:
                     for mount in workspace.mounts
                 ),
             )
+            if execution_plugins is not None:
+                await asyncio.to_thread(self._repository.append_run_event, run_id,
+                                        RunEventType.EXECUTION_SELECTED, execution_plugins.profile())
             run_tools = (
                 self._tools.extended(await self._dynamic_tools.snapshot_tools())
                 if self._dynamic_tools is not None
@@ -320,7 +343,7 @@ class AgentLoop:
                 if capability.supports_tools:
                     self._delegation.register(ParentDelegation(
                         run, workspace, skills or SkillExecutionSnapshot(), agents,
-                        run_tools, availability, system_prompt))
+                        run_tools, availability, system_prompt, execution_plugins=execution_plugins))
                     run_tools = run_tools.extended(delegation_tools())
                     availability = ToolAvailabilitySnapshot(availability.enabled_names | DELEGATION_NAMES)
                     system_prompt += discovery_prompt(agents)
@@ -343,342 +366,39 @@ class AgentLoop:
                 tools=run_tools,
                 current_user_message_id=run.user_message_id,
             )
-            transcript = list(prepared.messages)
             for identifier in skill_state.loaded:
                 await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOADED,
                                         skill_state.event(identifier, "manual"))
-            tool_definitions = prepared.tools
-            accumulated_text = run.partial_text
-            tool_call_count = 0
-            prompt_log_sequence = [0]
-            context_retry_used = False
-            failed_calls: Counter[str] = Counter()
-            used_call_ids: set[str] = set()
-            request_id = str(uuid4())
-            previous_attempt: Attempt | None = None
-
-            for _round in range(self._max_model_rounds + 1):
-                if _round >= self._max_model_rounds and not context_retry_used:
-                    break
-                self._raise_if_cancelled(cancellation_event)
-                estimated_round_tokens = self._counter.request(
-                    tuple(transcript),
-                    tool_definitions,
-                )
-                if estimated_round_tokens > prepared.budget.input_budget_tokens:
-                    return await self._fail(run_id, CONTEXT_LIMIT_ERROR)
-                await asyncio.to_thread(
-                    self._repository.append_run_event,
-                    run_id,
-                    RunEventType.MODEL_STARTED,
-                    self._model_started_event_data(
-                        run=run,
-                        budget=prepared.budget,
-                        context_tokens=estimated_round_tokens,
-                        tool_definitions=tool_definitions,
-                    ),
-                )
-                request = ModelRequest(
-                    provider_id=run.provider_id,
-                    provider_endpoint=provider_endpoint,
-                    model_id=run.model_id,
-                    response_mode=run.response_mode,
-                    reasoning_resolution=run.reasoning_resolution,
-                    messages=tuple(transcript),
-                    tools=tool_definitions,
-                    max_output_tokens=prepared.budget.output_reserve_tokens,
-                )
-                self._write_prompt_log(
-                    run=run,
-                    request=request,
-                    request_kind=f"main-{_round + 1:02d}",
-                    sequence=prompt_log_sequence,
-                )
-                round_text = ""
-                tool_calls: list[ModelToolCall] = []
-                completion: ModelCompleted | None = None
-                current_attempt = Attempt(
-                    run_id, request_id, "main",
-                    number=1 if previous_attempt is None else previous_attempt.number + 1,
-                    retry_of=None if previous_attempt is None else previous_attempt.id,
-                    cause=None if previous_attempt is None else "provider_context_limit",
-                    compaction_id=prepared.compaction_id,
-                    sources=replace(prepared.sources, skills=tuple(
-                        {"id": identifier, "revision": skill_state.snapshot.get(identifier).revision,
-                         "contentHash": skill_state.snapshot.get(identifier).content_hash}
-                        for identifier in skill_state.loaded)),
-                )
-                stream = self._gateway.stream(request, attempt=current_attempt)
-                events = self._with_cancellation(
-                    stream,
-                    cancellation_event,
-                )
-                retry_with_compaction = False
-                while True:
-                    try:
-                        event = await anext(events)
-                    except StopAsyncIteration:
-                        break
-                    except ModelGatewayError as error:
-                        if (
-                            error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
-                            and _round == 0
-                            and not context_retry_used
-                            and not accumulated_text
-                            and not round_text
-                            and not tool_calls
-                        ):
-                            context_retry_used = True
-                            previous_attempt = current_attempt
-                            _LOGGER.info(
-                                "context retrying after provider limit run_id=%s",
-                                run_id,
-                            )
-                            prepared = await self._prepare_context(
-                                run=run,
-                                provider_endpoint=provider_endpoint,
-                                system_prompt=system_prompt,
-                                cancellation_event=cancellation_event,
-                                availability=availability,
-                                tools=run_tools,
-                                force_compaction=True,
-                                compaction_limit=1,
-                                current_user_message_id=run.user_message_id,
-                                parent_request_id=request_id,
-                            )
-                            transcript = list(prepared.messages)
-                            tool_definitions = prepared.tools
-                            retry_with_compaction = True
-                            break
-                        raise
-                    if completion is not None:
-                        await delta_buffer.flush()
-                        return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
-                    if isinstance(event, ModelTextDelta):
-                        if not event.text or len(event.text) > 16384:
-                            await delta_buffer.flush()
-                            return await self._fail(
-                                run_id,
-                                INVALID_PROVIDER_RESPONSE,
-                            )
-                        if len(accumulated_text) + len(event.text) > (
-                            self._max_assistant_chars
-                        ):
-                            await delta_buffer.flush()
-                            return await self._fail(run_id, AGENT_LIMIT_ERROR)
-                        round_text += event.text
-                        accumulated_text += event.text
-                        await delta_buffer.append(event.text)
-                    elif isinstance(event, ModelToolCall):
-                        if event.call_id in used_call_ids:
-                            await delta_buffer.flush()
-                            return await self._fail(
-                                run_id,
-                                INVALID_PROVIDER_RESPONSE,
-                            )
-                        used_call_ids.add(event.call_id)
-                        tool_calls.append(event)
-                    elif isinstance(event, ModelCompleted):
-                        completion = event
-                    elif isinstance(event, ModelUsage):
-                        _LOGGER.info(
-                            "model usage run_id=%s round=%s input_tokens=%s output_tokens=%s",
-                            run_id,
-                            _round + 1,
-                            event.input_tokens,
-                            event.output_tokens,
-                        )
-                    else:
-                        await delta_buffer.flush()
-                        return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
+            host = LoopExecutionHost(
+                loop=self, run=run, cancellation_event=cancellation_event, workspace=workspace,
+                tools=run_tools, availability=availability, prepared=prepared,
+                system_prompt=system_prompt, base_system_prompt=base_system_prompt,
+                skill_state=skill_state, delta_buffer=delta_buffer, strategy=execution_strategy,
+                provider_endpoint=provider_endpoint,
+            )
+            try:
+                try:
+                    driver = driver_factory.create()
+                except Exception:
+                    raise _ExecutionFailed(INTERNAL_ERROR) from None
+                try:
+                    result = await self._await_with_cancellation(driver.execute(host), cancellation_event)
+                except Exception as error:
+                    raise self._driver_exception(error, host, cancellation_event) from None
+                try:
+                    await host._validate_result(result)
+                except Exception as error:
+                    raise self._driver_exception(error, host, cancellation_event) from None
                 await delta_buffer.flush()
-                if retry_with_compaction:
-                    continue
-                request_id = str(uuid4())
-                previous_attempt = None
-                if completion is None:
-                    await delta_buffer.flush()
-                    return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
-
-                if completion.reason in {
-                    ModelFinishReason.FINAL,
-                    ModelFinishReason.OUTPUT_LIMIT,
-                }:
-                    if (
-                        tool_calls
-                        or not accumulated_text.strip()
-                        or (
-                            completion.reason is ModelFinishReason.OUTPUT_LIMIT
-                            and not round_text.strip()
-                        )
-                    ):
-                        await delta_buffer.flush()
-                        return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
-                    self._raise_if_cancelled(cancellation_event)
-                    await delta_buffer.flush()
-                    completion_reason = (
-                        CompletionReason.STOP
-                        if completion.reason is ModelFinishReason.FINAL
-                        else CompletionReason.OUTPUT_LIMIT
-                    )
-                    if completion_reason is CompletionReason.OUTPUT_LIMIT:
-                        _LOGGER.info(
-                            "model output limit reached run_id=%s chars=%s",
-                            run_id,
-                            len(accumulated_text),
-                        )
-                        if run.output_continuation != "off":
-                            return await self._continue_output(
-                                run=run,
-                                system_prompt=system_prompt,
-                                base_transcript=tuple(transcript),
-                                prepared=prepared,
-                                receipt_skills=current_attempt.sources.skills if current_attempt.sources else (),
-                                accumulated_text=accumulated_text,
-                                cancellation_event=cancellation_event,
-                                availability=availability,
-                                tools=run_tools,
-                                prompt_log_sequence=prompt_log_sequence,
-                                delta_buffer=delta_buffer,
-                                provider_endpoint=provider_endpoint,
-                            )
-                    if self._delegation is not None:
-                        await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
-                    completed = await asyncio.to_thread(
-                        self._repository.complete_run,
-                        run_id,
-                        accumulated_text,
-                        completion_reason,
-                    )
-                    return completed.run
-
-                if (
-                    completion.reason is not ModelFinishReason.TOOL_CALLS
-                    or not tool_calls
-                ):
-                    await delta_buffer.flush()
-                    return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
-                transcript.append(
-                    ModelMessage(
-                        role="assistant",
-                        content=round_text,
-                        tool_calls=tuple(tool_calls),
-                    )
-                )
-                for call in tool_calls:
-                    if call.name in DELEGATION_NAMES and self._delegation is not None:
-                        try:
-                            delegated = await self._await_with_cancellation(
-                                self._delegation.invoke(run_id, call.call_id, call.name, call.arguments),
-                                cancellation_event)
-                        except AgentError as error:
-                            delegated = {"error": error.code}
-                        transcript.append(ModelMessage(
-                            role="tool", content=json.dumps(delegated, ensure_ascii=False),
-                            tool_call_id=call.call_id, tool_name=call.name))
-                        continue
-                    if call.name in {"discover_skills", "load_skill"}:
-                        system_prompt, transcript = await handle_skill_call(
-                            call=call, skill_state=skill_state, base_system_prompt=base_system_prompt,
-                            system_prompt=system_prompt, transcript=transcript, tool_definitions=tool_definitions,
-                            input_budget_tokens=prepared.budget.input_budget_tokens, counter=self._counter,
-                            repository=self._repository, run_id=run_id,
-                        )
-                        continue
-                    tool_call_count += 1
-                    if tool_call_count > self._max_tool_calls:
-                        await delta_buffer.flush()
-                        return await self._fail(run_id, AGENT_LIMIT_ERROR)
-                    self._raise_if_cancelled(cancellation_event)
-                    context = ToolContext(
-                        run_id=run.id,
-                        conversation_id=run.conversation_id,
-                        cancellation_event=cancellation_event,
-                        workspace=workspace,
-                    )
-
-                    async def record_tool_started() -> None:
-                        await asyncio.to_thread(
-                            self._repository.append_run_event,
-                            run_id,
-                            RunEventType.TOOL_STARTED,
-                            {"callId": call.call_id, "toolName": call.name},
-                        )
-
-                    try:
-                        result = await self._await_with_cancellation(
-                            run_tools.invoke(
-                                call.name,
-                                call.arguments,
-                                context,
-                                availability,
-                                record_tool_started,
-                                allow_approval=self._allow_tool_approval and run.source != "schedule",
-                            ),
-                            cancellation_event,
-                        )
-                    except ToolInvocationError as error:
-                        if error.code == "scheduled_tool_approval_required":
-                            await delta_buffer.flush()
-                            return await self._fail(
-                                run_id,
-                                SCHEDULED_TOOL_APPROVAL_REQUIRED if self._allow_tool_approval
-                                else PublicRunError("subagent_tool_approval_required",
-                                                    "Subagents cannot request tool approval.", False),
-                            )
-                        public_error = PublicRunError(
-                            code="tool_failure",
-                            message=error.message,
-                            retryable=error.retryable,
-                        )
-                        await asyncio.to_thread(
-                            self._repository.append_run_event,
-                            run_id,
-                            RunEventType.TOOL_FAILED,
-                            {
-                                "callId": call.call_id,
-                                "toolName": call.name,
-                                "error": {
-                                    "code": public_error.code,
-                                    "message": public_error.message,
-                                    "retryable": public_error.retryable,
-                                },
-                            },
-                        )
-                        fingerprint = self._tool_fingerprint(call)
-                        failed_calls[fingerprint] += 1
-                        transcript.append(
-                            ModelMessage(
-                                role="tool",
-                                content=f"Tool failed: {public_error.message}",
-                                tool_call_id=call.call_id,
-                                tool_name=call.name,
-                            )
-                        )
-                        if failed_calls[fingerprint] >= 2:
-                            await delta_buffer.flush()
-                            return await self._fail(run_id, AGENT_LIMIT_ERROR)
-                    else:
-                        await asyncio.to_thread(
-                            self._repository.append_run_event,
-                            run_id,
-                            RunEventType.TOOL_COMPLETED,
-                            {
-                                "callId": call.call_id,
-                                "toolName": call.name,
-                                "summary": result.summary,
-                            },
-                        )
-                        transcript.append(
-                            ModelMessage(
-                                role="tool",
-                                content=result.content,
-                                tool_call_id=call.call_id,
-                                tool_name=call.name,
-                            )
-                        )
+                self._raise_if_cancelled(cancellation_event)
+                completed = await asyncio.to_thread(
+                    self._repository.complete_run, run_id, result.text, result.completion_reason)
+                return completed.run
+            finally:
+                await host._close()
+        except _ExecutionFailed as error:
             await delta_buffer.flush()
-            return await self._fail(run_id, AGENT_LIMIT_ERROR)
+            return await self._fail(run_id, error.error)
         except _RunCancelled:
             await delta_buffer.flush()
             return await self._cancel(run_id)
@@ -706,6 +426,24 @@ class AgentLoop:
             _LOGGER.exception("agent run failed run_id=%s", run_id)
             return await self._fail(run_id, INTERNAL_ERROR)
 
+    @staticmethod
+    def _driver_exception(
+        error: Exception, host: LoopExecutionHost, cancellation_event: asyncio.Event,
+    ) -> Exception:
+        # Cancellation can interrupt driver cleanup, which may itself raise.
+        # The accepted Run's actual cancellation request still takes precedence.
+        if cancellation_event.is_set():
+            return _RunCancelled()
+        if host._owns_exception(error) and isinstance(error, (
+            _ExecutionFailed, ModelGatewayError, ContextLimitExceeded,
+            ModelCapabilityNotFound, _ContextPreparationFailed,
+            ModelCapabilityProviderError, ConversationStoreError,
+        )):
+            return error
+        # Plugins can import core exception classes. A matching type grants no
+        # authority to persist its payload or log its traceback.
+        return _ExecutionFailed(INTERNAL_ERROR)
+
     async def _continue_output(
         self,
         *,
@@ -721,7 +459,8 @@ class AgentLoop:
         delta_buffer: _AssistantDeltaBuffer,
         receipt_skills: tuple[dict[str, object], ...] = (),
         provider_endpoint: ProviderEndpointSnapshot | None = None,
-    ) -> RunSnapshot:
+        execution_strategy: ExecutionStrategy,
+    ) -> DriverResult:
         continuation_base = base_transcript
         configured_max = (
             None
@@ -748,7 +487,8 @@ class AgentLoop:
                         prepared.budget,
                     )
                 except ContextLimitExceeded:
-                    if context_retry_used:
+                    if context_retry_used or not execution_strategy.allow_context_retry(
+                        ContextRetryState("continuation", "local_budget")):
                         return await self._complete_partial(
                             run.id,
                             accumulated_text,
@@ -831,6 +571,8 @@ class AgentLoop:
                             error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
                             and not round_text
                             and not context_retry_used
+                            and execution_strategy.allow_context_retry(
+                                ContextRetryState("continuation", "provider_context_limit"))
                         ):
                             context_retry_used = True
                             previous_attempt = current_attempt
@@ -867,17 +609,14 @@ class AgentLoop:
                         raise
                     if completion is not None:
                         await delta_buffer.flush()
-                        return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                        raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
                     if isinstance(event, ModelTextDelta):
                         if not event.text or len(event.text) > 16384:
                             await delta_buffer.flush()
-                            return await self._fail(
-                                run.id,
-                                INVALID_PROVIDER_RESPONSE,
-                            )
+                            raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE,)
                         if len(accumulated_text) + len(event.text) > self._max_assistant_chars:
                             await delta_buffer.flush()
-                            return await self._fail(run.id, AGENT_LIMIT_ERROR)
+                            raise _ExecutionFailed(AGENT_LIMIT_ERROR)
                         round_text += event.text
                         accumulated_text += event.text
                         await delta_buffer.append(event.text)
@@ -893,12 +632,12 @@ class AgentLoop:
                         )
                     else:
                         await delta_buffer.flush()
-                        return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                        raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
                 if retry_with_compaction:
                     continue
                 if completion is None or not round_text.strip():
                     await delta_buffer.flush()
-                    return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                    raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
                 if completion.reason is ModelFinishReason.FINAL:
                     await delta_buffer.flush()
                     return await self._complete_partial(
@@ -909,7 +648,7 @@ class AgentLoop:
                     )
                 if completion.reason is not ModelFinishReason.OUTPUT_LIMIT:
                     await delta_buffer.flush()
-                    return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                    raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
                 await delta_buffer.flush()
                 break
         if configured_max is None:
@@ -932,17 +671,11 @@ class AgentLoop:
         accumulated_text: str,
         reason: CompletionReason,
         cancellation_event: asyncio.Event,
-    ) -> RunSnapshot:
+    ) -> DriverResult:
         self._raise_if_cancelled(cancellation_event)
         if self._delegation is not None:
             await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
-        completed = await asyncio.to_thread(
-            self._repository.complete_run,
-            run_id,
-            accumulated_text,
-            reason,
-        )
-        return completed.run
+        return DriverResult(accumulated_text, reason)
 
     def _write_prompt_log(
         self,

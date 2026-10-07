@@ -20,6 +20,7 @@ from opensprite_backend.skills.models import SkillExecutionSnapshot
 
 from .loop import AgentLoop
 from .events import INTERNAL_ERROR
+from .plugin_catalog import ExecutionPluginSelection
 
 _LOGGER = logging.getLogger("opensprite.agent.run_manager")
 
@@ -48,6 +49,8 @@ class RunManager:
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
+        *,
+        execution_plugins: ExecutionPluginSelection | None = None,
     ) -> bool:
         async with self._lock:
             if self._closed:
@@ -62,7 +65,7 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace, skills, agents, provider_endpoint),
+                self._execute(run_id, cancellation, workspace, skills, agents, provider_endpoint, execution_plugins),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
@@ -98,8 +101,14 @@ class RunManager:
         skills: SkillExecutionSnapshot | None = None,
         agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
+        execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         try:
+            if execution_plugins is not None:
+                return await self._loop.execute(
+                    run_id, cancellation, workspace, skills, agents, provider_endpoint,
+                    execution_plugins=execution_plugins,
+                )
             if provider_endpoint is not None:
                 return await self._loop.execute(run_id, cancellation, workspace, skills, agents, provider_endpoint)
             if agents is not None:

@@ -1917,6 +1917,16 @@ class SqliteConversationRepository:
         data: dict[str, object],
     ) -> None:
         keys = set(data)
+        if event_type is RunEventType.EXECUTION_SELECTED:
+            if keys != {"loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"} or type(data.get("apiVersion")) is not int or data["apiVersion"] != 1:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            for key in ("loopId", "policyId"):
+                if not isinstance(data[key], str) or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", data[key]) is None:
+                    raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            for key in ("loopVersion", "policyVersion"):
+                if not SqliteConversationRepository._is_bounded_text(data[key], maximum=64):
+                    raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
         if event_type in {RunEventType.SKILL_LOADED, RunEventType.SKILL_LOAD_FAILED}:
             expected = {"skillId", "scope", "name", "revision", "contentHash", "source"}
             if event_type is RunEventType.SKILL_LOAD_FAILED:

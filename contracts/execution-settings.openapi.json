@@ -1,0 +1,65 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local execution settings API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative contract for selection and metadata of trusted, installed Agent Loop and execution policy plugins. No installation, upload, Tool or Provider plugins are exposed."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [{"LocalSession": []}],
+  "x-transport-security": {"scope": "local desktop service", "applicationAuthentication": "existing local session policy; trusted-local mode may bypass login", "browserOriginPolicy": "same-origin", "cors": "disabled by default"},
+  "x-persistence": {"path": ".opensprite/config/execution.json", "schemaVersion": 1, "default": {"loopId": "standard", "policyId": "standard"}, "lazyCreation": "The first successful PUT creates the settings file. GET never writes."},
+  "x-execution-selection": "Changes apply only to future accepted runs. An accepted run and its subagents retain their selected plugin bindings and versions. GET preserves saved IDs even when the plugin is missing or incompatible; PUT and run acceptance validate availability.",
+  "x-trust": "Plugins are trusted Python packages installed in the backend environment. Catalog discovery reads metadata. Selection validates the selected factory. These plugins execute in the backend process and are not sandboxed.",
+  "tags": [{"name": "execution-settings", "description": "Agent Loop and execution policy selection."}],
+  "paths": {
+    "/api/settings/execution": {
+      "get": {
+        "operationId": "getExecutionSettings", "summary": "Read saved selection and plugin metadata", "tags": ["execution-settings"],
+        "responses": {
+          "200": {"description": "Selection and installed plugin metadata. A saved ID may no longer be listed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExecutionSettings"}}}},
+          "503": {"$ref": "#/components/responses/Unavailable"}, "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      },
+      "put": {
+        "operationId": "putExecutionSettings", "summary": "Validate and replace execution selection atomically", "tags": ["execution-settings"],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExecutionSelection"}}}},
+        "responses": {
+          "200": {"description": "The requested selection is persisted and confirmed with current metadata.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExecutionSettings"}}}},
+          "400": {"$ref": "#/components/responses/InvalidRequest"}, "503": {"$ref": "#/components/responses/Unavailable"}, "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {"LocalSession": {"type": "apiKey", "in": "cookie", "name": "__Host-OpenSpriteSession"}},
+    "schemas": {
+      "PluginId": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
+      "ExecutionSelection": {
+        "type": "object", "additionalProperties": false, "required": ["loopId", "policyId"],
+        "properties": {"loopId": {"$ref": "#/components/schemas/PluginId"}, "policyId": {"$ref": "#/components/schemas/PluginId"}}
+      },
+      "ExecutionPlugin": {
+        "type": "object", "additionalProperties": false, "required": ["id", "kind", "name", "description", "version", "apiVersion", "status"],
+        "properties": {
+          "id": {"$ref": "#/components/schemas/PluginId"}, "kind": {"type": "string", "enum": ["loop", "policy"]},
+          "name": {"type": "string", "minLength": 1, "maxLength": 128}, "description": {"type": "string", "maxLength": 2048},
+          "version": {"type": "string", "minLength": 1, "maxLength": 128}, "apiVersion": {"type": "integer", "minimum": 1},
+          "status": {"type": "string", "enum": ["available", "incompatible", "unavailable"]}
+        }
+      },
+      "ExecutionSettings": {
+        "type": "object", "additionalProperties": false, "required": ["selection", "plugins"],
+        "properties": {"selection": {"$ref": "#/components/schemas/ExecutionSelection"}, "plugins": {"type": "array", "items": {"$ref": "#/components/schemas/ExecutionPlugin"}, "description": "Unique identities by kind and ID. IDs may be shared across different kinds."}}
+      },
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "plugin_unavailable", "settings_store_unavailable", "internal_error"]},
+      "ErrorDetail": {"type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"], "properties": {"code": {"$ref": "#/components/schemas/ErrorCode"}, "message": {"type": "string"}, "retryable": {"type": "boolean"}}},
+      "ErrorEnvelope": {"type": "object", "additionalProperties": false, "required": ["error"], "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}}
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed fields or an unknown loop/policy ID. error.code=invalid_request; retryable=false.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "Unavailable": {"description": "An incompatible, unavailable or failing selected plugin (plugin_unavailable), or unreadable/unwritable settings (settings_store_unavailable). retryable=true.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "An unexpected backend failure. error.code=internal_error; retryable=false.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}

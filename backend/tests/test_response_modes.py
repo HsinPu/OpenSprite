@@ -143,7 +143,7 @@ def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path, old_
     source.mark_run_started(old.run.id)
     source.complete_run(old.run.id, "answer")
     path = tmp_path / "upgrade.db"
-    old_schema = SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN + ";\n", "").replace("PRAGMA user_version = 19", "PRAGMA user_version = 18")
+    old_schema = SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN + ";\n", "").replace("PRAGMA user_version = 20", "PRAGMA user_version = 18")
     with closing(sqlite3.connect(path)) as target, closing(sqlite3.connect(tmp_path / "source.db")) as original:
         target.executescript(old_schema)
         for table in ("conversations", "messages", "runs", "run_events"):
@@ -158,7 +158,7 @@ def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path, old_
     assert upgraded.get_run(old.run.id).reasoning_resolution is None
     assert upgraded.list_run_events(old.run.id, after_sequence=0, limit=100) == source.list_run_events(old.run.id, after_sequence=0, limit=100)
     with closing(sqlite3.connect(path)) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
         assert connection.execute("SELECT response_mode FROM schedules").fetchone()[0] == expected_mode
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     run = upgraded.start_run(conversation_id=old.run.conversation_id, client_request_id=str(uuid4()), message="new", provider_id="openai", model_id="gpt-5.6", response_mode="ultra").run
@@ -171,7 +171,7 @@ def test_v18_upgrade_preserves_history_and_freezes_new_resolution(tmp_path, old_
 
 def test_migration_failure_rolls_back_tables_and_version(tmp_path):
     connection = sqlite3.connect(tmp_path / "rollback.db", isolation_level=None)
-    old_schema = SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN + ";\n", "").replace("PRAGMA user_version = 19", "PRAGMA user_version = 18")
+    old_schema = SCHEMA_SQL.replace(NEW_CHECK, OLD_CHECK).replace("ALTER TABLE runs ADD COLUMN " + RESOLUTION_COLUMN + ";\n", "").replace("PRAGMA user_version = 20", "PRAGMA user_version = 18")
     connection.executescript(old_schema)
     before = connection.execute("SELECT sql FROM sqlite_master WHERE name='runs'").fetchone()[0]
     connection.set_authorizer(lambda action, arg, *_: sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_DROP_TABLE and arg == "schedules" else sqlite3.SQLITE_OK)
