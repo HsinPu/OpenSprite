@@ -8,7 +8,9 @@ import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
 import type { Locale } from "../src/i18n/catalog";
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+const packagesApi = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("../src/api/executionSettings", async (original) => ({ ...await original<typeof import("../src/api/executionSettings")>(), getExecutionSettings: api.get, putExecutionSettings: api.put }));
+vi.mock("../src/api/executionPluginPackages", async (original) => ({ ...await original<typeof import("../src/api/executionPluginPackages")>(), getExecutionPackages: packagesApi.get }));
 
 const settings: ExecutionData = {
   selection: { loopId: "standard", policyId: "standard" },
@@ -44,6 +46,7 @@ describe("execution plugin workbench", () => {
   beforeEach(() => {
     api.get.mockReset().mockResolvedValue(settings);
     api.put.mockReset().mockImplementation(async (selection) => ({ ...settings, selection }));
+    packagesApi.get.mockReset().mockResolvedValue({ packages: [], runtime: { kind: "docker", baseImage: "opensprite:local", manifestStatus: "missing" } });
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -222,7 +225,7 @@ describe("execution plugin workbench", () => {
     const drawer = await screen.findByRole("dialog", { name: "開發說明" });
     expect(within(drawer).getByText("uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin")).toBeTruthy();
     expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v1");
-    expect(drawer.textContent).toContain("COPY --from=uv /uv /usr/local/bin/uv");
+    expect(drawer.textContent).toContain("OPENSPRITE_PLUGIN_BUNDLE_DIR");
     fireEvent.click(within(drawer).getByRole("tab", { name: "API v1 邊界" }));
     expect(within(drawer).getByRole("alert").textContent).toContain("程序內 API 不是安全沙箱");
     expect(within(drawer).getByText(/API v1 不提供修改 prompt/)).toBeTruthy();
@@ -240,6 +243,33 @@ describe("execution plugin workbench", () => {
     expect(screen.queryByRole("radio")).toBeNull();
     expect(applyButton().hasAttribute("disabled")).toBe(true);
     expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("keeps installed plugin selection working when the package inventory fails", async () => {
+    packagesApi.get.mockRejectedValueOnce(new Error("inventory unavailable"));
+    render(<ExecutionSettings active />);
+    await loaded();
+    await screen.findByRole("alert");
+    await chooseNoRecovery();
+    expect(applyButton().hasAttribute("disabled")).toBe(false);
+    fireEvent.click(applyButton());
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith({ loopId: "standard", policyId: "no_recovery" }));
+    expect(within(savedRegion()).getByText("不自動重試或續寫")).toBeTruthy();
+  });
+
+  it("preserves a valid unapplied draft while checking the deployment and installed catalog", async () => {
+    render(<ExecutionSettings active />);
+    await loaded();
+    await chooseNoRecovery();
+    fireEvent.click(screen.getByRole("button", { name: "核對部署狀態" }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    const radio = await screen.findByRole("radio", { name: "選為草稿：不自動重試或續寫" });
+    expect((radio as HTMLInputElement).checked).toBe(true);
+    expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
+    expect(applyButton().hasAttribute("disabled")).toBe(false);
+    expect(api.put).not.toHaveBeenCalled();
+    fireEvent.click(applyButton());
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith({ loopId: "standard", policyId: "no_recovery" }));
   });
 
   it("ignores a stale GET after leaving the page", async () => {

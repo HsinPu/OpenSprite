@@ -175,6 +175,57 @@ phase／取消及策略差異，最後輸出 wheel SHA-256 與 profile。`--no-d
 從明確的來源清單產生；使用固定 ZIP metadata 與 UTF-8／LF 文字，排除環境、
 build 產物、快取及使用者資料。修改作者範例或指南後要重新產生並檢查內容。
 
+## 工作臺匯入、部署與套用
+
+工作臺現在提供已審查 wheel 的匯入快取與 Docker 部署包下載。匯入只解析
+wheel／metadata 並保存原始檔案，**不匯入插件模組、不安裝到 Python 環境，
+也不呼叫 Docker**。套件作者仍須先審查、測試並建置程式碼；靜態檢查不是沙箱。
+
+套件 API 使用現有存取驗證，HTTP 契約記錄在完整 repository 的
+`contracts/execution-plugin-packages.openapi.json`：
+
+| 操作 | API | 實際效果 |
+| --- | --- | --- |
+| 讀取匯入清單 | `GET /api/execution-plugin-packages` | 回傳匯入套件、目前 runtime 與部署身份；不重新載入插件模組 |
+| 匯入 wheel | `POST /api/execution-plugin-packages` | multipart 欄位只能有一個 `file`；成功回傳更新後清單 |
+| 移除匯入快取 | `DELETE /api/execution-plugin-packages/{uuid}` | 只刪除這個 UUID 的快取 wheel／manifest；不解除安裝、不變更執行設定 |
+| 下載 Docker 部署包 | `GET /api/execution-plugin-packages/{uuid}/deployment-bundle` | 回傳 ZIP；路由本身沒有 `.zip` 後綴 |
+
+上傳只接受支援的 pure-Python wheel，每份最多 10 MiB；快取最多 64 份。
+靜態解析會核對安全路徑、檔案／解壓大小上限、wheel tag、metadata、RECORD
+完整性、API v1 entry points、保留 ID 與既有 module／插件 ID 衝突。它不接受
+native binary、`.pth`／啟動腳本、直接 URL 或 extras 依賴。需要的 Python
+版本與適用依賴必須已符合**目前後端環境**；匯入不替作者解析或下載依賴。
+這些檢查不會執行工廠；保存選擇及接受新任務時才載入並驗證工廠。
+作者仍須讓每次 `create()` 回傳新實例；執行時核心檢查策略的真正 `bool`
+及 Host 契約。格式不支援為 `invalid_package`，環境不符為
+`incompatible_package`（HTTP 400）；大小或份數超限為 HTTP 413。
+
+成功後保存在 `AppPaths` 管理的唯一資料根目錄
+`.opensprite/cache/execution-plugin-packages/{uuid}/`。UUID 是匯入項目身份，
+不是插件 ID，也不是本機路徑。重複上傳同一個 wheel SHA-256 會沿用既有項目。
+已匯入表示原始 wheel 已保存；待部署表示還需要在實際後端環境安裝。
+
+`runtimeStatus` 描述匯入 wheel 與目前安裝的關係：
+
+| API 狀態 | 工作臺應理解的狀態 | 證據與下一步 |
+| --- | --- | --- |
+| `not_installed` | 未安裝／待部署 | 目前 Python 環境找不到該 distribution；Docker 可下載部署包 |
+| `unverified` | 已有套件，但來源未確認 | distribution 存在，缺少有效部署 manifest 或該套件記錄；不能說此 wheel 已部署 |
+| `mismatch` | 部署內容不一致 | 有效 manifest 中的版本、來源雜湊、entry points 或檔案清單與匯入項目不同 |
+| `confirmed` | 已確認安裝這份 wheel | 建置 manifest、來源 wheel 身份與目前實際安裝檔案均吻合；還需選擇並保存 |
+
+清單另回傳 `runtime.kind`（`local`／`docker`）、`runtime.baseImage` 與
+`runtime.manifestStatus`（`verified`／`missing`／`invalid`）。安裝檔案遭修改
+會使整份部署 manifest 驗證失敗；該情況不能繼續標示 `confirmed`。
+API 不會自動查詢 Docker daemon，也不會把操作者填寫的 image ref 視為已確認
+存在的映像。`confirmed` 是安裝來源身份，**不是程式碼安全或任務成功保證**。
+
+「已套用」不是套件 API 的狀態欄位。它須由執行設定成功保存所選 `loopId`／
+`policyId`，並在新 Run 的 `execution.selected` 事件確認接受時的 binding。
+選擇既有任務或之後更改設定，不會更換已接受任務及其子代理的固定 binding。
+下載部署包、健康檢查通過或完成一個 Run，都不能取代自己的任務驗收。
+
 ## 安裝到本機後端環境
 
 使用真正啟動後端的 Python 環境，不能安裝到另一個全域 Python 後就宣稱產品
@@ -196,53 +247,120 @@ Python／平台的依賴；不能把範例的 `--no-deps` 當成已安裝所有�
 建立，前端重新讀取不會熱發現剛放入環境的套件。新任務及其子代理固定使用
 接受時的 binding；已接受任務不因之後改設定而切換版本。
 
-## 安裝到 Docker 映像
+本機手動安裝沒有 Docker 建置 manifest；匯入清單通常會顯示 `unverified`，
+這不妨礙已安裝 catalog 的正常選擇，但無法確認安裝來源就是上傳的 wheel。
+本機 runtime 的部署包下載回傳 HTTP 503 `deployment_unavailable`；目前沒有
+由工作臺執行的本機安裝器或自動寫入 provenance 的功能。
+
+## 透過 Docker 部署包安裝
 
 現有 runtime 用 UID 10001 執行、沒有 Docker socket 或 root 安裝能力。
 插件應在 Docker 主機建置映像時安裝，最終仍用原本非 root 使用者啟動。
 不要在執行中的容器修改核心環境，也不要掛入 Docker socket 作為安裝捷徑。
 
-在獨立 build context 放已驗證的範例 wheel 與下列 Dockerfile：
+### 1. 設定真正的基底映像
 
-```dockerfile
-FROM opensprite:local
-USER root
-COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
-COPY opensprite_execution_example-0.1.0-py3-none-any.whl /tmp/execution-plugins/
-RUN uv pip install --python /app/backend/.venv/bin/python --no-index --no-deps /tmp/execution-plugins/opensprite_execution_example-0.1.0-py3-none-any.whl \
-    && uv pip check --python /app/backend/.venv/bin/python
-USER opensprite
-```
+部署包需後端 runtime 為 `docker`，且操作者設定
+`OPENSPRITE_DEPLOYMENT_BASE_IMAGE` 為明確的 image ref（tag 或 SHA-256 digest）。
+`OPENSPRITE_RUNTIME_KIND=docker` 描述產品執行方式；不能只改這個值便宣稱
+本機環境有 Docker 安裝能力。基底必須是保留原安裝路徑、使用者與 runtime
+設定的相容 OpenSprite 映像；範例依賴仍為 `>=0.21.27,<0.22`。
 
-此例的 base 必須是 `>=0.21.27,<0.22` 的既有 OpenSprite 映像。
-`USER root` 只用於 build 層；成品保留原 CMD、healthcheck、HOME 與 runtime UID。
-固定 base image digest 與 wheel SHA-256 可保留更精確的部署來源。
+官方 `compose.yaml` 建置並標記 `opensprite:local`，所以基底設定預設也是
+`opensprite:local`；這是明確的部署設定，不是由後端偵測目前映像。若使用
+自訂 tag／digest 或直接 `docker run`，先確認 Docker 主機有欲使用的相容
+映像，將**實際 ref** 放到原部署使用的環境／`.env`，或以
+`-e OPENSPRITE_DEPLOYMENT_BASE_IMAGE=YOUR_ACTUAL_IMAGE_REF` 傳入，並依既有
+服務流程重啟以讓後端讀到它。優先使用已記錄、相容且 digest 固定的映像。
+runtime 為 local 或基底缺失／無效時，下載回傳 HTTP 503
+`deployment_unavailable`。設定 image ref 不會拉取映像或驗證主機已有它。
+
+### 2. 匯入並下載部署包
+
+在工作臺匯入已審查 wheel，核對 distribution、版本、插件 ID、依賴與完整
+SHA-256，再下載部署 ZIP。快取無法讀取為 HTTP 503
+`packages_store_unavailable`；不要把失敗的匯入或下載視為安裝成功。
+
+每份部署包有原始 wheel、`Dockerfile`、`compose.override.yaml`、`README.md`
+及 `validate_deployment.py`。與作者範例 ZIP 不同，它是某份已匯入 wheel 的
+實際 build context，**沒有待安裝依賴的 wheelhouse**。下載時重新檢查目前
+後端的 Python／依賴環境，build 時再檢查真正的 base；缺失／不相容依賴
+會失敗，不會自動連網補足。
+
+產生的 Dockerfile 使用指定 base，僅在 build 階段 `USER root`，依序：
+
+1. 用目標 Python 的 `ensurepip` 啟用它內建的 pip。
+2. 在 `/app/backend/.venv/bin/python` 所屬環境執行
+   `pip install --no-index --no-deps --force-reinstall`，安裝包內的實際 wheel。
+3. 執行 `pip check` 及包內驗證腳本，核對 wheel、相依環境與安裝檔案。
+4. 寫入 `/app/execution-plugin-manifest.json`，最後恢復 `USER opensprite`。
+
+此流程沒有額外下載 pip、插件或依賴；指定 base 仍須已在 Docker 主機可用。
+建置驗證只查 metadata 與檔案，不匯入插件模組或提前執行 factory。工廠失敗
+可能到保存選擇時才出現，靜態檢查及建置成功不能代替作者測試。
+
+### 3. 在主機套用到既有部署
+
+完成或取消執行中的 Runs，記錄原映像與部署參數，將 ZIP 解壓到獨立目錄。
+在 Docker 主機的該目錄設定絕對 build context：
 
 ```bash
-docker build -t opensprite:with-execution-example /ABS/plugin-build-context
+export OPENSPRITE_PLUGIN_BUNDLE_DIR="$(pwd)"
 ```
 
-使用原本 Compose service、project 與資料 volume，另外的 override 只改 image：
-
-```yaml
-services:
-  opensprite:
-    image: opensprite:with-execution-example
+```powershell
+$env:OPENSPRITE_PLUGIN_BUNDLE_DIR = (Get-Location).Path
 ```
+
+將產生的 override **追加到原本 Compose 呼叫**。以下是需要換成目前部署
+真實 project 與絕對路徑的例子；保留原環境、所有原 override、port 與資料 volume：
 
 ```bash
-docker compose -p YOUR_EXISTING_PROJECT -f compose.yaml -f compose.execution-example.yaml up -d --no-build --wait
+docker compose -p YOUR_EXISTING_PROJECT -f /ABS/OpenSprite/compose.yaml -f /ABS/plugin-bundle/compose.override.yaml up -d --build --wait
 ```
 
-project、compose 檔案、環境與 port 必須換成目前部署的實際值；不能換 project
-後把新的空資料 volume 當作原部署，也不要使用 `down -v`。
-重建前記錄原映像，失敗可用同一 project／資料 volume 重新指定原映像回復。
+Compose 的相對路徑依第一個 compose 檔案解析，絕對 bundle 目錄避免不同工作
+目錄造成歧義。override 只指定 service 的 derived image、build 與必要 runtime
+環境，不新增資料 volume 或替使用者選新 project。不得變更 project 後把新的
+空 volume 當作原部署，也不要使用 `down -v`。同一 `.opensprite` 只能有一個
+後端 writer；不要另開第二個容器讀寫同一 volume 來測試。
+
+產生的 override 會將重啟後的 `OPENSPRITE_DEPLOYMENT_BASE_IMAGE` 更新為這次
+建好的 derived image。下一次安裝 B 時，Dockerfile 便從已包含 A 的映像建置，
+驗證並保留 A 的套件與 manifest，而不是回到最初沒有插件的基底。這個結果
+映像必須保留在同一 Docker 主機。若自行改結果 tag 或直接 `docker run`，
+也要同步設定下一次部署基底的實際 ref；後端不會自行猜測目前 image。
+
+重建同一份 wheel 時，既有結果 tag 可以同時作為本次來源與輸出；建置前
+來源必須已存在，成功後才取代 tag。先以獨立 tag 或 digest 保留先前相容
+映像，避免將已被取代的相同 tag 當作回復參照。
+
+### 4. 核對身份，再保存選擇
+
+`validate_deployment.py` 把來源 wheel SHA-256 與 distribution／version／
+entry points／來源檔案清單寫入 root 擁有、模式 `0644` 的 manifest。
+執行中的非 root 後端核對 manifest 的身份、權限及實際安裝檔案；來源檔案
+雜湊不含安裝器重寫的 `RECORD`，只容許已知 installer metadata 與 bytecode。
+它也檢查額外未記錄檔案與符號連結，不以可修改的 metadata 名稱代替內容證據。
+
+兩種雜湊回答不同問題：
+
+| 身份 | 回答的問題 |
+| --- | --- |
+| 原 wheel 的 SHA-256 | 這是不是當時匯入、交付並建置的那份 archive？ |
+| manifest 內每個來源檔案的 SHA-256／大小 | 目前 Python 環境的實際安裝內容是否仍與該份 wheel 相符？ |
+
+因此，相同插件 ID／版本但 archive bytes 不同，不會確認成同一份部署。
+當其有效 manifest 對應到另一份 wheel，清單顯示 `mismatch`；manifest 缺失
+或實際安裝內容被修改則不能確認來源。既有 manifest 中其他插件套件只有在
+內容仍符合驗證且 ID 沒有衝突時才保留，不會靠名稱把被破壞的舊套件帶入新映像。
 
 健康檢查通過後仍要核對 backend catalog 的兩個 ID／`0.1.0`／API v1，
-成功保存選擇，再建立新 Run 並核對 `execution.selected`。容器啟動、wheel 上傳
-或 metadata 檢查都不能單獨證明插件已安裝並採用。
+匯入清單的 `confirmed`、成功保存選擇，再建立新 Run 並核對
+`execution.selected`。使用實際 Host、工具與事件的驗證可使用可拋棄 fixture
+Provider，不需要付費模型呼叫；fixture 證據不代表外部 Provider 真實表現。
 
-這個直接建置流程使用已有機制，不代表工作臺已提供套件上傳、下載、安裝器或
-Docker 控制。後續若加入匯入 cache／部署 bundle，應以當時實作契約描述
-「已匯入／待部署／已安裝／已套用」，並區分來源 wheel 雜湊與實際安裝檔案的
-manifest 身份；不把 static 檢查當作安全隔離或實際部署證據。
+回復時使用先前相容映像、相同 project 與資料 volume。若 backend／SQLite
+schema 已改變，先停止服務並還原相容備份，不能假設舊版能寫新版 schema。
+備份須包含整個敏感 `.opensprite`，尤其 `auth.json` 與 `credential.key`。
+工作臺移除匯入快取不解除安裝插件；解除安裝或回復要透過實際環境／映像更換。

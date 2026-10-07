@@ -2,7 +2,7 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.21.29`。
+目前產品版本為 `0.21.30`。
 
 ## Docker 部署
 
@@ -34,6 +34,14 @@ docker compose up -d --build --wait
 **不要使用 `docker compose down -v`**，它會永久刪除資料 volume。
 備份時先停止容器，備份整個 volume；還原時保留 UID/GID 與權限，並一起處理 `auth.json` 和 `config/credential.key`。
 整份 volume 含敏感資料，備份也須保護。
+
+### 安裝執行插件
+
+在「設定 → 執行方式」匯入已審查的純 Python wheel，下載部署包，在 Docker 主機依包內 README 建置並重新啟動既有 Compose project，再回頁面核對安裝狀態，選取 Loop／策略並套用至新任務。匯入只做靜態檢查與快取，不會在後端程序安裝或執行套件。
+
+此 repository 的 Compose 明確使用 `opensprite:local` 作為部署包的預設基底。若使用其他映像標籤，啟動服務前設定 `OPENSPRITE_DEPLOYMENT_BASE_IMAGE` 為已建置、可用的實際映像；直接 `docker run` 也需傳入此環境變數。未設定合法基底时，匯入與清單仍可用，但部署包下載會停用。請沿用既有 project 名稱與資料 volume。
+
+插件是受信任 Python 程式碼，靜態檢查與安裝內容核對不提供安全沙箱。作者介面、測試、套件格式、Docker／本機安裝與回復方法見 [執行插件作者指南](docs/architecture/execution-plugin-authoring.md)；可建置範例位於 [examples/execution-plugin](examples/execution-plugin/README.md)，頁面也提供完整專案 ZIP。
 
 ### Docker 驗證
 

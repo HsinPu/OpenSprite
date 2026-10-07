@@ -44,6 +44,22 @@
 .execution-guide .ant-alert { margin-bottom: 24px; }
 .execution-guide ul { padding-left: 20px; }
 .execution-guide li { margin-bottom: 12px; }
+.execution-guide ol { padding-left: 20px; }
+.execution-packages { padding-top: 24px; border-top: 1px solid var(--settings-border); min-width: 0; }
+.execution-packages__runtime { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; color: var(--settings-muted); font-size: 12px; }
+.execution-packages__runtime code { overflow-wrap: anywhere; }
+.execution-packages__install-help { margin-bottom: 12px; }
+.execution-packages__notice { margin: 0 0 12px; color: var(--settings-primary); font-size: 13px; }
+.execution-packages > .ant-alert { margin-bottom: 12px; }
+.execution-packages__import-form { margin-top: 20px; }
+.execution-packages__import-error { margin-top: 12px; }
+.execution-packages__file { display: flex; align-items: flex-start; flex-direction: column; gap: 4px; padding: 12px 0 0; font-size: 12px; }
+.execution-packages__file code { overflow-wrap: anywhere; }
+.execution-packages__file span { color: var(--os-text-secondary, #687787); }
+.execution-packages__drawer h4 { margin: 24px 0 12px; font-size: 14px; font-weight: 600; }
+.execution-packages__drawer ul { padding-left: 20px; }
+.execution-packages__drawer li { margin-bottom: 8px; overflow-wrap: anywhere; }
+.execution-packages__remove-title { display: block; max-width: 320px; overflow-wrap: anywhere; }
 .execution-guide__code { margin: 16px 0 24px; border: 1px solid var(--os-border, #dce3e9); border-radius: var(--os-radius, 6px); overflow: hidden; }
 .execution-guide__code-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--os-border, #dce3e9); font-size: 12px; color: var(--os-text-secondary, #687787); }
 .execution-guide__code-header .ant-typography { margin: 0; }

@@ -26,6 +26,9 @@ from .api.general_settings_routes import (
     router as general_settings_router,
 )
 from .api.execution_settings_routes import execution_settings_error_response, router as execution_settings_router
+from .api.execution_package_routes import execution_package_error_handler, router as execution_package_router
+from .execution_plugins.models import ExecutionPackageError
+from .execution_plugins.service import ExecutionPackageOperations, UnavailableExecutionPackages
 from .execution_settings import ExecutionSettingsError, ExecutionSettingsErrorCode, ExecutionSettingsOperations, UnavailableExecutionSettings
 from .api.local_path_routes import (
     local_path_error_response,
@@ -135,6 +138,7 @@ def create_app(
     ai_settings: AiSettingsOperations | None = None,
     general_settings: GeneralSettingsOperations | None = None,
     execution_settings: ExecutionSettingsOperations | None = None,
+    execution_packages: ExecutionPackageOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
     tool_settings: ToolSettingsOperations | None = None,
     mcp_connections: McpConnections | None = None,
@@ -178,6 +182,7 @@ def create_app(
     )
     app.state.app_info = resolved_app_info
     app.state.execution_settings = execution_settings if execution_settings is not None else UnavailableExecutionSettings()
+    app.state.execution_packages = execution_packages if execution_packages is not None else UnavailableExecutionPackages()
     app.state.conversation_settings = (
         conversation_settings
         if conversation_settings is not None
@@ -228,6 +233,8 @@ def create_app(
         exc: RequestValidationError,
     ) -> JSONResponse:
         del exc
+        if request.url.path.startswith("/api/execution-plugin-packages"):
+            return await execution_package_error_handler(request, ExecutionPackageError("invalid_request"))
         if request.url.path == "/api/settings/execution":
             return execution_settings_error_response(ExecutionSettingsErrorCode.INVALID_REQUEST)
         if request.url.path.startswith("/api/auth/"):
@@ -352,6 +359,11 @@ def create_app(
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
+        if request.url.path.startswith("/api/execution-plugin-packages"):
+            # Uploaded package metadata can include private content. Keep errors fixed
+            # and omit exception reprs/traces at this input boundary.
+            _LOGGER.error("execution plugin package request failed")
+            return await execution_package_error_handler(request, ExecutionPackageError("internal_error"))
         if request.url.path == "/api/agents" or request.url.path.startswith("/api/agents/"):
             # Response validation can embed the whole definition in its error.
             # Never log an exception repr/trace from this content boundary.
@@ -369,6 +381,7 @@ def create_app(
         return execution_settings_error_response(exc.code)
 
     app.add_exception_handler(ExecutionSettingsError, cast(ExceptionHandler, execution_settings_error_handler))
+    app.add_exception_handler(ExecutionPackageError, cast(ExceptionHandler, execution_package_error_handler))
     app.add_exception_handler(
         RequestValidationError,
         cast(ExceptionHandler, validation_error_handler),
@@ -448,6 +461,7 @@ def create_app(
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
     app.include_router(execution_settings_router)
+    app.include_router(execution_package_router)
     app.include_router(conversation_settings_router)
     app.include_router(tool_settings_router)
     app.include_router(mcp_router)

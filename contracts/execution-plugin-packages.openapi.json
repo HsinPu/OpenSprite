@@ -1,0 +1,542 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite execution plugin package workbench",
+    "version": "0.1.0-draft",
+    "description": "Import reviewed pure-Python execution wheels, inspect metadata, remove cached archives, and export offline Docker build bundles. No runtime installer or Docker socket operations."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [
+    {
+      "LocalSession": []
+    }
+  ],
+  "x-transport-security": {
+    "scope": "local desktop service",
+    "applicationAuthentication": "existing local session policy",
+    "browserOriginPolicy": "same-origin"
+  },
+  "x-persistence": {
+    "path": ".opensprite/cache/execution-plugin-packages/<uuid>/",
+    "lazyCreation": "GET and rejected imports never create the cache. Successful import atomically saves wheel and fixed manifest; identical SHA-256 import returns the existing UUID."
+  },
+  "x-trust": "Import inspects ZIP and metadata without importing Python. Execution plugins remain trusted in-process Python. Archive validation is not a sandbox or task-success proof.",
+  "x-deployment": "Bundle requires Docker runtime and valid operator-supplied OPENSPRITE_DEPLOYMENT_BASE_IMAGE. Build offline on Docker host, preserve existing compose project and volume, install as build root, final runtime USER opensprite. Confirmation requires root-owned build manifest, wheel SHA-256 match and actual installed file hashes. Same ID/version with different archive bytes is not confirmed.",
+  "x-limits": {
+    "wheelBytes": 10485760,
+    "multipartBytes": 10551296,
+    "unpackedBytes": 33554432,
+    "fileBytes": 4194304,
+    "members": 512,
+    "packages": 64
+  },
+  "x-supported-wheel": "Purelib, none/any wheel; API v1 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
+  "paths": {
+    "/api/execution-plugin-packages": {
+      "get": {
+        "operationId": "listExecutionPluginPackages",
+        "responses": {
+          "413": {
+            "description": "Bounded imported cache entry count exceeded, including inactive transactions.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "200": {
+            "description": "Imported package inventory with deployment identity; import never installs code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request, unsupported wheel, or incompatible installed environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cache unavailable or Docker deployment configuration unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "importExecutionPluginPackage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Exactly one wheel file, at most 10 MiB; uploaded filename is validated, never a filesystem path."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Imported package inventory with deployment identity; import never installs code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request, unsupported wheel, or incompatible installed environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Imported UUID not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bounded wheel or package-count limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cache unavailable or Docker deployment configuration unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/execution-plugin-packages/{package_id}": {
+      "parameters": [
+        {
+          "name": "package_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteExecutionPluginPackage",
+        "responses": {
+          "204": {
+            "description": "Only imported archive and manifest removed; installed distribution and settings unchanged."
+          },
+          "400": {
+            "description": "Malformed request, unsupported wheel, or incompatible installed environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Imported UUID not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bounded wheel or package-count limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cache unavailable or Docker deployment configuration unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/execution-plugin-packages/{package_id}/deployment-bundle": {
+      "parameters": [
+        {
+          "name": "package_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getExecutionPluginDeploymentBundle",
+        "responses": {
+          "200": {
+            "description": "ZIP containing wheel, Dockerfile, compose.override.yaml, README.md, validate_deployment.py.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request, unsupported wheel, or incompatible installed environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Imported UUID not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Bounded wheel or package-count limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sanitized internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cache unavailable or Docker deployment configuration unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "LocalSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-OpenSpriteSession"
+      }
+    },
+    "schemas": {
+      "PackagePlugin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "apiVersion",
+          "entryPoint"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "loop",
+              "policy"
+            ]
+          },
+          "apiVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "entryPoint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "PackageSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "fileName",
+          "distributionName",
+          "version",
+          "sha256",
+          "sizeBytes",
+          "importedAt",
+          "requiresPython",
+          "requiresDist",
+          "plugins",
+          "runtimeStatus"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "distributionName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760
+          },
+          "importedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requiresPython": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "requiresDist": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "plugins": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/PackagePlugin"
+            }
+          },
+          "runtimeStatus": {
+            "type": "string",
+            "enum": [
+              "not_installed",
+              "confirmed",
+              "unverified",
+              "mismatch"
+            ]
+          }
+        }
+      },
+      "RuntimeIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "baseImage",
+          "manifestStatus"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "docker",
+              "local"
+            ]
+          },
+          "baseImage": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "manifestStatus": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "missing",
+              "invalid"
+            ]
+          }
+        }
+      },
+      "PackageListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packages",
+          "runtime"
+        ],
+        "properties": {
+          "packages": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/PackageSummary"
+            }
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "invalid_package",
+                  "incompatible_package",
+                  "package_too_large",
+                  "package_not_found",
+                  "packages_store_unavailable",
+                  "deployment_unavailable",
+                  "internal_error"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

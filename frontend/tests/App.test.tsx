@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/app/App";
 import { DEFAULT_WORKSPACE_ID } from "../src/api/agentChat";
@@ -121,6 +121,12 @@ async function openSettingsFromRail() {
 }
 
 describe("settings page focus restoration", () => {
+  beforeAll(async () => {
+    // Measure navigation and focus, separately from the test runner's cold module transform.
+    // Keep the real deferred page and its controls; no settings component is mocked.
+    await import("../src/features/settings/SettingsPage");
+  });
+
   it.each([
     [1440, "AI 模型", "models"],
     [1440, "Agents", "agents"],

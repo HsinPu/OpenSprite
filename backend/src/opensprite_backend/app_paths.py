@@ -178,6 +178,10 @@ class AppPaths:
     def cache_dir(self) -> Path:
         return self.home / "cache"
 
+    @property
+    def execution_plugin_packages_dir(self) -> Path:
+        return self.cache_dir / "execution-plugin-packages"
+
 
 def build_app_paths(home: str | Path | None = None) -> AppPaths:
     """Build normalized paths without creating files or directories."""

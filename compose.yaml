@@ -3,6 +3,8 @@ services:
     build:
       context: .
     image: opensprite:local
+    environment:
+      OPENSPRITE_DEPLOYMENT_BASE_IMAGE: "${OPENSPRITE_DEPLOYMENT_BASE_IMAGE:-opensprite:local}"
     init: true
     restart: unless-stopped
     ports:

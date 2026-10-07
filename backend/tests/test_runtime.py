@@ -19,6 +19,7 @@ from opensprite_backend.provider_connections import (
 )
 from opensprite_backend.runtime import create_system_app
 from opensprite_backend.authentication import AccessMode, AccessPolicy, JsonAccessPolicyStore
+from opensprite_backend.execution_plugins.service import ExecutionPackageService, UnavailableExecutionPackages
 
 from test_local_security import RecordingConnections
 
@@ -103,6 +104,30 @@ def test_system_app_is_offline_until_lifespan_entry() -> None:
         app.state.provider_connections,
         UnavailableProviderConnections,
     )
+
+
+def test_execution_package_inventory_binds_only_during_each_lifespan_and_stays_lazy(tmp_path) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    runtimes = []
+
+    def factory():
+        runtime = FakeRuntime()
+        runtime.execution_packages = ExecutionPackageService(paths)
+        runtimes.append(runtime)
+        return runtime
+
+    app = create_system_app(app_paths=paths, runtime_factory=factory, enforce_authentication=False)
+    assert isinstance(app.state.execution_packages, UnavailableExecutionPackages)
+    for count in (1, 2):
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            response = client.get("/api/execution-plugin-packages")
+            assert response.status_code == 200
+            assert response.json() == {"packages": [], "runtime": {"kind": "local", "baseImage": None, "manifestStatus": "missing"}}
+            assert app.state.execution_packages is runtimes[-1].execution_packages
+            assert len(runtimes) == count
+            assert not paths.execution_plugin_packages_dir.exists()
+        assert isinstance(app.state.execution_packages, UnavailableExecutionPackages)
+    assert runtimes[0].execution_packages is not runtimes[1].execution_packages
 
 
 def test_sequential_lifespans_use_and_close_fresh_runtimes() -> None:

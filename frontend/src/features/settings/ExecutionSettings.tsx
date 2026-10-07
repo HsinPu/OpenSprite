@@ -9,6 +9,7 @@ import {
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ExecutionDeveloperGuide, type DeveloperGuideTab } from "./ExecutionDeveloperGuide";
+import { ExecutionPackageManager } from "./ExecutionPackageManager";
 import { SaveStatus } from "./SettingsPrimitives";
 import "./ExecutionSettings.css";
 
@@ -23,6 +24,7 @@ export function ExecutionSettings({ active }: { active: boolean }) {
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const requestVersion = useRef(0);
+  const draftRef = useRef<ExecutionSelection | null>(null);
   const [data, setData] = useState<ExecutionSettingsData | null>(null);
   const [draft, setDraft] = useState<ExecutionSelection | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,9 @@ export function ExecutionSettings({ active }: { active: boolean }) {
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideTab, setGuideTab] = useState<DeveloperGuideTab>("loop");
 
-  const reload = useCallback(async () => {
+  useEffect(() => { draftRef.current = draft; }, [draft]);
+  const reload = useCallback(async (preserveDraft = false) => {
+    const previousDraft = preserveDraft ? draftRef.current : null;
     const request = ++requestVersion.current;
     setLoading(true);
     setSaving(false);
@@ -47,7 +51,10 @@ export function ExecutionSettings({ active }: { active: boolean }) {
       const next = await getExecutionSettings();
       if (request !== requestVersion.current) return;
       setData(next);
-      setDraft(next.selection);
+      const stillAvailable = previousDraft !== null
+        && next.plugins.some((plugin) => plugin.kind === "loop" && plugin.id === previousDraft.loopId && plugin.status === "available")
+        && next.plugins.some((plugin) => plugin.kind === "policy" && plugin.id === previousDraft.policyId && plugin.status === "available");
+      setDraft(stillAvailable ? previousDraft : next.selection);
     } catch (failure) {
       if (request === requestVersion.current) setError(failure);
     } finally {
@@ -112,7 +119,7 @@ export function ExecutionSettings({ active }: { active: boolean }) {
   }
   const columns: TableColumnsType<PluginRow> = [
     { title: t("execution.column.name"), key: "name", width: 230, render: (_, row) => <div className="execution-settings__identity"><strong>{pluginName(row)}</strong><code>{row.id}</code>{row.id === selectedId(data?.selection ?? null, row.kind) ? <span className="execution-settings__saved-badge">{t("execution.savedBadge")}</span> : null}</div> },
-    { title: t("execution.column.behavior"), key: "behavior", responsive: ["md"], render: (_, row) => <p className="execution-settings__description">{description(row)}</p> },
+    { title: t("execution.column.behavior"), key: "behavior", responsive: ["lg"], render: (_, row) => <p className="execution-settings__description">{description(row)}</p> },
     { title: t("execution.column.version"), key: "version", width: 90, render: (_, row) => row.plugin?.version ?? "—" },
     { title: "API", key: "api", width: 64, render: (_, row) => row.plugin?.apiVersion ?? "—" },
     { title: t("execution.column.status"), key: "status", width: 116, render: (_, row) => status(row) },
@@ -147,5 +154,6 @@ export function ExecutionSettings({ active }: { active: boolean }) {
       {detail ? <><h3>{pluginName(detail)}</h3><p className="execution-settings__detail-description">{description(detail)}</p><Descriptions size="small" column={1} items={[{ key: "kind", label: t("execution.column.kind"), children: t(detail.kind === "loop" ? "execution.loop" : "execution.policy") }, { key: "id", label: t("execution.pluginId"), children: <code>{detail.id}</code> }, { key: "version", label: t("execution.column.version"), children: detail.plugin?.version ?? "—" }, { key: "api", label: "API", children: detail.plugin?.apiVersion ?? "—" }, { key: "status", label: t("execution.column.status"), children: status(detail) }]} />{detail.plugin?.status !== "available" ? <Alert type="warning" showIcon title={t("execution.unavailablePlugin")} /> : null}</> : null}
     </Drawer>
     <ExecutionDeveloperGuide open={guideOpen} tab={guideTab} onTab={setGuideTab} onClose={() => setGuideOpen(false)} />
+    <ExecutionPackageManager active={active} catalogBusy={busy} onRefreshCatalog={() => reload(true)} onGuide={() => openGuide("install")} />
   </div>;
 }

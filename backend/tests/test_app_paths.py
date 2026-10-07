@@ -41,6 +41,7 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.tool_receipts_dir == home / "logs" / "tool-receipts"
     assert paths.tool_receipt_key_file == home / "config" / "tool-receipt.key"
     assert paths.cache_dir == home / "cache"
+    assert paths.execution_plugin_packages_dir == home / "cache" / "execution-plugin-packages"
     assert paths.agents_dir == home / "agents"
     assert paths.agents_settings_file == home / "config" / "agents.json"
     assert paths.agents_transaction_file == home / "config" / "agents-transaction.json"
@@ -74,6 +75,7 @@ def test_system_app_lifespan_creates_only_runtime_logs(
         assert (profile / ".opensprite" / "logs" / "backend").is_dir()
         assert not (profile / ".opensprite" / "data").exists()
         assert not (profile / ".opensprite" / "config").exists()
+        assert not (profile / ".opensprite" / "cache").exists()
 
     assert (profile / ".opensprite" / "logs" / "backend").is_dir()
 

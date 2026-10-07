@@ -35,6 +35,7 @@ RUN uv sync --locked --dev \
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV HOME=/home/opensprite \
+    OPENSPRITE_RUNTIME_KIND=docker \
     PATH=/app/backend/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

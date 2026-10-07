@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import os
 from pathlib import Path
 from threading import Lock
 from typing import Protocol
@@ -13,6 +14,7 @@ from fastapi import FastAPI
 from .agent import AgentLoop, RunManager
 from .agent.plugin_catalog import ExecutionPluginCatalog
 from .execution_settings import ExecutionSettingsOperations, ExecutionSettingsService, UnavailableExecutionSettings
+from .execution_plugins.service import ExecutionPackageOperations, ExecutionPackageService, UnavailableExecutionPackages
 from .application import (
     AgentChatOperations,
     AgentChatService,
@@ -99,6 +101,7 @@ class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     ai_settings: AiSettingsOperations
     general_settings: GeneralSettingsOperations
     execution_settings: ExecutionSettingsOperations
+    execution_packages: ExecutionPackageOperations
     conversation_settings: ConversationSettingsOperations
     tool_settings: ToolSettingsOperations
     mcp_connections: McpConnections
@@ -133,6 +136,7 @@ class _SystemRuntime:
         delegation: DelegationCoordinator,
         provider_mutations=None,
         execution_settings: ExecutionSettingsOperations | None = None,
+        execution_packages: ExecutionPackageOperations | None = None,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -141,6 +145,7 @@ class _SystemRuntime:
         self.provider_http_client = getattr(provider_runtime, "http_client", None)
         self.ai_settings = ai_settings
         self.execution_settings = execution_settings if execution_settings is not None else UnavailableExecutionSettings()
+        self.execution_packages = execution_packages if execution_packages is not None else UnavailableExecutionPackages()
         self.general_settings = general_settings
         self.conversation_settings = conversation_settings
         self.tool_settings = tool_settings
@@ -199,6 +204,11 @@ def create_system_runtime(
     general_settings = create_general_settings_service(paths)
     execution_plugins = ExecutionPluginCatalog()
     execution_settings = ExecutionSettingsService(paths, execution_plugins)
+    execution_packages = ExecutionPackageService(
+        paths,
+        runtime_kind=os.environ.get("OPENSPRITE_RUNTIME_KIND", "local"),
+        base_image_ref=os.environ.get("OPENSPRITE_DEPLOYMENT_BASE_IMAGE"),
+    )
     conversation_settings = create_conversation_settings_service(paths)
     event_notifier = RunEventNotifier()
     repository = SqliteConversationRepository(
@@ -306,6 +316,7 @@ def create_system_runtime(
         delegation,
         provider_mutations,
         execution_settings,
+        execution_packages,
     )
 
 
@@ -350,6 +361,7 @@ def create_system_app(
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.execution_settings = UnavailableExecutionSettings()
+            app.state.execution_packages = UnavailableExecutionPackages()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
             app.state.mcp_connections = UnavailableMcpConnections()
@@ -368,6 +380,7 @@ def create_system_app(
             app.state.ai_settings = runtime.ai_settings
             app.state.general_settings = runtime.general_settings
             app.state.execution_settings = getattr(runtime, "execution_settings", UnavailableExecutionSettings())
+            app.state.execution_packages = getattr(runtime, "execution_packages", UnavailableExecutionPackages())
             app.state.conversation_settings = runtime.conversation_settings
             app.state.tool_settings = getattr(
                 runtime,
@@ -416,6 +429,7 @@ def create_system_app(
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.execution_settings = UnavailableExecutionSettings()
+            app.state.execution_packages = UnavailableExecutionPackages()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
             app.state.mcp_connections = UnavailableMcpConnections()
