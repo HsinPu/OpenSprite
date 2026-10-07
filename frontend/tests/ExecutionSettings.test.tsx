@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExecutionSettingsApiError, type ExecutionSettings as ExecutionData } from "../src/api/executionSettings";
 import { ExecutionSettings } from "../src/features/settings/ExecutionSettings";
@@ -42,6 +42,7 @@ describe("execution plugin settings", () => {
     api.get.mockReset().mockResolvedValue(settings);
     api.put.mockReset().mockImplementation(async (selection) => ({ ...settings, selection }));
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it.each([["zh-TW", "執行方式", "執行策略"], ["en", "Execution", "Execution policy"], ["ja", "実行方式", "実行ポリシー"]] as const)("shows the selection and read-only metadata in %s", async (locale, title, policy) => {
     render(<I18nProvider><Localized locale={locale} /></I18nProvider>);
@@ -89,6 +90,39 @@ describe("execution plugin settings", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(true));
     expect(screen.getByRole("button", { name: "儲存執行方式" }).getAttribute("aria-busy")).toBe("false");
   });
+
+  it.each(["reopen", "remount"] as const)("reads the confirmed selection after %s while a save is pending", async (transition) => {
+    const actualApi = await vi.importActual<typeof import("../src/api/executionSettings")>("../src/api/executionSettings");
+    api.get.mockImplementation(actualApi.getExecutionSettings);
+    api.put.mockImplementation(actualApi.putExecutionSettings);
+    const pending = deferred<Response>();
+    let stored = settings;
+    const fetchMock = vi.fn((_path: string, init?: RequestInit) => init?.method === "PUT" ? pending.promise : Promise.resolve(new Response(JSON.stringify(stored))));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = render(<ExecutionSettings active />);
+    try {
+      await screen.findAllByText("版本 1.0.0");
+      await chooseNoRecovery();
+      fireEvent.click(screen.getByRole("button", { name: "儲存執行方式" }));
+      await waitFor(() => expect(api.put).toHaveBeenCalledOnce());
+      if (transition === "reopen") view.rerender(<ExecutionSettings active={false} />);
+      else view.rerender(<div />);
+      view.rerender(<ExecutionSettings active />);
+
+      expect(screen.getByRole("status").textContent).toBe("正在讀取執行方式…");
+      expect(screen.getAllByRole("combobox").every((item) => item.closest(".ant-select")?.classList.contains("ant-select-disabled"))).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      stored = { ...settings, selection: { loopId: "standard", policyId: "no_recovery" } };
+      await act(async () => pending.resolve(new Response(JSON.stringify(stored))));
+      await waitFor(() => expect(screen.queryByText("正在讀取執行方式…")).toBeNull());
+      expect(screen.getByRole("combobox", { name: "執行策略" }).closest(".ant-select")?.textContent).toContain("不自動重試或續寫");
+      expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      await act(async () => pending.resolve(new Response(JSON.stringify({ ...settings, selection: { loopId: "standard", policyId: "no_recovery" } }))));
+    }
+  });
+
 
   it("keeps the unsaved selection after a PUT failure and supports retry", async () => {
     api.put.mockRejectedValueOnce(new ExecutionSettingsApiError("plugin_unavailable")).mockImplementationOnce(async (selection) => ({ ...settings, selection }));

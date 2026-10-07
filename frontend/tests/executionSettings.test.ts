@@ -12,6 +12,12 @@ const settings: ExecutionSettings = {
   ],
 };
 const body = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
 afterEach(() => vi.unstubAllGlobals());
 
 describe("execution settings API", () => {
@@ -24,6 +30,64 @@ describe("execution settings API", () => {
     expect(fetchMock).toHaveBeenLastCalledWith("/api/settings/execution", {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(selected),
     });
+  });
+
+  it("waits for every pending write, including writes started while the read is waiting", async () => {
+    const first = deferred<Response>();
+    const second = deferred<Response>();
+    const third = deferred<Response>();
+    const selected = { loopId: "standard", policyId: "no_recovery" };
+    const responses = [first.promise, second.promise, third.promise];
+    let stored = settings;
+    const fetchMock = vi.fn((_path: string, init?: RequestInit) => init?.method === "PUT"
+      ? responses.shift()!
+      : Promise.resolve(body(stored)));
+    vi.stubGlobal("fetch", fetchMock);
+    const firstWrite = putExecutionSettings(selected);
+    const reading = getExecutionSettings();
+    const secondWrite = putExecutionSettings(settings.selection);
+    let thirdWrite: Promise<ExecutionSettings> | undefined;
+    try {
+      second.resolve(body(settings));
+      await secondWrite;
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      thirdWrite = putExecutionSettings(settings.selection);
+      first.resolve(body({ ...settings, selection: selected }));
+      await firstWrite;
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      stored = settings;
+      third.resolve(body(stored));
+      await expect(reading).resolves.toEqual(stored);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/settings/execution", undefined);
+    } finally {
+      first.resolve(body({ ...settings, selection: selected }));
+      second.resolve(body(settings));
+      third.resolve(body(settings));
+      await Promise.allSettled([firstWrite, secondWrite, reading, ...(thirdWrite ? [thirdWrite] : [])]);
+    }
+  });
+
+  it("reads persisted settings after a failed write and cleans up the pending write", async () => {
+    const pending = deferred<Response>();
+    const fetchMock = vi.fn((_path: string, init?: RequestInit) => init?.method === "PUT"
+      ? pending.promise
+      : Promise.resolve(body(settings)));
+    vi.stubGlobal("fetch", fetchMock);
+    const writing = putExecutionSettings({ loopId: "standard", policyId: "no_recovery" });
+    const failure = expect(writing).rejects.toMatchObject({ code: "network_error" });
+    const reading = getExecutionSettings();
+    try {
+      expect(fetchMock).toHaveBeenCalledOnce();
+      pending.reject(new Error("offline"));
+      await failure;
+      await expect(reading).resolves.toEqual(settings);
+      await expect(getExecutionSettings()).resolves.toEqual(settings);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      pending.resolve(body({ ...settings, selection: { loopId: "standard", policyId: "no_recovery" } }));
+      await Promise.allSettled([writing, failure, reading]);
+    }
   });
 
   it("allows a missing saved plugin and reports newer incompatible API versions", async () => {

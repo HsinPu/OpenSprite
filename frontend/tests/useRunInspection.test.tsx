@@ -71,6 +71,7 @@ function Harness({ conversationId: activeConversationId, getRunRequest, eventStr
     <span data-testid="selected">{inspection.selectedRunId ?? "latest"}</span>
     <span data-testid="run">{inspection.run?.id ?? "none"}</span>
     <span data-testid="events">{inspection.events.length}</span>
+    <span data-testid="execution-profile">{JSON.stringify(inspection.events.find((event) => event.type === "execution.selected")?.data ?? null)}</span>
     <span data-testid="loading">{String(inspection.loading)}</span>
     <span data-testid="error">{inspection.error ?? ""}</span>
     <button type="button" onClick={() => void inspection.inspectRun(firstRunId)}>first</button>
@@ -85,6 +86,31 @@ beforeEach(() => {
 });
 
 describe("useRunInspection", () => {
+  it("keeps the historical plugin selection after replaying more than 500 events", async () => {
+    let handlers: RunEventStreamHandlers | undefined;
+    const close = vi.fn();
+    const getRunRequest = vi.fn(async (runId: string) => snapshot(runId));
+    const eventStreamFactory = (_runId: string, value: RunEventStreamHandlers) => { handlers = value; return { close }; };
+    render(<Harness conversationId={conversationId} getRunRequest={getRunRequest} eventStreamFactory={eventStreamFactory} />);
+    fireEvent.click(screen.getByRole("button", { name: "first" }));
+    await waitFor(() => expect(screen.getByTestId("run").textContent).toBe(firstRunId));
+    const profile = { loopId: "custom.loop", loopVersion: "1.2.3", policyId: "no_recovery", policyVersion: "1.0.0", apiVersion: 1 };
+    const base = { runId: firstRunId, conversationId, createdAt: "2026-08-21T08:30:01Z" };
+
+    act(() => {
+      handlers!.onEvent({ ...base, sequence: 1, type: "run.started", data: {} });
+      handlers!.onEvent({ ...base, sequence: 2, type: "execution.selected", data: profile });
+      for (let sequence = 3; sequence <= 602; sequence += 1) {
+        handlers!.onEvent({ ...base, sequence, type: "assistant.delta", data: { text: "x" } });
+      }
+      handlers!.onEvent({ ...base, sequence: 603, type: "run.completed", data: { assistantMessageId: snapshot(firstRunId).assistantMessageId, completionReason: "stop" } });
+    });
+
+    expect(screen.getByTestId("events").textContent).toBe("500");
+    expect(JSON.parse(screen.getByTestId("execution-profile").textContent!)).toEqual(profile);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("loads a historical snapshot and its events, then returns to latest", async () => {
     let handlers: RunEventStreamHandlers | null = null;
     const close = vi.fn();

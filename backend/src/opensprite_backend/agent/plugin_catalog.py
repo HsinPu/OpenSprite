@@ -6,6 +6,7 @@ acceptance boundary; Python plugins run with the backend's process privileges.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field, replace
 from importlib.metadata import EntryPoint, entry_points
 import re
@@ -44,6 +45,11 @@ class ExecutionStrategyFactory(Protocol):
     api_version: int
 
     def create(self) -> ExecutionStrategy: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _EntryPointSource:
+    point: EntryPoint
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,14 +117,30 @@ class ExecutionPluginCatalog:
                 self._sources.pop(key, None)
                 continue
             api_version = int(match[2])
-            distribution = point.dist
-            version = distribution.version if distribution is not None else "unknown"
-            description = distribution.metadata.get("Summary", "") if distribution is not None else ""
-            descriptor = PluginDescriptor(point.name, kind, point.name, str(description)[:256],
-                                          str(version)[:64], api_version,
-                                          "available" if api_version == API_VERSION else "incompatible")
+            version, description = "unknown", ""
+            metadata_available = True
+            try:
+                distribution = point.dist
+                if distribution is not None:
+                    metadata = distribution.metadata
+                    raw_version = metadata.get("Version")
+                    if not isinstance(raw_version, str) or not raw_version.strip() or len(raw_version) > 64:
+                        raise ValueError("invalid plugin version metadata")
+                    version = raw_version
+                    raw_description = metadata.get("Summary", "")
+                    if not isinstance(raw_description, str):
+                        raise ValueError("invalid plugin summary metadata")
+                    description = raw_description[:256]
+            except Exception:
+                metadata_available = False
+            status: PluginStatus = (
+                "unavailable" if not metadata_available else
+                "available" if api_version == API_VERSION else "incompatible"
+            )
+            descriptor = PluginDescriptor(point.name, kind, point.name, description,
+                                          version, api_version, status)
             self._descriptors[key] = descriptor
-            self._sources[key] = point
+            self._sources[key] = _EntryPointSource(point)
 
     def descriptors(self) -> tuple[PluginDescriptor, ...]:
         return tuple(self._descriptors.values())
@@ -139,12 +161,12 @@ class ExecutionPluginCatalog:
         try:
             source = self._sources[key]
             # External entry points export a no-argument factory provider.
-            factory = source.load()() if hasattr(source, "load") else source
+            factory = source.point.load()() if isinstance(source, _EntryPointSource) else source
             if type(getattr(factory, "api_version", None)) is not int or factory.api_version != API_VERSION or not callable(getattr(factory, "create", None)):
                 raise ExecutionPluginError("plugin_unavailable")
             self._sources[key] = factory
             return descriptor, factory
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             self._descriptors[key] = replace(descriptor, status="unavailable")
             raise ExecutionPluginError("plugin_unavailable") from None
 

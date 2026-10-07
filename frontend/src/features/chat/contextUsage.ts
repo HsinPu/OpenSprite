@@ -44,8 +44,9 @@ export function appendEventPreservingContextUsage(
   const next = [...events, event];
   if (next.length <= MAX_VISIBLE_EVENTS) return next;
   const runStarted = next.find((candidate) => candidate.type === "run.started");
+  const executionSelected = next.find((candidate) => candidate.type === "execution.selected");
   const latestContextEvent = [...next].reverse().find((candidate) => contextUsageFromEvent(candidate) !== null);
-  const pinned = [runStarted, latestContextEvent].filter(
+  const pinned = [runStarted, executionSelected, latestContextEvent].filter(
     (candidate, index, values): candidate is RunEvent => candidate !== undefined
       && values.findIndex((value) => value?.sequence === candidate.sequence) === index,
   );

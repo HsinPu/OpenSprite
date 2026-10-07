@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from importlib.metadata import EntryPoint
 import sys
@@ -182,17 +183,90 @@ def test_resolved_binding_keeps_factory_and_discovered_version_after_source_chan
     first_factory = StandardDriverFactory()
     replacement_factory = StandardDriverFactory()
     point = InstalledPoint("pinned", LOOPS, lambda: first_factory,
-                           dist=SimpleNamespace(version="3.2.1", metadata={"Summary": "Pinned plugin"}))
+                           dist=SimpleNamespace(metadata={"Version": "3.2.1", "Summary": "Pinned plugin"}))
     catalog = ExecutionPluginCatalog((point,))
     accepted = catalog.resolve("pinned", "standard")
     point.provider = lambda: replacement_factory
-    point.dist.version = "9.9.9"
+    point.dist.metadata["Version"] = "9.9.9"
     next_binding = catalog.resolve("pinned", "standard")
     assert accepted.driver_factory is first_factory
     assert next_binding.driver_factory is first_factory
     assert accepted.profile()["loopVersion"] == "3.2.1"
     assert next_binding.profile()["loopVersion"] == "3.2.1"
     assert point.loads == 1
+
+
+def test_cached_factory_with_its_own_load_method_is_not_reloaded():
+    class Factory:
+        api_version = 1
+
+        def create(self):
+            return StandardDriverFactory().create()
+
+        def load(self):
+            raise AssertionError("This is a factory asset loader, not an entry-point loader.")
+
+    factory = Factory()
+    point = InstalledPoint("asset_loader", LOOPS, lambda: factory)
+    catalog = ExecutionPluginCatalog((point,))
+    first = catalog.resolve("asset_loader", "standard")
+    second = catalog.resolve("asset_loader", "standard")
+    assert first.driver_factory is second.driver_factory is factory
+    assert first.driver_factory.create() is not second.driver_factory.create()
+    assert descriptor(catalog, "loop", "asset_loader").status == "available"
+    assert point.loads == 1
+
+
+@pytest.mark.parametrize("phase", ["import", "provider"])
+def test_synchronous_plugin_self_cancellation_is_unavailable_instead_of_request_cancellation(phase):
+    def provider():
+        raise asyncio.CancelledError("private plugin cancellation detail")
+
+    class Point(InstalledPoint):
+        def load(self):
+            self.loads += 1
+            if phase == "import":
+                raise asyncio.CancelledError("private plugin import detail")
+            return provider
+
+    point = Point("self_cancelled", LOOPS, provider)
+    catalog = ExecutionPluginCatalog((point,))
+    with pytest.raises(ExecutionPluginError, match="plugin_unavailable"):
+        catalog.resolve("self_cancelled", "standard")
+    assert descriptor(catalog, "loop", "self_cancelled").status == "unavailable"
+    with pytest.raises(ExecutionPluginError, match="plugin_unavailable"):
+        catalog.resolve("self_cancelled", "standard")
+    assert point.loads == 1
+
+
+@pytest.mark.parametrize("version_line", ["Version: \n", "", "Version: " + "1" * 65 + "\n"])
+def test_bad_real_distribution_metadata_is_isolated_from_builtin_selection(tmp_path, monkeypatch, version_line):
+    from fastapi.testclient import TestClient
+
+    from opensprite_backend.app import create_app
+    from opensprite_backend.app_paths import build_app_paths
+    from opensprite_backend.execution_settings import ExecutionSettingsService
+
+    distribution = tmp_path / "opensprite_bad_metadata-1.0.dist-info"
+    distribution.mkdir()
+    (distribution / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: opensprite-bad-metadata\n" + version_line,
+        encoding="utf-8")
+    (distribution / "entry_points.txt").write_text(
+        f"[{LOOPS}]\nbad_metadata = never_import_bad_metadata:factory\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    catalog = ExecutionPluginCatalog()
+    item = descriptor(catalog, "loop", "bad_metadata")
+    assert item.status == "unavailable" and item.version == "unknown"
+    service = ExecutionSettingsService(build_app_paths(tmp_path / ".opensprite"), catalog)
+    with TestClient(create_app(execution_settings=service)) as client:
+        read = client.get("/api/settings/execution")
+        assert read.status_code == 200
+        assert read.json()["selection"] == {"loopId": "standard", "policyId": "standard"}
+        assert client.put("/api/settings/execution", json={"loopId": "standard", "policyId": "standard"}).status_code == 200
+        assert client.put("/api/settings/execution", json={"loopId": "bad_metadata", "policyId": "standard"}).status_code == 503
+    assert asyncio.run(service.get()).selection.loop_id == "standard"
+    assert "never_import_bad_metadata" not in sys.modules
 
 
 def test_policy_creation_failure_does_not_expose_plugin_exception():

@@ -87,8 +87,21 @@ async function request(selection?: ExecutionSelection): Promise<ExecutionSetting
   return result;
 }
 
-export const getExecutionSettings = (): Promise<ExecutionSettings> => request();
-export const putExecutionSettings = (selection: ExecutionSelection): Promise<ExecutionSettings> => request(selection);
+const pendingWrites = new Set<Promise<ExecutionSettings>>();
+
+export async function getExecutionSettings(): Promise<ExecutionSettings> {
+  // Settings can unmount while saving. A new page must read after every in-flight
+  // write settles, including failed writes, rather than display an earlier value.
+  while (pendingWrites.size > 0) await Promise.allSettled([...pendingWrites]);
+  return request();
+}
+
+export function putExecutionSettings(selection: ExecutionSelection): Promise<ExecutionSettings> {
+  const write = request(selection);
+  pendingWrites.add(write);
+  void write.then(() => pendingWrites.delete(write), () => pendingWrites.delete(write));
+  return write;
+}
 
 export function executionSettingsErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof ExecutionSettingsApiError ? error.code : "network_error";

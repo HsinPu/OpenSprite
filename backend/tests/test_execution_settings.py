@@ -1,10 +1,12 @@
 """Persistence and HTTP boundaries for execution plugin selection."""
 
+import asyncio
 from asyncio import run
 from dataclasses import replace
 import json
 import os
 from pathlib import Path
+from threading import Event
 
 from fastapi.testclient import TestClient
 import pytest
@@ -48,6 +50,48 @@ def test_default_read_is_lazy_and_does_not_load_factories(tmp_path: Path) -> Non
     assert service.selection() == ("standard", "standard")
     assert catalog.validated == [("standard", "standard")]
     assert not paths.home.exists()
+
+
+def test_plugin_validation_in_put_does_not_block_other_event_loop_work(tmp_path: Path) -> None:
+    from test_execution_plugin_catalog import InstalledPoint, LOOPS
+
+    from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
+    from opensprite_backend.agent.standard_driver import StandardDriverFactory
+
+    entered, release = Event(), Event()
+
+    def provider():
+        entered.set()
+        if not release.wait(1):
+            raise TimeoutError("The event loop could not release the loading factory.")
+        return StandardDriverFactory()
+
+    point = InstalledPoint("waiting", LOOPS, provider)
+    paths = build_app_paths(tmp_path / ".opensprite")
+    service = ExecutionSettingsService(paths, ExecutionPluginCatalog((point,)))
+
+    async def scenario():
+        async def unrelated_work():
+            for _ in range(200):
+                if entered.is_set():
+                    release.set()
+                    return
+                await asyncio.sleep(0.001)
+            raise AssertionError("Plugin validation did not start.")
+
+        concurrent = asyncio.create_task(unrelated_work())
+        try:
+            saved = await service.update("waiting", "standard")
+            await concurrent
+            assert saved.selection.loop_id == "waiting"
+        finally:
+            release.set()
+            concurrent.cancel()
+            await asyncio.gather(concurrent, return_exceptions=True)
+
+    run(scenario())
+    assert point.loads == 1
+    assert service.selection() == ("waiting", "standard")
 
 
 def test_first_successful_put_persists_only_fixed_selection_schema(tmp_path: Path) -> None:

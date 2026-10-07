@@ -391,9 +391,21 @@ class AgentLoop:
                     raise self._driver_exception(error, host, cancellation_event) from None
                 await delta_buffer.flush()
                 self._raise_if_cancelled(cancellation_event)
-                completed = await asyncio.to_thread(
-                    self._repository.complete_run, run_id, result.text, result.completion_reason)
-                return completed.run
+                try:
+                    completed = await asyncio.to_thread(
+                        self._repository.complete_run, run_id, result.text, result.completion_reason)
+                    return completed.run
+                except ConversationStoreError as error:
+                    if error.failure is StoreFailure.INVALID_STATE:
+                        # request_cancel can win the SQLite transaction after
+                        # the last event check. Its persisted status, rather
+                        # than an arbitrary store error, proves that Stop won.
+                        current = await asyncio.to_thread(self._repository.get_run, run_id)
+                        if current is not None and current.status is RunStatus.CANCELLING:
+                            return await self._cancel(run_id)
+                        if current is not None and current.status is RunStatus.CANCELLED:
+                            return current
+                    raise
             finally:
                 await host._close()
         except _ExecutionFailed as error:
@@ -418,7 +430,16 @@ class AgentLoop:
             await delta_buffer.flush()
             return await self._fail(run_id, inference_error(error.failure))
         except asyncio.CancelledError:
-            raise
+            task = asyncio.current_task()
+            if task is not None and task.cancelling() > 0:
+                # Preserve RunManager.close and owner-task timeout semantics.
+                raise
+            # A plugin's own CancelledError does not cancel the owning Run
+            # task. Persist a terminal result before RunManager releases it.
+            await delta_buffer.flush()
+            if cancellation_event.is_set():
+                return await self._cancel(run_id)
+            return await self._fail(run_id, INTERNAL_ERROR)
         except ConversationStoreError:
             raise
         except Exception:

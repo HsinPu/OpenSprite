@@ -38,11 +38,12 @@ describe("context usage indicator", () => {
     expect(indicator.getAttribute("aria-label")).toContain("尚無使用量資料");
   });
 
-  it("preserves Run start and the latest valid Context event when the visible event window is full", () => {
+  it("preserves Run start, execution plugins and the latest Context after more than 500 events", () => {
     const runStarted: RunEvent = { ...event({}), type: "run.started" };
-    const context = { ...event({ providerId: usage.providerId, modelId: usage.modelId, contextTokens: usage.contextTokens, contextLimitTokens: usage.contextLimitTokens, inputBudgetTokens: usage.inputBudgetTokens }), sequence: 2 };
-    const filled = Array.from({ length: 499 }, (_, index): RunEvent => ({
-      sequence: index + 3,
+    const executionSelected: RunEvent = { ...event({ loopId: "custom.loop", loopVersion: "1.2.3", policyId: "no_recovery", policyVersion: "1.0.0", apiVersion: 1 }), type: "execution.selected", sequence: 2 };
+    const context = { ...event({ ...usage }), sequence: 3 };
+    const filled = Array.from({ length: 600 }, (_, index): RunEvent => ({
+      sequence: index + 4,
       type: "assistant.delta",
       runId: context.runId,
       conversationId: context.conversationId,
@@ -50,13 +51,15 @@ describe("context usage indicator", () => {
       data: { text: "x" },
     }));
 
-    const retained = appendEventPreservingContextUsage([runStarted, context, ...filled.slice(0, 498)], filled[498]!);
+    const latestContext = { ...context, sequence: 604, data: { ...usage, contextTokens: 8_192 } };
+    const retained = [...filled, latestContext].reduce(appendEventPreservingContextUsage, [runStarted, executionSelected, context]);
 
     expect(retained).toHaveLength(500);
-    expect(contextUsageFromEvents(retained)).toEqual(usage);
+    expect(contextUsageFromEvents(retained)).toEqual({ ...usage, contextTokens: 8_192 });
     expect(retained[0]).toEqual(runStarted);
-    expect(retained[1]).toEqual(context);
-    expect(retained.at(-1)?.sequence).toBe(501);
+    expect(retained[1]).toEqual(executionSelected);
+    expect(retained.at(-1)).toEqual(latestContext);
+    expect(retained).not.toContainEqual(context);
   });
 
   it("marks the indicator while Context is being compacted", () => {

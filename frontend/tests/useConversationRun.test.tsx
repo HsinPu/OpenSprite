@@ -112,6 +112,8 @@ function Harness({ activeConversationId, streamFactory, responseDelivery = "stre
       <div data-testid="sending">{String(state.isSending)}</div>
       <div data-testid="can-recover">{String(state.canRecover)}</div>
       <div data-testid="has-older">{String(state.hasOlderMessages)}</div>
+      <div data-testid="events">{state.events.length}</div>
+      <div data-testid="execution-profile">{JSON.stringify(state.events.find((event) => event.type === "execution.selected")?.data ?? null)}</div>
       <button type="button" onClick={() => void state.send("hello")}>send</button>
       <button type="button" onClick={() => setLocale("en")}>change language</button>
       <div data-testid="send-result">{String(sendResult)}</div>
@@ -130,6 +132,30 @@ beforeEach(() => {
 
 
 describe("useConversationRun", () => {
+  it("keeps accepted plugin versions after a live stream exceeds 500 events", async () => {
+    let handlers: RunEventStreamHandlers | undefined;
+    const streamFactory = (_id: string, value: RunEventStreamHandlers) => { handlers = value; return { close: noop }; };
+    vi.stubGlobal("fetch", vi.fn((path: string) => Promise.resolve(new Response(JSON.stringify(
+      path.includes("/messages") ? { messages: [userMessage], nextBeforeSequence: null } : run("running"),
+    )))));
+    render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    const profile = { loopId: "custom.loop", loopVersion: "1.2.3", policyId: "no_recovery", policyVersion: "1.0.0", apiVersion: 1 };
+    const base = { runId, conversationId, createdAt: "2026-08-21T08:30:01Z" };
+
+    act(() => {
+      handlers!.onEvent({ ...base, sequence: 1, type: "run.started", data: {} });
+      handlers!.onEvent({ ...base, sequence: 2, type: "execution.selected", data: profile });
+      for (let sequence = 3; sequence <= 602; sequence += 1) {
+        handlers!.onEvent({ ...base, sequence, type: "assistant.delta", data: { text: "x" } });
+      }
+    });
+
+    await waitFor(() => expect(screen.getByTestId("events").textContent).toBe("500"));
+    expect(JSON.parse(screen.getByTestId("execution-profile").textContent!)).toEqual(profile);
+    expect(screen.getByTestId("streamed").textContent).toHaveLength(600);
+  });
+
   it("stops terminal hydration recovery after three automatic attempts", async () => {
     let offline = false;
     let failedReads = 0;

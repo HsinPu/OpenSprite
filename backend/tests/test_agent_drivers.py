@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,9 @@ from opensprite_backend.agent.context import ContextLimitExceeded, ModelCapabili
 from opensprite_backend.agent.events import INTERNAL_ERROR
 from opensprite_backend.agent.execution_host import _ExecutionFailed
 from opensprite_backend.agent.loop import AgentLoop, _RunCancelled
+from opensprite_backend.agent.plugin_catalog import ExecutionPluginSelection
+from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.agent.standard_driver import StandardDriverFactory
 from opensprite_backend.agent.standard_driver import StandardDriver
 from opensprite_backend.agent.strategies import NoRecoveryExecutionStrategy
 from opensprite_backend.conversations.models import (CompletionReason, PublicRunError,
@@ -28,6 +32,7 @@ from opensprite_backend.inference.models import (InferenceFailure, ModelComplete
     ModelFinishReason, ModelTextDelta, ModelToolCall)
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
+from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, DefaultWorkspaceResolver
 
 
 DriverFunction = Callable[[ExecutionHost], Awaitable[DriverResult]]
@@ -542,3 +547,164 @@ async def test_driver_cannot_modify_an_exception_previously_raised_by_host(tmp_p
     assert result.status is RunStatus.FAILED
     assert result.error == INTERNAL_ERROR
     assert secret not in caplog.text
+
+
+@pytest.mark.parametrize("stage", ["driver", "driver_factory", "strategy_factory",
+                                   "context_strategy", "completion_strategy"])
+@async_test
+async def test_plugin_cancelled_error_is_terminal_failure_without_cancelling_owner(
+    tmp_path: Path, caplog, stage: str):
+    secret = "plugin-cancelled-error-secret"
+
+    async def abort(host):
+        raise asyncio.CancelledError(secret)
+
+    class CancelFactory:
+        def create(self):
+            raise asyncio.CancelledError(secret)
+
+    class CancelStrategy:
+        def allow_context_retry(self, state):
+            raise asyncio.CancelledError(secret)
+
+        def allow_output_continuation(self, state):
+            raise asyncio.CancelledError(secret)
+
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    script = ([ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]
+              if stage == "context_strategy" else
+              [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
+    loop, _, _ = loop_for(repository, ScriptedGateway([script]),
+        abort if stage == "driver" else without_checkpoints,
+        execution_strategy=CancelStrategy() if stage.endswith("_strategy") else None)
+    if stage == "driver_factory":
+        loop._driver_factory = CancelFactory()
+    selection = (ExecutionPluginSelection("standard", "1", "broken", "1",
+        StandardDriverFactory(), CancelFactory()) if stage == "strategy_factory" else None)
+    manager = RunManager(repository, loop)
+    await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID),
+                        execution_plugins=selection)
+    task = manager._tasks[run.id]
+
+    result = await manager.wait(run.id)
+
+    assert result.status is RunStatus.FAILED
+    assert result.error == INTERNAL_ERROR
+    assert not task.cancelled()
+    assert task.cancelling() == 0
+    assert run.id not in manager._tasks
+    assert repository.list_run_events(run.id, after_sequence=0, limit=100)[-1].type is RunEventType.RUN_FAILED
+    assert secret not in caplog.text
+    await manager.close()
+
+
+@async_test
+async def test_owner_task_cancellation_keeps_run_manager_shutdown_semantics(tmp_path: Path):
+    ready = asyncio.Event()
+    drained = asyncio.Event()
+
+    async def wait_for_shutdown(host):
+        ready.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            drained.set()
+
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    loop, _, _ = loop_for(repository, ScriptedGateway([]), wait_for_shutdown)
+    manager = RunManager(repository, loop)
+    await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID))
+    task = manager._tasks[run.id]
+    await ready.wait()
+
+    await manager.close()
+
+    assert task.cancelled()
+    assert task.cancelling() > 0
+    assert drained.is_set()
+    assert repository.get_run(run.id).status is RunStatus.INTERRUPTED
+    assert RunEventType.RUN_FAILED not in [event.type for event in
+        repository.list_run_events(run.id, after_sequence=0, limit=100)]
+
+
+@async_test
+async def test_owner_task_timeout_keeps_cancelled_error_propagation(tmp_path: Path):
+    timeout_scope = None
+
+    async def wait_for_timeout(host):
+        assert timeout_scope is not None
+        timeout_scope.reschedule(asyncio.get_running_loop().time() + 0.01)
+        await asyncio.Event().wait()
+
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    loop, _, _ = loop_for(repository, ScriptedGateway([]), wait_for_timeout)
+
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(None) as timeout_scope:
+            await loop.execute(run.id, asyncio.Event())
+
+    assert repository.get_run(run.id).status is RunStatus.RUNNING
+    assert RunEventType.RUN_FAILED not in [event.type for event in
+        repository.list_run_events(run.id, after_sequence=0, limit=100)]
+
+
+@async_test
+async def test_stop_wins_when_request_cancel_precedes_completion_transaction(tmp_path: Path):
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    entered = threading.Event()
+    release = threading.Event()
+
+    class GatedRepository:
+        def __getattr__(self, name):
+            return getattr(repository, name)
+
+        def complete_run(self, *args, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return repository.complete_run(*args, **kwargs)
+
+    gated = GatedRepository()
+    loop, _, _ = loop_for(gated, ScriptedGateway([completed("partial")]))
+    manager = RunManager(gated, loop)
+    await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID))
+    assert await asyncio.to_thread(entered.wait, 5)
+    try:
+        acknowledged = await manager.cancel(run.id)
+        assert acknowledged.status is RunStatus.CANCELLING
+    finally:
+        release.set()
+
+    result = await manager.wait(run.id)
+
+    assert result.status is RunStatus.CANCELLED
+    assert result.partial_text == "partial"
+    assert result.error is None
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    assert events[-1].type is RunEventType.RUN_CANCELLED
+    assert RunEventType.RUN_COMPLETED not in [event.type for event in events]
+    assert RunEventType.RUN_FAILED not in [event.type for event in events]
+    await manager.close()
+
+
+@async_test
+async def test_completion_invalid_state_without_persisted_cancel_still_propagates(
+    tmp_path: Path, monkeypatch):
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    error = ConversationStoreError(StoreFailure.INVALID_STATE)
+
+    def fail_completion(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(repository, "complete_run", fail_completion)
+    loop, _, _ = loop_for(repository, ScriptedGateway([completed()]))
+
+    with pytest.raises(ConversationStoreError) as caught:
+        await loop.execute(run.id, asyncio.Event())
+
+    assert caught.value is error
+    assert repository.get_run(run.id).status is RunStatus.RUNNING

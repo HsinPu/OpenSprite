@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from enum import StrEnum
 import json
 from typing import Literal, Protocol
@@ -177,7 +178,7 @@ class ExecutionSettingsService:
             failed = True
         if failed:
             raise ExecutionSettingsError(ExecutionSettingsErrorCode.INVALID_REQUEST)
-        self._validate(selection)
+        await asyncio.to_thread(self._validate, selection)
         # Resolve the catalog before writing so a broken catalog cannot save settings.
         result = self._response(selection)
         payload = json.dumps({"version": 1, **selection.model_dump(by_alias=True)}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
