@@ -306,7 +306,6 @@ export const zhTWMessages = {
   "app.earlier": "較早",
   "app.features": "應用程式功能",
   "app.settings": "設定",
-  "app.user": "使用者",
   "app.logout": "登出",
 
   "workspaces.default": "預設工作區",
@@ -531,6 +530,7 @@ export const zhTWMessages = {
   "auth.currentPassword": "目前密碼",
   "auth.changeAction": "修改密碼",
   "auth.passwordChanged": "密碼已更新，其他 Session 已登出。",
+  "auth.sessionsTitle": "登入狀態",
   "auth.logoutAll": "登出所有 Session",
   "auth.logoutAllDescription": "撤銷所有瀏覽器的登入狀態，包含目前這個瀏覽器。",
   "auth.trustedLocalTitle": "本機信任模式",

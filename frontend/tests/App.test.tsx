@@ -112,11 +112,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function openSettingsMenu() {
-  const opener = screen.getByRole("button", { name: "使用者" });
+async function openSettingsFromRail() {
+  const opener = screen.getByRole("button", { name: "設定" });
+  opener.focus();
   fireEvent.click(opener);
-  fireEvent.click(await screen.findByRole("menuitem", { name: "設定" }));
-  await screen.findByRole("button", { name: "返回對話" });
+  await screen.findByRole("button", { name: "返回對話" }, { timeout: 5000 });
   return opener;
 }
 
@@ -153,7 +153,7 @@ describe("settings page focus restoration", () => {
     const input = screen.getByRole("textbox", { name: "輸入訊息" });
     fireEvent.change(input, { target: { value: "unsent settings draft" } });
     const hash = window.location.hash;
-    await openSettingsMenu();
+    await openSettingsFromRail();
     expect(container.querySelector(".app-shell")?.hasAttribute("inert")).toBe(true);
     expect(container.querySelector(".app-shell")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("textarea")).toBe(input);
@@ -168,7 +168,7 @@ describe("settings page focus restoration", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(screen.getByRole("button", { name: "設定分類" }));
     const drawer = container.querySelector<HTMLElement>(".settings-category-drawer")!;
     fireEvent.click(within(drawer).getByRole("button", { name: "AI 模型" }));
@@ -178,7 +178,7 @@ describe("settings page focus restoration", () => {
 
   it("uses a full-page surface for every section", async () => {
     const { container } = render(<App />);
-    await openSettingsMenu();
+    await openSettingsFromRail();
     const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     expect(dialog.classList.contains("settings-surface--general")).toBe(true);
 
@@ -190,7 +190,7 @@ describe("settings page focus restoration", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     render(<App />);
     if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    const opener = await openSettingsMenu();
+    const opener = await openSettingsFromRail();
     fireEvent.click(screen.getByRole("button", { name: "返回對話" }));
 
     await waitFor(() => expect(document.activeElement).toBe(opener));
@@ -200,7 +200,7 @@ describe("settings page focus restoration", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     const { container } = render(<App />);
     if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    const opener = await openSettingsMenu();
+    const opener = await openSettingsFromRail();
     const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.keyDown(dialog, { key: "Escape" });
 
@@ -268,7 +268,8 @@ describe("Ant Design shell controls", () => {
     expect(container.querySelector(".chat-workspace__context-heading button")).toBeNull();
     expect(expandSidebar.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(expandSidebar);
-    expect(screen.getByRole("button", { name: "使用者" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "使用者" })).toBeNull();
   });
 
   it("uses only the mobile menu on narrow screens", () => {
@@ -298,7 +299,7 @@ describe("persisted AI settings", () => {
     render(<App />);
 
     expect(screen.queryByRole("combobox", { name: /目前模型/ })).toBeNull();
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
@@ -317,7 +318,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(true);
     hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "high", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
@@ -337,7 +338,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
@@ -357,7 +358,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
@@ -378,7 +379,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const select = await screen.findByRole("combobox", { name: "回應模式" });
     expect(select.parentElement?.textContent).toContain("高");
@@ -404,7 +405,7 @@ describe("persisted AI settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await openSettingsMenu();
+    await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     const select = await screen.findByRole("combobox", { name: "回應模式" });
     await waitFor(() => expect(select.parentElement?.textContent).toContain("中"));
@@ -521,7 +522,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const sidebar = container.querySelector<HTMLElement>("#main-navigation-sidebar")!;
 
     expect(within(sidebar).queryByRole("button", { name: "排程" })).toBeNull();
-    await openSettingsMenu();
+    await openSettingsFromRail();
     const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
 
@@ -549,7 +550,7 @@ it("keeps schedules out of the main sidebar and opens them inside settings", asy
     const { container } = render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
-    await openSettingsMenu();
+    await openSettingsFromRail();
     const dialog = container.querySelector<HTMLElement>(".settings-surface")!;
     fireEvent.click(await within(dialog).findByRole("button", { name: "排程" }));
     await screen.findByRole("heading", { name: "晨間整理" });

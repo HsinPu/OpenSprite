@@ -13,7 +13,27 @@ describe("PrivacySettings", () => {
     render(<I18nProvider><AuthGate><PrivacySettings /></AuthGate></I18nProvider>);
     expect(await screen.findByRole("region", { name: /本機信任模式|Trusted local mode/ })).toBeTruthy();
     expect(screen.queryByLabelText(/目前密碼|Current password/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(登出|Log out)$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /登出所有 Session|Log out all sessions/ })).toBeNull();
+  });
+
+  it("logs out the current session and returns to the login screen", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (input === "/api/auth/logout") return Promise.resolve(new Response(null, { status: 204 }));
+      const body = input === "/api/auth/status"
+        ? { state: "authenticated", expiresAt: new Date(Date.now() + 60_000).toISOString() }
+        : { version: "0.21.26" };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<I18nProvider><AuthGate><PrivacySettings /></AuthGate></I18nProvider>);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^(登出|Log out)$/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST", credentials: "same-origin" }));
+    expect(await screen.findByLabelText(/^(密碼|Password)$/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^(登出|Log out)$/ })).toBeNull();
+    expect(fetchMock.mock.calls.some(([input]) => input === "/api/auth/logout-all")).toBe(false);
   });
 
   it("changes the password with the exact secret fields and clears the form", async () => {

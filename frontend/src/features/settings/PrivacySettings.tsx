@@ -1,4 +1,4 @@
-import { Button, Input } from "antd";
+import { Button, Input, Space } from "antd";
 import { useState, type FormEvent } from "react";
 
 import { AuthenticationApiError, changePassword, logoutAll } from "../../api/authentication";
@@ -8,7 +8,7 @@ import { SettingsCard } from "./SettingsPrimitives";
 
 export function PrivacySettings() {
   const { t } = useI18n();
-  const { mode, requireLogin } = useAuthentication();
+  const { mode, signOut, requireLogin } = useAuthentication();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -59,9 +59,12 @@ export function PrivacySettings() {
         <Button htmlType="submit" type="primary" loading={busy}>{t("auth.changeAction")}</Button>
       </form>
     </SettingsCard>
-    <SettingsCard icon="privacy" title={t("auth.logoutAll")}>
+    <SettingsCard icon="privacy" title={t("auth.sessionsTitle")}>
       <p className="settings-card-description">{t("auth.logoutAllDescription")}</p>
-      <Button danger disabled={busy} onClick={() => void revokeAll()}>{t("auth.logoutAll")}</Button>
+      <Space wrap>
+        <Button disabled={busy} onClick={() => void signOut()}>{t("app.logout")}</Button>
+        <Button danger disabled={busy} onClick={() => void revokeAll()}>{t("auth.logoutAll")}</Button>
+      </Space>
     </SettingsCard>
   </div>;
 }

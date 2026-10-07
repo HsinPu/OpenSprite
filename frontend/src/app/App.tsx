@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
-import { UserMenu } from "./UserMenu";
 import { ApiOutlined, RobotOutlined, AppstoreOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined, SettingOutlined, MessageOutlined } from "@ant-design/icons";
 import { Button, Dropdown, Tooltip, type MenuProps } from "antd";
 import { BrandLogo } from "../ui/BrandLogo";
@@ -20,7 +19,6 @@ import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
 import { DeferredSettingsPage } from "../features/settings/DeferredSettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
-import { useAuthentication } from "../features/auth/AuthGate";
 import { useWorkspaces } from "../features/workspaces/useWorkspaces";
 import { WorkspaceSwitcher, workspaceName } from "../features/workspaces/WorkspaceSwitcher";
 import type { Workspace } from "../api/workspaces";
@@ -68,7 +66,6 @@ function ConversationButton({
 
 export function App() {
   const { t } = useI18n();
-  const { mode: authMode, signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
   const workspaceController = useWorkspaces();
   const activeWorkspaceId = workspaceController.catalog?.activeWorkspaceId ?? DEFAULT_WORKSPACE_ID;
@@ -450,7 +447,7 @@ export function App() {
           {([ ["models", "settings.category.models", <ApiOutlined />], ["agents", "settings.category.agents", <RobotOutlined />], ["skills", "settings.category.skills", <AppstoreOutlined />] ] as const).map(([section, label, icon]) => (
             <Tooltip key={section} title={t(label)} placement="right"><Button type="text" icon={icon} aria-label={t(label)} onClick={() => openSettings(section)} /></Tooltip>
           ))}
-          <Tooltip title={t("settings.title")} placement="right"><Button className="resource-rail__settings" type="text" icon={<SettingOutlined />} aria-label={t("settings.title")} onClick={() => openSettings("general")} /></Tooltip>
+          <Tooltip title={t("settings.title")} placement="right"><Button ref={settingsButtonRef} className="resource-rail__settings" type="text" icon={<SettingOutlined />} aria-label={t("settings.title")} onClick={() => openSettings("general")} /></Tooltip>
         </nav>
         <div className="workspace-navigation">
         <div className="sidebar-header">
@@ -528,9 +525,6 @@ export function App() {
           ) : null}
         </nav>
 
-        <nav className="utility-nav" aria-label={t("app.features")}>
-          <UserMenu triggerRef={settingsButtonRef} onSettings={openSettings} onLogout={authMode === "password_required" ? () => void signOut() : undefined} />
-        </nav>
         </div>
       </aside>
 

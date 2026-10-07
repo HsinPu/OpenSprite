@@ -72,12 +72,6 @@ button { color: inherit; }
 .conversation-load-more { width: 100%; min-height: 32px; margin: 12px 0 0; border: 1px solid var(--os-border); border-radius: 6px; background: var(--os-surface); color: var(--os-muted); font-size: 12px; cursor: pointer; }
 .conversation-load-more:hover:not(:disabled) { color: var(--os-primary); }
 .nav-divider { height: 1px; margin: 12px 6px; background: var(--os-border); }
-.utility-nav { position: relative; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--os-border); }
-.user-menu-trigger { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; font-size: 12px; cursor: pointer; }
-.user-menu-trigger > span:nth-child(2) { flex: 1; text-align: left; }
-.user-menu-trigger:hover { background: #e9eef1; }
-.user-menu-popup.ant-dropdown { left: 0 !important; right: auto !important; top: auto !important; bottom: calc(100% + 8px) !important; width: 100%; min-width: 0 !important; max-height: calc(100dvh - 120px); overflow-y: auto; background: var(--os-surface); border: 1px solid var(--os-border); border-radius: 8px; box-shadow: 0 6px 20px rgb(23 36 46 / 12%); }
-.user-menu-popup.ant-dropdown .ant-dropdown-menu { box-shadow: none; background: var(--os-surface); }
 .panel-resize-handle { position: absolute; top: 0; bottom: 0; width: 8px; z-index: 30; cursor: col-resize; touch-action: none; outline: none; }
 .panel-resize-handle--left { left: var(--app-sidebar-width); transform: translateX(-50%); }
 .panel-resize-handle--right { right: var(--execution-panel-width); transform: translateX(50%); }
