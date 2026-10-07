@@ -20,7 +20,7 @@
 .skills-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .skills-remove.ant-btn { color: #737373; }
 .skills-remove.ant-btn:not(:disabled):hover { color: #d9363e; background: #fff1f0; }
-.skills-import-menu { display: grid; gap: 4px; padding: 8px; border-radius: 10px; background: white; box-shadow: 0 6px 24px #0002; }
+.skills-import-menu { display: grid; gap: 4px; padding: 8px; border-radius: 6px; background: white; box-shadow: 0 6px 24px #0002; }
 .skills-settings { container-type: inline-size; }
 .skills-intro, .skills-result-count, .skills-help { color: var(--settings-muted, #737373); font-size: 13px; line-height: 1.6; }
 .skills-help { margin-top: 16px; }

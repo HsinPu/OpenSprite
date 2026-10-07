@@ -19,19 +19,19 @@ function LocalizedConfig({ children }: { children: ReactNode }) {
       locale={antdLocales[locale]}
       theme={{
         token: {
-          colorPrimary: "#ff6545",
+          colorPrimary: "#087f8c",
           colorSuccess: "#18a77b",
-          colorText: "#202124",
-          colorTextSecondary: "#6f7278",
-          colorBorder: "#e5e3df",
-          borderRadius: 12,
+          colorText: "#25313e",
+          colorTextSecondary: "#687787",
+          colorBorder: "#dce3e9",
+          borderRadius: 6,
           fontFamily:
             'Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
         },
         components: {
-          Button: { controlHeight: 42 },
-          Select: { controlHeight: 44 },
-          Switch: { colorPrimary: "#ff6545" },
+          Button: { controlHeight: 32 },
+          Select: { controlHeight: 32 },
+          Switch: { colorPrimary: "#087f8c" },
         },
       }}
     >

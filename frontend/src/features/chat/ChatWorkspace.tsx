@@ -269,7 +269,7 @@ export function ChatWorkspace({
       if (compactLayout) { onExecutionOpen?.(); setMobileExecutionOpen((open) => !open); }
       else handleExecutionPanelToggle();
     }}
-  />;
+  >{!compactLayout ? t("execution.title") : null}</Button>;
 
   return (
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
@@ -296,9 +296,13 @@ export function ChatWorkspace({
             ) : null}
             {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
               <div className="chat-workspace__empty-state">
-                <OpenSpriteMark />
+                <span className="chat-workspace__eyebrow">{t("app.workbench")}</span>
                 <h2>{t("chat.emptyTitle")}</h2>
                 <p>{t("chat.emptyDescription")}</p>
+                <dl className="chat-workspace__setup">
+                  <div><dt>{t("settings.category.workspaces")}</dt><dd>{workspaceName ?? t("workspaces.default")}</dd></div>
+                  <div><dt>{t("settings.category.models")}</dt><dd>{displayedModelName}</dd></div>
+                </dl>
               </div>
             ) : null}
             {chat.messages.map((message) => message.role === "user" ? (
@@ -351,6 +355,7 @@ export function ChatWorkspace({
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
+          <div className="chat-workspace__composer-heading"><span>{t("chat.inputLabel")}</span><span>{displayedModelName}</span></div>
           {workspaceUnavailable ? <p className="chat-workspace__workspace-warning" role="status">{t("workspaces.chatUnavailable", { name: workspaceName ?? t("workspaces.default") })}</p> : null}
           <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
@@ -364,6 +369,7 @@ export function ChatWorkspace({
             disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">
+            <span className="chat-workspace__keyboard-hint">{t(sendBehavior === "enter" ? "general.send.enter" : "general.send.modifierEnter")}</span>
             <div className="chat-workspace__composer-primary-actions">
               <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
               {chat.isRunning ? (

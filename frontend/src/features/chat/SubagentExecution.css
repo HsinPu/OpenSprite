@@ -6,7 +6,7 @@
 .subagent-execution__card {
   overflow: hidden;
   border: 1px solid var(--chat-border);
-  border-radius: 11px;
+  border-radius: 6px;
   background: var(--chat-bg);
 }
 

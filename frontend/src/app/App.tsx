@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
 import { UserMenu } from "./UserMenu";
-import { FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
+import { ApiOutlined, RobotOutlined, AppstoreOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Dropdown, type MenuProps } from "antd";
 
 import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
@@ -455,17 +455,17 @@ export function App() {
           </div>
         </div>
 
-        <button
+        <Button
           ref={newChatButtonRef}
           className="new-chat-button"
-          type="button"
+          type="primary"
+          icon={<PlusOutlined />}
           aria-label={t("app.newConversation")}
           title={t("app.newConversation")}
           onClick={startNewChat}
         >
-          <span aria-hidden="true">＋</span>
           <span className="new-chat-label">{t("app.newConversation")}</span>
-        </button>
+        </Button>
 
         <WorkspaceSwitcher
           controller={workspaceController}
@@ -475,11 +475,19 @@ export function App() {
           onManage={() => openSettings("workspaces")}
         />
 
+        <div className="workbench-resources">
+          <p className="nav-group-label">{t("app.workbench")}</p>
+          <Button type="text" icon={<ApiOutlined />} onClick={() => openSettings("models")}>{t("settings.category.models")}</Button>
+          <Button type="text" icon={<RobotOutlined />} onClick={() => openSettings("agents")}>{t("settings.category.agents")}</Button>
+          <Button type="text" icon={<AppstoreOutlined />} onClick={() => openSettings("skills")}>{t("settings.category.skills")}</Button>
+        </div>
+
         <nav
           id="conversation-navigation"
           className="conversation-nav"
           aria-label={t("app.conversationHistory")}
         >
+          <p className="nav-group-label">{t("app.conversationHistory")}</p>
           {conversationsLoading ? <p className="conversation-nav__status">{t("app.loadingConversations")}</p> : null}
           {conversationsError ? <p className="conversation-nav__status" aria-live="polite">{conversationsError}</p> : null}
           {workspaceActionError ? <p className="conversation-nav__status conversation-nav__status--error" aria-live="polite">{workspaceActionError}</p> : null}
