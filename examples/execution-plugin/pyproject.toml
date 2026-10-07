@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opensprite-execution-example"
+version = "0.1.0"
+description = "Checkpointed OpenSprite driver and a main-retry-only recovery policy"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = ["opensprite-backend>=0.21.27,<0.22"]
+
+[project.entry-points."opensprite_backend.agent_loops.v1"]
+example_checkpointed = "opensprite_execution_example.plugin:create_loop_factory"
+
+[project.entry-points."opensprite_backend.execution_policies.v1"]
+example_main_retry_only = "opensprite_execution_example.plugin:create_policy_factory"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opensprite_execution_example"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+filterwarnings = ["error"]

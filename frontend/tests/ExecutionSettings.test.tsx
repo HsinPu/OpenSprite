@@ -32,35 +32,49 @@ function Localized({ locale }: { locale: Locale }) {
   return <ExecutionSettings active />;
 }
 
+const applyButton = () => screen.getByRole("button", { name: "套用至新任務" });
+const savedRegion = () => screen.getByRole("region", { name: "新任務的已保存預設" });
+async function loaded() { await screen.findByRole("radio", { name: "選為草稿：標準 Loop" }); }
 async function chooseNoRecovery() {
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: "執行策略" }));
-  fireEvent.click(await screen.findByText("不自動重試或續寫"));
+  fireEvent.click(screen.getByRole("tab", { name: "執行策略" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "選為草稿：不自動重試或續寫" }));
 }
 
-describe("execution plugin settings", () => {
+describe("execution plugin workbench", () => {
   beforeEach(() => {
     api.get.mockReset().mockResolvedValue(settings);
     api.put.mockReset().mockImplementation(async (selection) => ({ ...settings, selection }));
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each([["zh-TW", "執行方式", "執行策略"], ["en", "Execution", "Execution policy"], ["ja", "実行方式", "実行ポリシー"]] as const)("shows the selection and read-only metadata in %s", async (locale, title, policy) => {
+  it.each([
+    ["zh-TW", "執行方式", "執行策略", "新任務的已保存預設", "選為草稿：標準 Loop", "開發說明", "下載範例專案"],
+    ["en", "Execution", "Execution policy", "Saved defaults for new tasks", "Select draft: Standard Loop", "Developer guide", "Download example project"],
+    ["ja", "実行方式", "実行ポリシー", "新規タスクの保存済み設定", "下書きに選択：標準 Loop", "開発ガイド", "サンプルをダウンロード"],
+  ] as const)("shows saved defaults, comparison tabs and the real example download in %s", async (locale, title, policy, savedTitle, radio, guide, download) => {
     render(<I18nProvider><Localized locale={locale} /></I18nProvider>);
     expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole("combobox", { name: policy }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(false));
-    expect(screen.getAllByText(/1\.0\.0/)).toHaveLength(2);
+    await screen.findByRole("radio", { name: radio });
+    expect(screen.getByRole("tab", { name: policy })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: savedTitle })).getAllByText(/1\.0\.0/)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: guide }));
+    const link = await screen.findByRole("link", { name: download });
+    expect(link.getAttribute("href")).toBe("/execution-plugin-example.zip");
+    expect(link.getAttribute("download")).toBe("execution-plugin-example.zip");
     expect(api.put).not.toHaveBeenCalled();
   });
 
-  it("waits until active to load, and disables selects while loading", async () => {
+  it("waits until active to load and prevents draft selection during loading", async () => {
     const pending = deferred<ExecutionData>();
     api.get.mockReturnValue(pending.promise);
     const view = render(<ExecutionSettings active={false} />);
     expect(api.get).not.toHaveBeenCalled();
     view.rerender(<ExecutionSettings active />);
-    expect(screen.getByRole("status").textContent).toBe("正在讀取執行方式…");
-    expect(screen.getAllByRole("combobox").every((item) => item.closest(".ant-select")?.classList.contains("ant-select-disabled"))).toBe(true);
+    expect(screen.getByText("正在讀取執行方式…")).toBeTruthy();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(applyButton().hasAttribute("disabled")).toBe(true);
     await act(async () => pending.resolve(settings));
+    expect(screen.getByRole("radio", { name: "選為草稿：標準 Loop" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("retries an initial GET failure without writing defaults", async () => {
@@ -69,29 +83,45 @@ describe("execution plugin settings", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("目前無法讀取或儲存執行方式。");
     fireEvent.click(within(alert).getByRole("button", { name: "重新讀取" }));
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    await loaded();
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(api.put).not.toHaveBeenCalled();
   });
 
-  it("saves an atomic selection, disables controls until confirmed, and explains no recovery", async () => {
+  it("keeps a draft separate from saved defaults and discards it without a write", async () => {
+    render(<ExecutionSettings active />);
+    await loaded();
+    await chooseNoRecovery();
+    expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
+    expect(within(savedRegion()).queryByText("不自動重試或續寫")).toBeNull();
+    expect(screen.getByText("有未套用的變更")).toBeTruthy();
+    expect((screen.getByRole("radio", { name: "選為草稿：不自動重試或續寫" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "取消草稿" }));
+    expect((screen.getByRole("radio", { name: "選為草稿：標準策略" }) as HTMLInputElement).checked).toBe(true);
+    expect(applyButton().hasAttribute("disabled")).toBe(true);
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("saves both IDs atomically and updates saved defaults only after confirmation", async () => {
     const pending = deferred<ExecutionData>();
     api.put.mockReturnValue(pending.promise);
     render(<ExecutionSettings active />);
-    await screen.findAllByText("版本 1.0.0");
+    await loaded();
     await chooseNoRecovery();
-    expect(screen.getByText("不自動重試上下文超限，也不接續被截斷的模型輸出。一般工具呼叫與工具核准仍正常執行。")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "儲存執行方式" }));
+    fireEvent.click(applyButton());
     await waitFor(() => expect(api.put).toHaveBeenCalledWith({ loopId: "standard", policyId: "no_recovery" }));
-    expect(screen.getByRole("button", { name: "儲存執行方式" }).getAttribute("aria-busy")).toBe("true");
-    expect(screen.getAllByRole("combobox").every((item) => item.closest(".ant-select")?.classList.contains("ant-select-disabled"))).toBe(true);
+    expect(applyButton().getAttribute("aria-busy")).toBe("true");
+    expect(screen.getAllByRole("radio").every((item) => item.hasAttribute("disabled"))).toBe(true);
+    expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
     await act(async () => pending.resolve({ ...settings, selection: { loopId: "standard", policyId: "no_recovery" } }));
-    expect(screen.getByRole("status").textContent).toContain("已儲存");
-    await waitFor(() => expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(true));
-    expect(screen.getByRole("button", { name: "儲存執行方式" }).getAttribute("aria-busy")).toBe("false");
+    expect(within(savedRegion()).getByRole("status").textContent).toContain("已儲存");
+    expect(within(savedRegion()).getByText("不自動重試或續寫")).toBeTruthy();
+    expect(applyButton().hasAttribute("disabled")).toBe(true);
+    expect(applyButton().getAttribute("aria-busy")).toBe("false");
   });
 
-  it.each(["reopen", "remount"] as const)("reads the confirmed selection after %s while a save is pending", async (transition) => {
+  it.each(["reopen", "remount"] as const)("reads the confirmed selection after %s while a write is pending", async (transition) => {
     const actualApi = await vi.importActual<typeof import("../src/api/executionSettings")>("../src/api/executionSettings");
     api.get.mockImplementation(actualApi.getExecutionSettings);
     api.put.mockImplementation(actualApi.putExecutionSettings);
@@ -101,53 +131,115 @@ describe("execution plugin settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     const view = render(<ExecutionSettings active />);
     try {
-      await screen.findAllByText("版本 1.0.0");
+      await loaded();
       await chooseNoRecovery();
-      fireEvent.click(screen.getByRole("button", { name: "儲存執行方式" }));
+      fireEvent.click(applyButton());
       await waitFor(() => expect(api.put).toHaveBeenCalledOnce());
       if (transition === "reopen") view.rerender(<ExecutionSettings active={false} />);
       else view.rerender(<div />);
       view.rerender(<ExecutionSettings active />);
-
-      expect(screen.getByRole("status").textContent).toBe("正在讀取執行方式…");
-      expect(screen.getAllByRole("combobox").every((item) => item.closest(".ant-select")?.classList.contains("ant-select-disabled"))).toBe(true);
+      expect(screen.getByText("正在讀取執行方式…")).toBeTruthy();
+      expect(screen.queryByRole("radio")).toBeNull();
+      expect(within(savedRegion()).queryByText("標準策略")).toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(2);
       stored = { ...settings, selection: { loopId: "standard", policyId: "no_recovery" } };
       await act(async () => pending.resolve(new Response(JSON.stringify(stored))));
       await waitFor(() => expect(screen.queryByText("正在讀取執行方式…")).toBeNull());
-      expect(screen.getByRole("combobox", { name: "執行策略" }).closest(".ant-select")?.textContent).toContain("不自動重試或續寫");
-      expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(true);
+      expect(within(savedRegion()).getByText("不自動重試或續寫")).toBeTruthy();
+      expect(applyButton().hasAttribute("disabled")).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(3);
     } finally {
       await act(async () => pending.resolve(new Response(JSON.stringify({ ...settings, selection: { loopId: "standard", policyId: "no_recovery" } }))));
     }
   });
 
-
-  it("keeps the unsaved selection after a PUT failure and supports retry", async () => {
+  it("keeps the draft after a PUT failure and supports retry", async () => {
     api.put.mockRejectedValueOnce(new ExecutionSettingsApiError("plugin_unavailable")).mockImplementationOnce(async (selection) => ({ ...settings, selection }));
     render(<ExecutionSettings active />);
-    await screen.findAllByText("版本 1.0.0");
+    await loaded();
     await chooseNoRecovery();
-    fireEvent.click(screen.getByRole("button", { name: "儲存執行方式" }));
+    fireEvent.click(applyButton());
     expect((await screen.findByRole("alert")).textContent).toContain("執行插件目前無法使用");
-    expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "儲存執行方式" }));
+    expect(applyButton().hasAttribute("disabled")).toBe(false);
+    expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
+    expect((screen.getByRole("radio", { name: "選為草稿：不自動重試或續寫" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(applyButton());
     await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
     expect(api.put).toHaveBeenLastCalledWith({ loopId: "standard", policyId: "no_recovery" });
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
-  it("keeps removed IDs visible and requires available replacements", async () => {
+  it("keeps missing IDs visible and blocks incompatible or unavailable draft choices", async () => {
     api.get.mockResolvedValue({ ...settings, selection: { loopId: "standard", policyId: "removed" } });
     render(<ExecutionSettings active />);
-    expect(await screen.findByText("removed (無法使用)")).toBeTruthy();
-    expect(screen.getByText("已選插件目前不在清單中，請選擇可用的替代插件。")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(true);
+    await loaded();
+    expect(within(savedRegion()).getByText("removed", { selector: "strong" })).toBeTruthy();
+    expect(applyButton().hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("tab", { name: "執行策略" }));
+    const removed = screen.getByRole("radio", { name: "選為草稿：removed" });
+    expect(removed.hasAttribute("disabled")).toBe(true);
+    expect((removed as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole("radio", { name: "選為草稿：Future policy" }).hasAttribute("disabled")).toBe(true);
     await chooseNoRecovery();
-    expect(screen.getByRole("button", { name: "儲存執行方式" }).hasAttribute("disabled")).toBe(false);
-    const future = screen.getByText("Future policy (版本不相容)").closest(".ant-select-item-option");
-    expect(future?.classList.contains("ant-select-item-option-disabled")).toBe(true);
+    expect(applyButton().hasAttribute("disabled")).toBe(false);
+    expect(within(savedRegion()).getByText("removed", { selector: "strong" })).toBeTruthy();
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("shows true catalog metadata in a Drawer and selects only a draft", async () => {
+    render(<ExecutionSettings active />);
+    await loaded();
+    fireEvent.click(screen.getByRole("tab", { name: "執行策略" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 不自動重試或續寫 詳情" }));
+    const drawer = await screen.findByRole("dialog", { name: "插件詳情" });
+    expect(within(drawer).getByText("不自動重試上下文超限，也不接續被截斷的模型輸出。一般工具呼叫與工具核准仍正常執行。")).toBeTruthy();
+    expect(within(drawer).getByText("no_recovery")).toBeTruthy();
+    expect(within(drawer).getByText("1.0.0")).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole("button", { name: "選為草稿" }));
+    expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
+    expect(applyButton().hasAttribute("disabled")).toBe(false);
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("shows unavailable details without fabricating a version or allowing selection", async () => {
+    api.get.mockResolvedValue({ ...settings, selection: { loopId: "standard", policyId: "removed" } });
+    render(<ExecutionSettings active />);
+    await loaded();
+    fireEvent.click(screen.getByRole("tab", { name: "執行策略" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 removed 詳情" }));
+    const drawer = await screen.findByRole("dialog", { name: "插件詳情" });
+    expect(within(drawer).getAllByText("—")).toHaveLength(2);
+    expect(within(drawer).getByText("已選插件目前不在清單中，請選擇可用的替代插件。")).toBeTruthy();
+    expect(within(drawer).getByRole("button", { name: "選為草稿" }).hasAttribute("disabled")).toBe(true);
+    expect(within(drawer).getByRole("alert").textContent).toContain("此插件目前無法選用。");
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("offers working build instructions and explains the API boundary without installing anything", async () => {
+    render(<ExecutionSettings active />);
+    await loaded();
+    fireEvent.click(screen.getByRole("button", { name: "安裝說明" }));
+    const drawer = await screen.findByRole("dialog", { name: "開發說明" });
+    expect(within(drawer).getByText("uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin")).toBeTruthy();
+    expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v1");
+    expect(drawer.textContent).toContain("COPY --from=uv /uv /usr/local/bin/uv");
+    fireEvent.click(within(drawer).getByRole("tab", { name: "API v1 邊界" }));
+    expect(within(drawer).getByRole("alert").textContent).toContain("程序內 API 不是安全沙箱");
+    expect(within(drawer).getByText(/API v1 不提供修改 prompt/)).toBeTruthy();
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it("clears stale defaults and the draft when a refresh fails", async () => {
+    api.get.mockResolvedValueOnce(settings).mockRejectedValueOnce(new ExecutionSettingsApiError("settings_store_unavailable"));
+    render(<ExecutionSettings active />);
+    await loaded();
+    await chooseNoRecovery();
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取" }));
+    await screen.findByRole("alert");
+    expect(within(savedRegion()).queryByText("標準策略")).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(applyButton().hasAttribute("disabled")).toBe(true);
+    expect(api.put).not.toHaveBeenCalled();
   });
 
   it("ignores a stale GET after leaving the page", async () => {
@@ -156,6 +248,7 @@ describe("execution plugin settings", () => {
     const view = render(<ExecutionSettings active />);
     view.rerender(<ExecutionSettings active={false} />);
     await act(async () => pending.resolve(settings));
-    expect(screen.queryByText("版本 1.0.0")).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(within(savedRegion()).queryByText("標準策略")).toBeNull();
   });
 });
