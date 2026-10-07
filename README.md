@@ -2,7 +2,50 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
-目前產品版本為 `0.21.22`。
+目前產品版本為 `0.21.23`。
+
+## Docker 部署
+
+安裝 Docker Engine／Docker Desktop（Linux containers）與 Docker Compose v2，在 repository 根目錄執行：
+
+```bash
+docker compose up -d --build --wait
+```
+
+開啟 [http://localhost:8765/](http://localhost:8765/)。更新原始碼後再次執行相同指令。
+首次啟動使用「信任本機」存取模式，預設只綁定主機 `127.0.0.1`。
+此部署供本機使用；遠端主機請用 SSH tunnel 轉送到本機 localhost，現有 Host／Origin 保護不支援直接用網域或 LAN IP 存取。
+例如 `ssh -L 8765:127.0.0.1:8765 user@server`，再開啟 localhost 網址。
+不要直接公開容器的連接埠。自訂主機連接埠可設定 `OPENSPRITE_PORT`，例如 PowerShell：
+
+```powershell
+$env:OPENSPRITE_PORT = '18765'
+docker compose up -d --build --wait
+```
+
+映像包含建置完成的前端及鎖定版本的 Python 相依套件，沿用既有同源服務。
+容器以 UID/GID `10001` 執行，僅一個 Uvicorn worker，不使用 reload。
+`opensprite-data` named volume 掛載到容器使用者的 `/home/opensprite/.opensprite`，所有設定、加密憑證、資料庫及工作區都位於其中。
+它與主機桌面安裝的 `.opensprite` 分開；不要讓多個容器或桌面服務同時寫入相同資料。
+容器中的 `localhost`、檔案路徑及 MCP stdio 程式都是容器環境；原生主機資料夾選擇器不可用。需連線主機 Provider 時，在 Docker Desktop 可使用 `host.docker.internal`，並確認該 Provider 的監聽及防火牆設定。
+正式映像提供 Python runtime，未包含 Node.js／npm 或額外 MCP server；需要這些程式時請延伸映像並安裝，MCP executable 須使用容器內的絕對實體路徑。
+
+停止並保留資料：`docker compose down`。查看狀態與日誌：`docker compose ps`、`docker compose logs --tail 100`。
+**不要使用 `docker compose down -v`**，它會永久刪除資料 volume。
+備份時先停止容器，備份整個 volume；還原時保留 UID/GID 與權限，並一起處理 `auth.json` 和 `config/credential.key`。
+整份 volume 含敏感資料，備份也須保護。
+
+### Docker 驗證
+
+```powershell
+docker build --target frontend-test -t opensprite:frontend-test .
+docker build --target backend-test -t opensprite:backend-test .
+./scripts/test-docker.ps1
+```
+
+測試 target 執行現有前後端檢查，不會進入正式 runtime 映像。
+smoke test 使用獨立 Compose project／volume 及預設連接埠 `18765`，驗證健康檢查、前端資產、API、Origin 保護、非 root 帳號及重建後的資料保留。
+完成後停止測試容器並保留測試資料 volume，終端機會列出名稱；正式部署與其他服務不受影響。
 
 ## Windows 安裝與更新
 
