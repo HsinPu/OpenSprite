@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { CloseOutlined, LeftOutlined, RightOutlined, CodeOutlined, FileTextOutlined, OrderedListOutlined, DownOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
+import { BrandLogo } from "../../ui/BrandLogo";
 import { createPortal } from "react-dom";
 
 import { AgentChatApiError, DEFAULT_WORKSPACE_ID, agentChatErrorText } from "../../api/agentChat";
@@ -23,6 +24,7 @@ import "./ChatWorkspace.css";
 
 
 type ChatWorkspaceProps = {
+  onConfigureModel?: () => void;
   draftValue?: string;
   onDraftChange?: (value: string | ((previous: string) => string)) => void;
   conversationId: string | null;
@@ -50,7 +52,7 @@ type ChatWorkspaceProps = {
 
 
 function OpenSpriteMark({ small = false }: { small?: boolean }) {
-  return <span aria-hidden="true" className={`chat-workspace__mark${small ? " chat-workspace__mark--small" : ""}`} />;
+  return <BrandLogo className={`chat-workspace__mark${small ? " chat-workspace__mark--small" : ""}`} />;
 }
 
 
@@ -76,6 +78,7 @@ const MemoizedMarkdownMessage = memo(MarkdownMessage);
 
 
 export function ChatWorkspace({
+  onConfigureModel,
   draftValue,
   onDraftChange,
   conversationId,
@@ -163,6 +166,7 @@ export function ChatWorkspace({
     : null;
   const isCompactingContext = displayedEvents.at(-1)?.type === "context.compaction.started";
   const pendingApprovalId = pendingToolApprovalId(chat.events);
+  const emptyConversation = !chat.loading && chat.messages.length === 0 && !showLiveAssistant;
   const displayedModelName = displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
@@ -273,7 +277,7 @@ export function ChatWorkspace({
 
   return (
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
-      <div className="chat-workspace__main">
+      <div className={`chat-workspace__main${emptyConversation ? " is-empty" : ""}`}>
         {!mobileHeaderActionTarget ? <header className="chat-workspace__header"><span>{workspaceName ?? t("workspaces.default")} / {title ?? t("app.newConversationTitle")}</span>{panelButton}</header> : null}
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
@@ -294,15 +298,16 @@ export function ChatWorkspace({
                   : t("chat.loadOlderMessages")}
               </button>
             ) : null}
-            {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
+            {emptyConversation ? (
               <div className="chat-workspace__empty-state">
                 <span className="chat-workspace__eyebrow">{t("app.workbench")}</span>
                 <h2>{t("chat.emptyTitle")}</h2>
                 <p>{t("chat.emptyDescription")}</p>
-                <dl className="chat-workspace__setup">
-                  <div><dt>{t("settings.category.workspaces")}</dt><dd>{workspaceName ?? t("workspaces.default")}</dd></div>
-                  <div><dt>{t("settings.category.models")}</dt><dd>{displayedModelName}</dd></div>
-                </dl>
+                <div className="chat-workspace__starters" aria-label={t("workbench.starters")}>
+                  {([ ["code", <CodeOutlined />], ["plan", <OrderedListOutlined />], ["write", <FileTextOutlined />] ] as const).map(([kind, icon]) => (
+                    <Button key={kind} aria-label={t(`workbench.starter.${kind}`)} icon={icon} onClick={() => { const template = t(`workbench.prompt.${kind}`); setDraft(previous => previous.trim() ? `${previous}\n\n${template}` : template); composerInputRef.current?.focus(); }}>{t(`workbench.starter.${kind}`)}</Button>
+                  ))}
+                </div>
               </div>
             ) : null}
             {chat.messages.map((message) => message.role === "user" ? (
@@ -355,7 +360,7 @@ export function ChatWorkspace({
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
-          <div className="chat-workspace__composer-heading"><span>{t("chat.inputLabel")}</span><span>{displayedModelName}</span></div>
+          <div className="chat-workspace__composer-heading"><span>{t("workbench.taskBrief")}</span></div>
           {workspaceUnavailable ? <p className="chat-workspace__workspace-warning" role="status">{t("workspaces.chatUnavailable", { name: workspaceName ?? t("workspaces.default") })}</p> : null}
           <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
@@ -369,7 +374,9 @@ export function ChatWorkspace({
             disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">
-            <span className="chat-workspace__keyboard-hint">{t(sendBehavior === "enter" ? "general.send.enter" : "general.send.modifierEnter")}</span>
+            <div className="chat-workspace__model-control">
+              {onConfigureModel ? <Button type="text" size="small" onClick={onConfigureModel} disabled={chat.isRunning} icon={<DownOutlined />}>{modelName}</Button> : <span>{displayedModelName}</span>}
+            </div>
             <div className="chat-workspace__composer-primary-actions">
               <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
               {chat.isRunning ? (
@@ -379,6 +386,7 @@ export function ChatWorkspace({
               )}
             </div>
           </div>
+          <div className="chat-workspace__composer-footnote"><span>{t(sendBehavior === "enter" ? "general.send.enter" : "general.send.modifierEnter")}</span><span>{t("workbench.reviewHint")}</span></div>
         </form>
       </div>
 

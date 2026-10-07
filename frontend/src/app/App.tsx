@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
 import { UserMenu } from "./UserMenu";
-import { ApiOutlined, RobotOutlined, AppstoreOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
-import { Button, Dropdown, type MenuProps } from "antd";
+import { ApiOutlined, RobotOutlined, AppstoreOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined, SettingOutlined, MessageOutlined } from "@ant-design/icons";
+import { Button, Dropdown, Tooltip, type MenuProps } from "antd";
+import { BrandLogo } from "../ui/BrandLogo";
 
 import { agentChatErrorText, getConversation, isIdentifier, moveConversationToWorkspace, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
@@ -31,11 +32,7 @@ function conversationIdFromHash(): string | null {
 }
 
 function OpenSpriteMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <span />
-    </span>
-  );
+  return <BrandLogo />;
 }
 
 function ConversationButton({
@@ -58,9 +55,9 @@ function ConversationButton({
     : targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.default")) }));
   return (
     <div className={`conversation-item${active ? " is-active" : ""}`}>
-      <button className="conversation-link" type="button" onClick={onClick}>
-        <span aria-hidden="true">◯</span>
-        <span>{conversation.title}</span>
+      <button className="conversation-link" type="button" onClick={onClick} aria-label={conversation.title}>
+        <MessageOutlined aria-hidden="true" />
+        <span className="conversation-item__copy"><span>{conversation.title}</span>{conversation.latestMessagePreview ? <small>{conversation.latestMessagePreview}</small> : null}</span>
       </button>
       <Dropdown menu={{ items, onClick: ({ key }) => { if (key !== "managed") onMove(key); } }} trigger={["click"]} disabled={targets.length === 0 && !conversation.workspaceManagedBySchedule}>
         <button className="conversation-item__more" type="button" aria-label={t("workspaces.moveConversationLabel", { title: conversation.title })} title={conversation.workspaceManagedBySchedule ? t("workspaces.moveManaged") : t("workspaces.moveConversation")}><MoreOutlined /></button>
@@ -448,10 +445,18 @@ export function App() {
         aria-hidden={(mobileNavigation ? !menuOpen : sidebarCollapsed) ? true : undefined}
         inert={mobileNavigation ? !menuOpen : sidebarCollapsed}
       >
+        <nav className="resource-rail" aria-label={t("app.features")}>
+          <div className="resource-rail__logo"><OpenSpriteMark /></div>
+          {([ ["models", "settings.category.models", <ApiOutlined />], ["agents", "settings.category.agents", <RobotOutlined />], ["skills", "settings.category.skills", <AppstoreOutlined />] ] as const).map(([section, label, icon]) => (
+            <Tooltip key={section} title={t(label)} placement="right"><Button type="text" icon={icon} aria-label={t(label)} onClick={() => openSettings(section)} /></Tooltip>
+          ))}
+          <Tooltip title={t("settings.title")} placement="right"><Button className="resource-rail__settings" type="text" icon={<SettingOutlined />} aria-label={t("settings.title")} onClick={() => openSettings("general")} /></Tooltip>
+        </nav>
+        <div className="workspace-navigation">
         <div className="sidebar-header">
           <div className="brand">
-            <OpenSpriteMark />
             <span>OpenSprite</span>
+            <small>{t("app.workbench")}</small>
           </div>
         </div>
 
@@ -474,13 +479,6 @@ export function App() {
           onCreate={() => { setWorkspaceCreateRequest((value) => value + 1); openSettings("workspaces"); }}
           onManage={() => openSettings("workspaces")}
         />
-
-        <div className="workbench-resources">
-          <p className="nav-group-label">{t("app.workbench")}</p>
-          <Button type="text" icon={<ApiOutlined />} onClick={() => openSettings("models")}>{t("settings.category.models")}</Button>
-          <Button type="text" icon={<RobotOutlined />} onClick={() => openSettings("agents")}>{t("settings.category.agents")}</Button>
-          <Button type="text" icon={<AppstoreOutlined />} onClick={() => openSettings("skills")}>{t("settings.category.skills")}</Button>
-        </div>
 
         <nav
           id="conversation-navigation"
@@ -533,6 +531,7 @@ export function App() {
         <nav className="utility-nav" aria-label={t("app.features")}>
           <UserMenu triggerRef={settingsButtonRef} onSettings={openSettings} onLogout={authMode === "password_required" ? () => void signOut() : undefined} />
         </nav>
+        </div>
       </aside>
 
       <main
@@ -543,6 +542,7 @@ export function App() {
         inert={mobileNavigation && menuOpen}
       >
         <ChatWorkspace
+          onConfigureModel={() => openSettings("models")}
           draftValue={draftState.key === draftKey ? draftState.value : ""}
           onDraftChange={changeDraft}
           key={`${conversationId ?? "new"}-${chatRevision}`}

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button, Input, Select, Spin } from "antd";
+import { BrandLogo } from "../../ui/BrandLogo";
 
 import { AuthenticationApiError, getAuthStatus, login, logout, setupAccess, type AuthStatus } from "../../api/authentication";
 import { AUTHENTICATION_REFRESHED_EVENT, AUTHENTICATION_REQUIRED_EVENT } from "../../api/http";
@@ -90,7 +91,7 @@ function AuthPage({ status, bootstrapToken, onAuthenticated }: { status: Extract
 
   return <main className="auth-shell">
     <section className="auth-card" aria-labelledby="auth-title">
-      <div className="auth-card__brand"><span className="auth-card__mark" aria-hidden="true"><span /></span><strong>OpenSprite</strong></div>
+      <div className="auth-card__brand"><BrandLogo className="auth-card__mark" /><strong>OpenSprite</strong></div>
       <Select aria-label={t("auth.language")} className="auth-language" value={locale} options={supportedLocales.map((value) => ({ value, label: localeLabels[value] }))} onChange={(value) => { if (isLocale(value)) setLocale(value); }} />
       <div className="auth-card__heading"><h1 id="auth-title">{t(setup ? "auth.setupTitle" : "auth.loginTitle")}</h1><p>{t(setup ? "auth.setupDescription" : "auth.loginDescription")}</p></div>
       <form onSubmit={submit}>

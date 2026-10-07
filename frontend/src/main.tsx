@@ -20,10 +20,13 @@ function LocalizedConfig({ children }: { children: ReactNode }) {
       theme={{
         token: {
           colorPrimary: "#087f8c",
-          colorSuccess: "#18a77b",
+          colorSuccess: "#16846a",
           colorText: "#25313e",
           colorTextSecondary: "#687787",
-          colorBorder: "#dce3e9",
+          colorBorder: "#e1e7eb",
+          colorBgLayout: "#f4f6f8",
+          colorBorderSecondary: "#e1e7eb",
+          fontSize: 14,
           borderRadius: 6,
           fontFamily:
             'Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
@@ -32,6 +35,8 @@ function LocalizedConfig({ children }: { children: ReactNode }) {
           Button: { controlHeight: 32 },
           Select: { controlHeight: 32 },
           Switch: { colorPrimary: "#087f8c" },
+          Card: { borderRadiusLG: 8 },
+          Modal: { borderRadiusLG: 8 },
         },
       }}
     >

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { DownOutlined } from "@ant-design/icons";
+import { BrandLogo } from "../../ui/BrandLogo";
 
 import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot } from "../../api/agentChat";
 import type { MessageKey, Translator } from "../../i18n/catalog";
@@ -15,7 +16,7 @@ import { RunDiagnostics } from "./RunDiagnostics";
 
 
 function OpenSpriteMark() {
-  return <span aria-hidden="true" className="chat-workspace__mark chat-workspace__mark--small" />;
+  return <BrandLogo className="chat-workspace__mark chat-workspace__mark--small" />;
 }
 
 const statusKeys: Record<RunSnapshot["status"], MessageKey> = {

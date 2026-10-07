@@ -17,7 +17,7 @@ from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.custom_agents.models import AgentExecutionSnapshot
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.conversations.models import RunStatus, StoreFailure
+from opensprite_backend.conversations.models import RunEventType, RunStatus, StoreFailure
 from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
@@ -138,6 +138,60 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
     assert result is not None
     assert result.status is RunStatus.CANCELLED
     await manager.close()
+
+
+@async_test
+async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> None:
+    repository = store(tmp_path)
+    run = start(repository)
+    buffered = asyncio.Event()
+
+    class PartialGateway:
+        async def stream(
+            self,
+            request: ModelRequest,
+        ) -> AsyncIterator[ModelStreamEvent]:
+            del request
+            yield ModelTextDelta("partial response")
+            # Reaching the next iteration proves the loop consumed the small
+            # delta, which remains below its persistence batching threshold.
+            buffered.set()
+            await asyncio.Event().wait()
+
+    manager = RunManager(
+        repository,
+        AgentLoop(
+            repository=repository,
+            gateway=PartialGateway(),
+            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
+        ),
+    )
+    try:
+        assert await manager.start(run.id, DEFAULT_WORKSPACE) is True
+        await asyncio.wait_for(buffered.wait(), timeout=1)
+        before_cancel = repository.get_run(run.id)
+        assert before_cancel is not None
+        assert before_cancel.partial_text == ""
+
+        cancelling = await manager.cancel(run.id)
+        result = await asyncio.wait_for(manager.wait(run.id), timeout=1)
+
+        assert cancelling.status is RunStatus.CANCELLING
+        assert result is not None
+        assert result.status is RunStatus.CANCELLED
+        assert result.error is None
+        assert result.partial_text == "partial response"
+        assert result.assistant_message_id is None
+        events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+        assert [event.type for event in events][-2:] == [
+            RunEventType.ASSISTANT_DELTA,
+            RunEventType.RUN_CANCELLED,
+        ]
+        assert events[-2].data == {"text": "partial response"}
+        assert all(event.type is not RunEventType.RUN_FAILED for event in events)
+    finally:
+        await manager.close()
 
 
 @async_test

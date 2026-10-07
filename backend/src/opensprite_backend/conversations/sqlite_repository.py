@@ -894,7 +894,12 @@ class SqliteConversationRepository:
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 row = self._require_run_row(connection, run_id)
-                if row["status"] != RunStatus.RUNNING.value:
+                # Cancellation flushes already-received buffered text before
+                # persisting the terminal cancelled event.
+                if row["status"] not in {
+                    RunStatus.RUNNING.value,
+                    RunStatus.CANCELLING.value,
+                }:
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
                 partial_text = row["partial_text"] + text
                 if len(partial_text) > MAX_ASSISTANT_CHARS:

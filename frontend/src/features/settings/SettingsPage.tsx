@@ -90,6 +90,12 @@ const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance
   { id: "about", labelKey: "settings.category.about", icon: "info", enabled: true },
 ];
 
+const categoryGroups: Array<{ labelKey: MessageKey; ids: readonly string[] }> = [
+  { labelKey: "settings.group.workspace", ids: ["general", "workspaces"] },
+  { labelKey: "settings.group.capabilities", ids: ["models", "tools", "skills", "agents", "schedules"] },
+  { labelKey: "settings.group.application", ids: ["privacy", "about", "memory", "appearance"] },
+];
+
 const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
   disconnected: "models.status.disconnected", connected: "models.status.connected", invalid_credentials: "models.status.invalidCredentials", provider_unreachable: "models.status.unreachable",
   provider_timeout: "models.status.timeout", provider_rate_limited: "models.status.rateLimited", credential_store_unavailable: "models.status.storeUnavailable",
@@ -555,11 +561,13 @@ export function SettingsPage({ section, active, onSectionChange, modelSelection,
     return () => window.removeEventListener("resize", closeDesktopDrawer);
   }, []);
   const categoryNavigation = <nav className="settings-category-rail" aria-label={t("settings.categories")}>
-    {categories.map((category) => {
+    {categoryGroups.map((group) => <div className="settings-category-group" key={group.labelKey}>
+      <p className="settings-category-group-title">{t(group.labelKey)}</p>
+      {group.ids.map((id) => categories.find((category) => category.id === id)!).map((category) => {
       const enabled = category.enabled === true;
       const selected = category.id === section;
-      return <button key={category.id} type="button" className={`settings-category${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}`} onClick={() => { if (enabled) { onSectionChange(category.id as SettingsSection); setCategoriesOpen(false); } }} disabled={!enabled} aria-current={selected ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span>{enabled ? null : <small>{t("common.demo")}</small>}</button>;
-    })}
+      return <Button key={category.id} type="text" className={`settings-category${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}`} onClick={() => { if (enabled) { onSectionChange(category.id as SettingsSection); setCategoriesOpen(false); } }} disabled={!enabled} aria-current={selected ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span>{enabled ? null : <small>{t("common.demo")}</small>}</Button>;
+    })}</div>)}
     <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
   </nav>;
   return (

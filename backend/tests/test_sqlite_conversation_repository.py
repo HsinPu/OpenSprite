@@ -572,6 +572,58 @@ def test_cancel_transitions_queued_immediately_and_running_via_cancelling(
     assert captured.value.failure is StoreFailure.RUN_NOT_ACTIVE
 
 
+def test_cancelling_run_accepts_pending_text_before_cancelled_terminal(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    store.request_cancel(accepted.run.id)
+
+    delta = store.append_assistant_delta(accepted.run.id, "已收到的部分回覆")
+    cancelled = store.mark_run_cancelled(accepted.run.id)
+
+    assert delta.type is RunEventType.ASSISTANT_DELTA
+    assert cancelled.status is RunStatus.CANCELLED
+    assert cancelled.partial_text == "已收到的部分回覆"
+    events = store.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+    assert [event.type for event in events] == [
+        RunEventType.RUN_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.RUN_CANCELLED,
+    ]
+
+
+@pytest.mark.parametrize("terminal_status", ["completed", "cancelled", "failed", "interrupted"])
+def test_terminal_run_rejects_further_assistant_deltas(
+    tmp_path: Path, terminal_status: str,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    store.append_assistant_delta(accepted.run.id, "preserved")
+    if terminal_status == "completed":
+        store.complete_run(accepted.run.id, "preserved")
+    elif terminal_status == "cancelled":
+        store.request_cancel(accepted.run.id)
+        store.mark_run_cancelled(accepted.run.id)
+    elif terminal_status == "failed":
+        store.fail_run(accepted.run.id, PublicRunError(
+            code="provider_timeout", message="Provider timed out.", retryable=True,
+        ))
+    else:
+        store.interrupt_incomplete_runs()
+    before = store.get_run(accepted.run.id)
+    events_before = store.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+
+    with pytest.raises(ConversationStoreError) as captured:
+        store.append_assistant_delta(accepted.run.id, "must not be saved")
+
+    assert captured.value.failure is StoreFailure.INVALID_STATE
+    assert store.get_run(accepted.run.id) == before
+    assert store.list_run_events(accepted.run.id, after_sequence=0, limit=100) == events_before
+
+
 def test_restart_marks_every_non_terminal_run_interrupted(tmp_path: Path) -> None:
     store = repository(tmp_path)
     queued = start(store, message="queued")

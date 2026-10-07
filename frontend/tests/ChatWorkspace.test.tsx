@@ -108,6 +108,28 @@ afterEach(() => {
 });
 
 describe("live chat workspace", () => {
+  it("uses task starters as editable drafts without submitting or replacing existing work", () => {
+    const send = vi.fn(async () => true);
+    mockedUseConversationRun.mockReturnValue({ hasPendingSubmission: false, messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRecovering: false, canRecover: false, recoverConnection: async () => undefined, isSending: false, isRunning: false, send, cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={null} modelName="Model" modelSelection={selection("openrouter", run.modelId)} modelChoices={[]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    const input = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole("button", { name: "規劃任務" }));
+    expect(input.value).toContain("目標：");
+    expect(input.value).toContain("背景與限制：");
+    expect(input.value).toContain("完成標準：");
+    expect(document.activeElement).toBe(input);
+    expect(send).not.toHaveBeenCalled();
+
+    const editedDraft = "已整理的背景與限制，請保留這段內容。";
+    fireEvent.change(input, { target: { value: editedDraft } });
+    fireEvent.click(screen.getByRole("button", { name: "整理資料" }));
+    expect(input.value.startsWith(`${editedDraft}\n\n`)).toBe(true);
+    expect(input.value).toContain("清楚的摘要");
+    expect(document.activeElement).toBe(input);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("keeps the draft on rejected submission and does not erase newer typing after acceptance", async () => {
     let accept!: (value: boolean) => void;
     const send = vi.fn().mockResolvedValueOnce(false).mockImplementationOnce(() => new Promise<boolean>((resolve) => { accept = resolve; }));

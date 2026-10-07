@@ -121,6 +121,33 @@ async function openSettingsMenu() {
 }
 
 describe("settings page focus restoration", () => {
+  it.each([
+    [1440, "AI 模型", "models"],
+    [1440, "Agents", "agents"],
+    [1440, "Skills", "skills"],
+    [1440, "設定", "general"],
+    [390, "AI 模型", "models"],
+  ])("opens the resource shortcut %s / %s and returns to its draft and focus", async (width, label, section) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    const { container } = render(<App />);
+    const input = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "資源設定完成後繼續編輯這份草稿" } });
+    if (Number(width) <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
+    const rail = container.querySelector<HTMLElement>(".resource-rail")!;
+    const opener = within(rail).getByRole("button", { name: String(label) });
+    opener.focus();
+    fireEvent.click(opener);
+
+    await screen.findByRole("button", { name: "返回對話" }, { timeout: 5000 });
+    expect(container.querySelector(`.settings-surface--${section}`)?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector("textarea")).toBe(input);
+    fireEvent.click(await screen.findByRole("button", { name: "返回對話" }, { timeout: 5000 }));
+
+    expect(input.value).toBe("資源設定完成後繼續編輯這份草稿");
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    if (Number(width) <= 900) expect(container.querySelector(".main-sidebar")?.hasAttribute("inert")).toBe(false);
+  });
+
   it("preserves the chat DOM, draft and hash while settings are open", async () => {
     const { container } = render(<App />);
     const input = screen.getByRole("textbox", { name: "輸入訊息" });
