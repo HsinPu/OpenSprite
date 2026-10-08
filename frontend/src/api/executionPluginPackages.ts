@@ -5,7 +5,7 @@ export type ExecutionPackagePlugin = { id: string; kind: "loop" | "policy"; apiV
 export type ExecutionPackage = {
   id: string; fileName: string; distributionName: string; version: string; sha256: string;
   sizeBytes: number; importedAt: string; requiresPython: string | null; requiresDist: string[];
-  plugins: ExecutionPackagePlugin[]; runtimeStatus: "not_installed" | "confirmed" | "unverified" | "mismatch";
+  plugins: ExecutionPackagePlugin[]; runtimeStatus: "not_installed" | "confirmed" | "unverified" | "mismatch" | "needs_update";
 };
 export type ExecutionPackageCatalog = {
   packages: ExecutionPackage[];
@@ -42,7 +42,7 @@ function catalog(value: unknown): ExecutionPackageCatalog {
       || !(item.requiresPython === null || text(item.requiresPython, 256))
       || !Array.isArray(item.requiresDist) || item.requiresDist.length > 64 || !item.requiresDist.every((dep) => text(dep, 512, 1))
       || !Array.isArray(item.plugins) || !item.plugins.length || item.plugins.length > 32
-      || !["not_installed", "confirmed", "unverified", "mismatch"].includes(String(item.runtimeStatus))
+      || !["not_installed", "confirmed", "unverified", "mismatch", "needs_update"].includes(String(item.runtimeStatus))
       || ids.has(item.id) || hashes.has(item.sha256)) throw invalid();
     ids.add(item.id); hashes.add(item.sha256);
     const pluginIds = new Set<string>();

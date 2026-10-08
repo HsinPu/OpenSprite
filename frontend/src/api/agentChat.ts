@@ -281,7 +281,14 @@ export async function cancelRun(runId: string): Promise<CancelRunResult> {
 function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   let data = value.data;
-  if (expectedType === "execution.selected" && (!exactKeys(data, ["loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"]) || data.apiVersion !== 2 || ![data.loopId, data.policyId].every(id => typeof id === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(id)) || !boundedString(data.loopVersion, 1, 64) || !boundedString(data.policyVersion, 1, 64))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "execution.selected") {
+    const ids = data.apiVersion === 3 ? ["pluginId"] : ["loopId", "policyId"];
+    const versions = data.apiVersion === 3 ? ["pluginVersion"] : ["loopVersion", "policyVersion"];
+    if (![2, 3].includes(Number(data.apiVersion)) || typeof data.apiVersion !== "number"
+      || !exactKeys(data, [...ids, ...versions, "apiVersion"])
+      || !ids.every(key => typeof data[key] === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(String(data[key])))
+      || !versions.every(key => boundedString(data[key], 1, 64))) throw new AgentChatApiError("malformed_response");
+  }
     if (expectedType === "run.started" && !exactKeys(data, [])) {
     const legacyKeys = ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"] as const;
     const currentKeys = [...legacyKeys, "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"] as const;

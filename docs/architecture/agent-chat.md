@@ -2,7 +2,7 @@
 
 ## Accepted task
 
-`AgentChatService` validates one text message and client request UUID, checks an existing accepted request before reading mutable settings, and snapshots the selected model, output/context settings, reasoning decision, Workspace, Provider endpoint and API v2 execution plugins.
+`AgentChatService` validates one text message and client request UUID, checks an existing accepted request before reading mutable settings, and snapshots the selected model, output/context settings, reasoning decision, Workspace, Provider endpoint and API v3 execution plugin.
 Acceptance is durable and idempotent. The same request identity returns the existing Run; different content using that identity is rejected.
 A Workspace mutation gate serializes acceptance against catalog/provider changes; one active Run per conversation is enforced by SQLite.
 
@@ -18,7 +18,7 @@ Cancellation preserves durable partial text; restart interrupts unfinished Runs 
 
 The authoritative capability resolver plans Context/output budgets. Older history may be summarized without deleting original messages.
 Main, compaction and continuation attempts have bounded semantic diagnostics and schema-v2 text context receipts.
-The core eligibility gates, cancellation and budgets apply before policy decisions; a policy cannot add authority or increase limits.
+The core eligibility gates, cancellation and budgets apply before plugin recovery decisions; a plugin cannot add authority or increase limits.
 Provider endpoints and reasoning choices stay fixed for an accepted task. Native OpenAI Responses, Anthropic Messages and OpenRouter/compatible Chat Completions stream text and usage.
 Action/function/tool responses are rejected as `invalid_provider_response`; no action catalog, tool role or execution registry exists.
 

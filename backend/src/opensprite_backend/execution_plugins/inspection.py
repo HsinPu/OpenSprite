@@ -221,14 +221,14 @@ def inspect_wheel(data: bytes, file_name: str, *, validate_environment=True,
             if match is None:
                 _invalid()
             api_version = int(match[2])
-            if api_version != 2 and not (allow_retired_api and api_version == 1):
+            if not (match[1] == "agent_loops" and api_version == 3) and not (allow_retired_api and api_version in {1, 2}):
                 raise ExecutionPackageError("incompatible_package")
             kind = "loop" if match[1] == "agent_loops" else "policy"
             for identifier, entry in parser.items(group, raw=True):
                 entry = entry.strip()
                 if not _ID.fullmatch(identifier) or not _ENTRY.fullmatch(entry) or len(entry) > 256:
                     _invalid()
-                if identifier == "standard" or kind == "policy" and identifier == "no_recovery":
+                if identifier in {"standard", "no_recovery"}:
                     _invalid()
                 module = entry.split(":", 1)[0].replace(".", "/")
                 if module + ".py" not in contents and module + "/__init__.py" not in contents:

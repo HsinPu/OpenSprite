@@ -1,6 +1,6 @@
 # OpenSprite architecture
 
-OpenSprite 0.21.31 is a text Agent workbench with a replaceable Loop and recovery policy.
+OpenSprite 0.21.33 is a text Agent workbench with a replaceable Agent Loop plugin.
 See [clean-agent-core](clean-agent-core.md) for the removed surfaces and upgrade boundary.
 
 ## Ownership
@@ -11,9 +11,9 @@ See [clean-agent-core](clean-agent-core.md) for the removed surfaces and upgrade
 There is no application CLI or command shim.
 
 The API validates input and delegates accepted requests to `application/chat_service.py`.
-The service snapshots AI settings, Workspace, Provider endpoint and execution plugins under the mutation gate.
+The service snapshots AI settings, Workspace, Provider endpoint and execution plugin under the mutation gate.
 `RunManager` owns task cancellation and single-owner execution. `AgentLoop` and `LoopExecutionHost` own context, inference, events, partial output and terminal transactions.
-An installed API v2 Driver coordinates the Host; a policy may veto otherwise eligible retry/continuation.
+An installed API v3 Loop plugin coordinates the Host and may veto otherwise eligible retry/continuation.
 `NativeModelGateway` owns encrypted-credential lookup and routes approved protocols to native adapters.
 `SqliteConversationRepository` owns conversations, messages, Runs, events and compactions.
 

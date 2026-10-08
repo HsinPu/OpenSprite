@@ -75,10 +75,10 @@ from .request_trace import Attempt, TracedGateway
 from .context.receipt import ReceiptSources
 
 
-from .driver import AgentDriverFactory, DriverResult
-from .execution_host import LoopExecutionHost, _ExecutionFailed
-from .standard_driver import StandardDriverFactory
-from .strategies import ContextRetryState, ExecutionStrategy, StandardExecutionStrategy
+from .plugin import AgentLoopPluginFactory, DriverResult, ContextRetryState
+from .execution_host import LoopExecutionHost, _ExecutionFailed, _SafePluginDecisions
+from .builtin_plugins import BuiltinLoopFactory
+from .plugin_catalog import ExecutionPluginSelection
 
 if TYPE_CHECKING:
     from .plugin_catalog import ExecutionPluginSelection
@@ -176,8 +176,7 @@ class AgentLoop:
         max_compactions_per_run: int | None = None,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
         prompt_log_writer: PromptLogWriter | None = None,
-        driver_factory: AgentDriverFactory | None = None,
-        execution_strategy: ExecutionStrategy | None = None,
+        plugin_factory: AgentLoopPluginFactory | None = None,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
@@ -203,19 +202,16 @@ class AgentLoop:
         self._max_compactions_per_run = max_compactions_per_run
         self._max_assistant_chars = max_assistant_chars
         self._prompt_log_writer = prompt_log_writer
-        self._driver_factory = driver_factory if driver_factory is not None else StandardDriverFactory()
-        self._execution_strategy = (
-            execution_strategy if execution_strategy is not None else StandardExecutionStrategy()
-        )
+        self._plugin_factory = plugin_factory if plugin_factory is not None else BuiltinLoopFactory()
 
     async def execute(
         self, run_id: str, cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
-        *, execution_plugins: ExecutionPluginSelection | None = None,
+        *, execution_plugin: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         return await self._execute(run_id, cancellation_event, workspace, provider_endpoint,
-                                   execution_plugins=execution_plugins)
+                                   execution_plugin=execution_plugin)
 
     async def _execute(
         self,
@@ -223,7 +219,7 @@ class AgentLoop:
         cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
-        *, execution_plugins: ExecutionPluginSelection | None = None,
+        *, execution_plugin: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         run = await asyncio.to_thread(self._repository.get_run, run_id)
         if run is None:
@@ -238,10 +234,10 @@ class AgentLoop:
             workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
-            driver_factory = execution_plugins.driver_factory if execution_plugins else self._driver_factory
+            binding = execution_plugin or ExecutionPluginSelection("standard", "3.0.0", self._plugin_factory)
             try:
-                execution_strategy = execution_plugins.make_strategy() if execution_plugins else self._execution_strategy
-            except Exception:
+                plugin = binding.create()
+            except (Exception, asyncio.CancelledError):
                 raise _ExecutionFailed(INTERNAL_ERROR) from None
             if (
                 workspace.id != run.workspace_id
@@ -267,9 +263,6 @@ class AgentLoop:
                     for mount in workspace.mounts
                 ),
             )
-            if execution_plugins is not None:
-                await asyncio.to_thread(self._repository.append_run_event, run_id,
-                                        RunEventType.EXECUTION_SELECTED, execution_plugins.profile())
             system_prompt = await self._system_prompt_provider.build(
                 run_id=run_id,
                 workspace=workspace,
@@ -288,22 +281,18 @@ class AgentLoop:
             host = LoopExecutionHost(
                 loop=self, run=run, cancellation_event=cancellation_event,
                 prepared=prepared, system_prompt=system_prompt,
-                delta_buffer=delta_buffer, strategy=execution_strategy,
+                delta_buffer=delta_buffer, plugin=plugin,
                 provider_endpoint=provider_endpoint,
             )
             try:
                 try:
-                    driver = driver_factory.create()
-                except Exception:
-                    raise _ExecutionFailed(INTERNAL_ERROR) from None
-                try:
-                    result = await self._await_with_cancellation(driver.execute(host), cancellation_event)
+                    result = await self._await_with_cancellation(plugin.execute(host), cancellation_event)
                 except Exception as error:
-                    raise self._driver_exception(error, host, cancellation_event) from None
+                    raise self._plugin_exception(error, host, cancellation_event) from None
                 try:
                     await host._validate_result(result)
                 except Exception as error:
-                    raise self._driver_exception(error, host, cancellation_event) from None
+                    raise self._plugin_exception(error, host, cancellation_event) from None
                 await delta_buffer.flush()
                 self._raise_if_cancelled(cancellation_event)
                 try:
@@ -363,7 +352,7 @@ class AgentLoop:
             return await self._fail(run_id, INTERNAL_ERROR)
 
     @staticmethod
-    def _driver_exception(
+    def _plugin_exception(
         error: Exception, host: LoopExecutionHost, cancellation_event: asyncio.Event,
     ) -> Exception:
         # Cancellation can interrupt driver cleanup, which may itself raise.
@@ -392,7 +381,7 @@ class AgentLoop:
         prompt_log_sequence: list[int],
         delta_buffer: _AssistantDeltaBuffer,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
-        execution_strategy: ExecutionStrategy,
+        plugin_decisions: _SafePluginDecisions,
     ) -> DriverResult:
         continuation_base = base_transcript
         configured_max = (
@@ -420,7 +409,7 @@ class AgentLoop:
                         prepared.budget,
                     )
                 except ContextLimitExceeded:
-                    if context_retry_used or not execution_strategy.allow_context_retry(
+                    if context_retry_used or not plugin_decisions.allow_context_retry(
                         ContextRetryState("continuation", "local_budget")):
                         return await self._complete_partial(
                             run.id,
@@ -503,7 +492,7 @@ class AgentLoop:
                             error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
                             and not round_text
                             and not context_retry_used
-                            and execution_strategy.allow_context_retry(
+                            and plugin_decisions.allow_context_retry(
                                 ContextRetryState("continuation", "provider_context_limit"))
                         ):
                             context_retry_used = True

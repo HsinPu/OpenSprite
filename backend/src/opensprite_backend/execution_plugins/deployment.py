@@ -90,9 +90,8 @@ def verify(package):
                 raise ValueError("unrecorded installed source")
             elif not path.is_dir():
                 raise ValueError("nonregular installed source")
-    groups = {"loop": "opensprite_backend.agent_loops.v2", "policy": "opensprite_backend.execution_policies.v2"}
     for plugin in package["plugins"]:
-        if plugin["apiVersion"] != 2 or not any(point.group == groups[plugin["kind"]]
+        if plugin["apiVersion"] != 3 or plugin["kind"] != "loop" or not any(point.group == "opensprite_backend.agent_loops.v3"
             and point.name == plugin["id"] and point.value == plugin["entryPoint"] for point in dist.entry_points):
             raise ValueError("installed entry point mismatch")
 
@@ -119,7 +118,7 @@ try:
         if MANIFEST.stat().st_size > 16777216:
             raise ValueError("oversized manifest")
         old = json.loads(MANIFEST.read_text(), object_pairs_hook=unique)
-        if set(old) != {"schemaVersion", "baseImage", "packages"} or type(old["schemaVersion"]) is not int or old["schemaVersion"] != 1:
+        if set(old) != {"schemaVersion", "baseImage", "packages"} or type(old["schemaVersion"]) is not int or old["schemaVersion"] not in {1, 2}:
             raise ValueError("invalid previous manifest")
         previous = [item for item in old["packages"] if item["distributionName"] != package["distributionName"]]
     packages = [*previous, package]
@@ -130,7 +129,7 @@ try:
         raise ValueError("duplicate deployment plugin identity")
     for item in packages:
         verify(item)
-    manifest = {"schemaVersion": 1, "baseImage": BASE_IMAGE, "packages": packages}
+    manifest = {"schemaVersion": 2, "baseImage": BASE_IMAGE, "packages": packages}
     temporary = MANIFEST.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
         json.dump(manifest, stream, separators=(",", ":"))
@@ -219,7 +218,7 @@ Preserve a separate previous image reference before rebuilding for rollback.
 
 After restart open the execution-plugin workbench. This wheel is confirmed
 only when the build manifest and actual installed contents match its SHA-256.
-Select its Loop/policy using the existing execution settings. A completed Run
+Select its Agent Loop using the existing execution settings. A completed Run
 does not itself prove task correctness: run your reviewed acceptance task.
 
 For rollback use the previous compatible image and the same existing volume.

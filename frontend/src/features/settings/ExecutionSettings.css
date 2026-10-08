@@ -8,7 +8,7 @@
 .execution-settings h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--settings-text); }
 .execution-settings__section-title { display: flex; align-items: center; gap: 16px; }
 .execution-settings__saved { padding-bottom: 24px; border-bottom: 1px solid var(--settings-border); }
-.execution-settings__saved-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 16px 0 12px; }
+.execution-settings__saved-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 16px 0 12px; }
 .execution-settings__saved-grid dt { margin-bottom: 8px; color: var(--settings-muted); font-size: 12px; }
 .execution-settings__saved-grid dd { margin: 0; min-width: 0; }
 .execution-settings__saved-grid dd > strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }

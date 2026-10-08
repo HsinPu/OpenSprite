@@ -415,8 +415,8 @@ class AgentChatService:
                 execution_binding = None
                 if self._execution_settings is not None and self._execution_plugins is not None:
                     try:
-                        selected_loop, selected_policy = await asyncio.to_thread(self._execution_settings.selection)
-                        execution_binding = await asyncio.to_thread(self._execution_plugins.resolve, selected_loop, selected_policy)
+                        selected_plugin = await asyncio.to_thread(self._execution_settings.selection)
+                        execution_binding = await asyncio.to_thread(self._execution_plugins.resolve, selected_plugin)
                     except (ExecutionPluginError, ExecutionSettingsError):
                         raise AgentChatError(ChatErrorCode.SETTINGS_STORE_UNAVAILABLE) from None
                 accepted = await asyncio.to_thread(
@@ -436,7 +436,8 @@ class AgentChatService:
                     workspace_name_snapshot=workspace.name,
                     workspace_root_hash=workspace.root_hash,
                     workspace_mount_manifest_hash=workspace.mount_manifest_hash,
-                        )
+                    execution_profile=execution_binding.profile() if execution_binding else None,
+                )
             except WorkspaceError as error:
                 raise _workspace_error(error) from error
             except ConversationStoreError as error:
@@ -444,7 +445,7 @@ class AgentChatService:
             if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
                 await self._run_manager.start(
                     accepted.run.id, workspace, provider_endpoint,
-                    execution_plugins=execution_binding,
+                    execution_plugin=execution_binding,
                 )
         return accepted
 

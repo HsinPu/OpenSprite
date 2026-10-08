@@ -44,7 +44,7 @@ class RunManager:
         workspace: WorkspaceExecutionContext,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         *,
-        execution_plugins: ExecutionPluginSelection | None = None,
+        execution_plugin: ExecutionPluginSelection | None = None,
     ) -> bool:
         async with self._lock:
             if self._closed:
@@ -59,7 +59,7 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace, provider_endpoint, execution_plugins),
+                self._execute(run_id, cancellation, workspace, provider_endpoint, execution_plugin),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
@@ -90,12 +90,12 @@ class RunManager:
         cancellation: asyncio.Event,
         workspace: WorkspaceExecutionContext,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
-        execution_plugins: ExecutionPluginSelection | None = None,
+        execution_plugin: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         try:
             return await self._loop.execute(
                 run_id, cancellation, workspace, provider_endpoint,
-                execution_plugins=execution_plugins,
+                execution_plugin=execution_plugin,
             )
         except ConversationStoreError as execution_error:
             _LOGGER.exception("run execution failed run_id=%s", run_id)

@@ -1,8 +1,9 @@
-"""Run-local execution authority used by replaceable trusted drivers."""
+"""Run-local execution authority used by replaceable trusted Agent Loops."""
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 from collections import Counter
@@ -29,7 +30,7 @@ from opensprite_backend.inference.models import (
     ModelUsage,
 )
 
-from .driver import DriverResult, ModelTurn
+from .plugin import AgentLoopPlugin, DriverResult, ModelTurn, CompletionState, ContextRetryState
 from .events import (
     AGENT_LIMIT_ERROR,
     CONTEXT_LIMIT_ERROR,
@@ -37,7 +38,6 @@ from .events import (
     INVALID_PROVIDER_RESPONSE,
 )
 from .request_trace import Attempt
-from .strategies import CompletionState, ContextRetryState
 
 if TYPE_CHECKING:
     from opensprite_backend.conversations.models import RunSnapshot
@@ -45,7 +45,6 @@ if TYPE_CHECKING:
     from opensprite_backend.workspaces import WorkspaceExecutionContext
 
     from .loop import AgentLoop, _AssistantDeltaBuffer, _PreparedContext
-    from .strategies import ExecutionStrategy
 
 
 _LOGGER = logging.getLogger("opensprite.agent.context")
@@ -57,19 +56,21 @@ class _ExecutionFailed(Exception):
         self.error = error
 
 
-class _SafeExecutionStrategy:
+class _SafePluginDecisions:
     """Convert every plugin callback failure before it enters core error handling."""
 
-    def __init__(self, strategy: ExecutionStrategy) -> None:
-        self._strategy = strategy
+    def __init__(self, plugin: AgentLoopPlugin) -> None:
+        self._plugin = plugin
 
     def _decision(self, method: str, state: object) -> bool:
         try:
-            decision = getattr(self._strategy, method)(state)
+            decision = getattr(self._plugin, method)(state)
             if type(decision) is not bool:
-                raise ValueError("invalid strategy decision")
+                if inspect.iscoroutine(decision):
+                    decision.close()
+                raise ValueError("invalid plugin decision")
             return decision
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             raise _ExecutionFailed(INTERNAL_ERROR) from None
 
     def allow_context_retry(self, state: ContextRetryState) -> bool:
@@ -80,7 +81,7 @@ class _SafeExecutionStrategy:
 
 
 class LoopExecutionHost:
-    """Keep execution state and all effects outside the pluggable driver."""
+    """Keep execution state and all effects in core, behind the plugin Host."""
 
     def __init__(
         self,
@@ -91,7 +92,7 @@ class LoopExecutionHost:
         prepared: _PreparedContext,
         system_prompt: str,
         delta_buffer: _AssistantDeltaBuffer,
-        strategy: ExecutionStrategy,
+        plugin: AgentLoopPlugin,
         provider_endpoint: ProviderEndpointSnapshot | None,
     ) -> None:
         self._loop = loop
@@ -100,7 +101,7 @@ class LoopExecutionHost:
         self._prepared = prepared
         self._system_prompt = system_prompt
         self._delta_buffer = delta_buffer
-        self._strategy = _SafeExecutionStrategy(strategy)
+        self._decisions = _SafePluginDecisions(plugin)
         self._provider_endpoint = provider_endpoint
         self._transcript = list(prepared.messages)
         self._accumulated_text = run.partial_text
@@ -255,7 +256,7 @@ class LoopExecutionHost:
                         and not self._context_retry_used
                         and not self._accumulated_text
                         and not round_text
-                        and self._strategy.allow_context_retry(
+                        and self._decisions.allow_context_retry(
                             ContextRetryState("main", "provider_context_limit")
                         )
                     ):
@@ -346,7 +347,7 @@ class LoopExecutionHost:
             if (
                 reason is CompletionReason.OUTPUT_LIMIT
                 and self._run.output_continuation != "off"
-                and self._strategy.allow_output_continuation(
+                and self._decisions.allow_output_continuation(
                     CompletionState(turn.finish_reason, self._run.output_continuation))
             ):
                 self._result = await self._loop._continue_output(
@@ -356,7 +357,7 @@ class LoopExecutionHost:
                     cancellation_event=self._cancellation_event,
                     prompt_log_sequence=self._prompt_log_sequence,
                     delta_buffer=self._delta_buffer, provider_endpoint=self._provider_endpoint,
-                    execution_strategy=self._strategy)
+                    plugin_decisions=self._decisions)
             else:
                 self._result = await self._loop._complete_partial(
                     self._run.id, self._accumulated_text, reason, self._cancellation_event)

@@ -52,7 +52,7 @@ function durationText(run: RunSnapshot | null): string {
 function eventLabel(event: RunEvent, t: Translator): string | null {
   switch (event.type) {
     case "run.started": return t("execution.event.runStarted");
-    case "execution.selected": return t("execution.event.executionSelected", { loop: `${event.data.loopId} ${event.data.loopVersion}`, policy: `${event.data.policyId} ${event.data.policyVersion}` });
+    case "execution.selected": return event.data.apiVersion === 3 ? t("execution.event.loopSelected", { plugin: `${event.data.pluginId} ${event.data.pluginVersion}` }) : t("execution.event.executionSelected", { loop: `${event.data.loopId} ${event.data.loopVersion}`, policy: `${event.data.policyId} ${event.data.policyVersion}` });
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "context.compaction.completed": return t("execution.event.contextCompactionCompleted");
     case "context.compaction.failed": return t("execution.event.contextCompactionFailed");
@@ -209,7 +209,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <div><dt>{t("execution.startTime")}</dt><dd>{formatTime(run.startedAt, locale, timeZone)}</dd></div>
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
-                {executionProfile ? <div><dt>{t("diagnostics.executionPlugins")}</dt><dd>{`${executionProfile.loopId} ${executionProfile.loopVersion} / ${executionProfile.policyId} ${executionProfile.policyVersion}`}</dd></div> : null}
+                {executionProfile ? <div><dt>{t("diagnostics.executionPlugins")}</dt><dd>{executionProfile.apiVersion === 3 ? `${executionProfile.pluginId} ${executionProfile.pluginVersion}` : `${executionProfile.loopId} ${executionProfile.loopVersion} / ${executionProfile.policyId} ${executionProfile.policyVersion}`}</dd></div> : null}
                 {maxOutputTokens !== null ? <div><dt>{t("execution.maxOutputTokens")}</dt><dd>{formatTokenLimit(maxOutputTokens)}</dd></div> : null}
                 {workspaceAvailability ? <div><dt>{t("execution.workspaceAvailability")}</dt><dd>{t(workspaceAvailability === "available" ? "workspaces.available" : workspaceAvailability === "unavailable" ? "workspaces.unavailable" : "workspaces.noRoot")}</dd></div> : null}
                 <div><dt>{t("execution.source")}</dt><dd>{t(historical ? "execution.history" : "execution.currentConversation")}</dd></div>

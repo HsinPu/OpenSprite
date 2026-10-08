@@ -106,6 +106,7 @@ class ConversationRepository(Protocol):
         workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
         workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+        execution_profile: Mapping[str, object] | None = None,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(

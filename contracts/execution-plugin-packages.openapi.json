@@ -30,7 +30,7 @@
     "members": 512,
     "packages": 64
   },
-  "x-supported-wheel": "Purelib, none/any wheel; API v2 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
+  "x-supported-wheel": "Purelib, none/any wheel; API v3 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
   "paths": {
     "/api/execution-plugin-packages": {
       "get": {
@@ -447,7 +447,8 @@
               "not_installed",
               "confirmed",
               "unverified",
-              "mismatch"
+              "mismatch",
+              "needs_update"
             ]
           }
         }
@@ -545,5 +546,6 @@
         }
       }
     }
-  }
+  },
+  "x-retired-packages": "Cached API v1/v2 wheels remain readable without execution and report needs_update. New imports and deployment bundles accept only agent_loops.v3."
 }

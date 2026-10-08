@@ -16,16 +16,14 @@ import pytest
 from context_test_support import TestCapabilityResolver
 from test_agent_loop import (ScriptedGateway, accepted_run, async_test,
                              seed_completed_turns, store)
-from opensprite_backend.agent.driver import DriverResult, ExecutionHost, ModelTurn
+from opensprite_backend.agent.plugin import DriverResult, ExecutionHost, ModelTurn
 from opensprite_backend.agent.context import ContextLimitExceeded, ModelCapabilityProviderError
 from opensprite_backend.agent.events import INTERNAL_ERROR
 from opensprite_backend.agent.execution_host import _ExecutionFailed
 from opensprite_backend.agent.loop import AgentLoop, _RunCancelled
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginSelection
 from opensprite_backend.agent.run_manager import RunManager
-from opensprite_backend.agent.standard_driver import StandardDriverFactory
-from opensprite_backend.agent.standard_driver import StandardDriver
-from opensprite_backend.agent.strategies import NoRecoveryExecutionStrategy
+from opensprite_backend.agent.builtin_plugins import BuiltinLoopFactory, StandardLoopPlugin, NoRecoveryLoopPlugin
 from opensprite_backend.conversations.models import (CompletionReason, PublicRunError,
     RunEventType, RunStatus, StoreFailure)
 from opensprite_backend.conversations.repository import ConversationStoreError
@@ -40,6 +38,13 @@ DriverFunction = Callable[[ExecutionHost], Awaitable[DriverResult]]
 class FunctionDriver:
     function: DriverFunction
     calls: int = 0
+    decisions: object = None
+
+    def allow_context_retry(self, state):
+        return self.decisions.allow_context_retry(state) if self.decisions else True
+
+    def allow_output_continuation(self, state):
+        return self.decisions.allow_output_continuation(state) if self.decisions else True
 
     async def execute(self, host: ExecutionHost) -> DriverResult:
         self.calls += 1
@@ -48,13 +53,14 @@ class FunctionDriver:
 
 @dataclass
 class FunctionFactory:
-    api_version = 2
+    api_version = 3
 
     function: DriverFunction
+    decisions: object = None
     created: list[FunctionDriver] = field(default_factory=list)
 
     def create(self) -> FunctionDriver:
-        driver = FunctionDriver(self.function)
+        driver = FunctionDriver(self.function, decisions=self.decisions)
         self.created.append(driver)
         return driver
 
@@ -71,11 +77,11 @@ def completed(text: str = "answer"):
 
 
 def loop_for(repository, gateway, function=without_checkpoints, **kwargs):
-    factory = FunctionFactory(function)
+    factory = FunctionFactory(function, decisions=kwargs.pop("decisions", None))
     loop = AgentLoop(repository=repository, gateway=gateway,
 
                      capability_resolver=TestCapabilityResolver(),
-                     driver_factory=factory, **kwargs)
+                     plugin_factory=factory, **kwargs)
     return loop, factory
 
 
@@ -116,7 +122,7 @@ async def test_no_recovery_disables_first_provider_context_retry(tmp_path: Path)
         message="current", provider_id="openrouter", model_id="openrouter/auto",
         response_mode="default").run
     gateway = ScriptedGateway([[ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]])
-    loop, _ = loop_for(repository, gateway, execution_strategy=NoRecoveryExecutionStrategy())
+    loop, _ = loop_for(repository, gateway, decisions=NoRecoveryLoopPlugin())
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -141,7 +147,7 @@ async def test_policy_can_disable_continuation_retry_without_losing_partial_text
         [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
         [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
     ])
-    loop, _ = loop_for(repository, gateway, execution_strategy=ContinueWithoutRetry())
+    loop, _ = loop_for(repository, gateway, decisions=ContinueWithoutRetry())
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -214,17 +220,15 @@ async def test_plugin_exceptions_fail_without_logging_exception_secrets(tmp_path
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
     loop, _ = loop_for(repository, ScriptedGateway([script]),
         broken_driver if failure_at == "driver" else without_checkpoints,
-        execution_strategy=BrokenStrategy() if "strategy" in failure_at else None)
+        decisions=BrokenStrategy() if "strategy" in failure_at else None)
     if failure_at == "factory":
-        loop._driver_factory = BrokenFactory()
+        loop._plugin_factory = BrokenFactory()
     class BrokenSelection:
-        driver_factory = loop._driver_factory
-
-        def make_strategy(self):
+        def create(self):
             raise RuntimeError(secret)
 
     result = await loop.execute(run.id, asyncio.Event(),
-        execution_plugins=BrokenSelection() if failure_at == "strategy_factory" else None)
+        execution_plugin=BrokenSelection() if failure_at == "strategy_factory" else None)
 
     assert result.status is RunStatus.FAILED
     assert result.error.code == "internal_error"
@@ -296,7 +300,7 @@ async def test_strategy_domain_errors_are_sanitized_before_host_owns_them(
               if phase == "context" else
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
     loop, _ = loop_for(repository, ScriptedGateway([script]),
-                          execution_strategy=ForgedStrategy())
+                          decisions=ForgedStrategy())
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -435,14 +439,13 @@ async def test_plugin_cancelled_error_is_terminal_failure_without_cancelling_own
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
     loop, _ = loop_for(repository, ScriptedGateway([script]),
         abort if stage == "driver" else without_checkpoints,
-        execution_strategy=CancelStrategy() if stage.endswith("_strategy") else None)
+        decisions=CancelStrategy() if stage.endswith("_strategy") else None)
     if stage == "driver_factory":
-        loop._driver_factory = CancelFactory()
-    selection = (ExecutionPluginSelection("standard", "1", "broken", "1",
-        StandardDriverFactory(), CancelFactory()) if stage == "strategy_factory" else None)
+        loop._plugin_factory = CancelFactory()
+    selection = (ExecutionPluginSelection("broken", "1", CancelFactory()) if stage == "strategy_factory" else None)
     manager = RunManager(repository, loop)
     await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID),
-                        execution_plugins=selection)
+                        execution_plugin=selection)
     task = manager._tasks[run.id]
 
     result = await manager.wait(run.id)

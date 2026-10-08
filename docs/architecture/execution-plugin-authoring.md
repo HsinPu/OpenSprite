@@ -1,113 +1,114 @@
-# 執行插件作者指南
+# 撰寫 Agent Loop 插件（API v3）
 
-## 契約與專案
+OpenSprite 0.21.33 使用單一 Agent Loop 插件。執行流程與兩個恢復判斷必須在同一實例，沒有獨立 Policy entry point。範例套件版本 0.3.0，可從工作臺下載完整專案。
 
-OpenSprite 0.21.31 只接受 **Host API v2** 的文字 Loop／執行策略。
-下載工作臺的「範例專案」，或使用 `examples/execution-plugin`；其中包含完整 manifest、原始碼與測試，套件版本為 0.2.0。
-`src/opensprite_execution_example/plugin.py` 的 entry point 必須指向「無參數、回傳 factory」的函式，不直接指向 Driver 實例。
+## 可建置的最小實作
 
-```toml
-[project]
-name = "my-execution-plugin"
-version = "0.1.0"
-requires-python = ">=3.12,<3.14"
-dependencies = ["opensprite-backend>=0.21.31,<0.22"]
-
-[project.entry-points."opensprite_backend.agent_loops.v2"]
-my_loop = "my_plugin.plugin:create_loop_factory"
-
-[project.entry-points."opensprite_backend.execution_policies.v2"]
-my_policy = "my_plugin.plugin:create_policy_factory"
-```
-
-只提供一種插件時移除另一組。使用不與內建重複的 ID；factory 的 `api_version = 2`，每次 `create()` 建立新實例。
-
-## 寫 Loop
+建立 `src/opensprite_execution_example/plugin.py`：
 
 ```python
-from opensprite_backend.agent.driver import DriverResult, ExecutionHost
+"""A single API v3 Loop coordinates flow and decides eligible recovery."""
+from opensprite_backend.agent.plugin import (
+    CompletionState, ContextRetryState, DriverResult, ExecutionHost,
+)
 
-class MyDriver:
+
+class MainRetryOnlyLoop:
     async def execute(self, host: ExecutionHost) -> DriverResult:
         await host.checkpoint()
         turn = await host.next_turn()
         await host.checkpoint()
         return await host.finish(turn)
 
-class MyFactory:
-    api_version = 2
-    def create(self):
-        return MyDriver()
+    def allow_context_retry(self, state: ContextRetryState) -> bool:
+        return state.phase == "main" and state.cause == "provider_context_limit"
 
-def create_loop_factory():
-    return MyFactory()
+    def allow_output_continuation(self, state: CompletionState) -> bool:
+        return False
+
+
+class MainRetryOnlyFactory:
+    api_version = 3
+
+    def create(self) -> MainRetryOnlyLoop:
+        return MainRetryOnlyLoop()
+
+
+def create_plugin_factory() -> MainRetryOnlyFactory:
+    return MainRetryOnlyFactory()
 ```
 
-`ModelTurn` 只有 `text` 與 `finish_reason`；Host 自行完成符合設定的上下文恢復與輸出續寫。
-Host 操作必須順序 await，不得同時呼叫、複製／修改／重放 turn、自造 DriverResult，或在 finish 後再次推論。
-必須原樣回傳 finish 的物件；不要吞掉 Host 失敗或 `CancelledError`。有臨時資源時用 finally 收尾，不在 cleanup 發起新操作。
-任務完成只表示流程終止，不保證答案品質或任意成果已通過驗收。
+範例在模型前後檢查取消，只允許主模型遭 Provider 上下文超限時的核心合格重試，不自動續寫。同步判斷方法快速回傳真正的 bool；不可讀取憑證、呼叫外部服務、寫入日誌或修改模型設定。每次 `create()` 必須建立新插件，避免 Run 共用可變狀態。
 
-## 寫策略
+建立 `pyproject.toml`：
 
-策略實作兩個同步方法並回傳真正的 bool：
+```toml
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
 
-```python
-def allow_context_retry(self, state):
-    return state.phase == "main" and state.cause == "provider_context_limit"
+[project]
+name = "opensprite-execution-example"
+version = "0.3.0"
+description = "Single OpenSprite Agent Loop with checkpointed execution and main-context recovery"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = ["opensprite-backend>=0.21.33,<0.22"]
 
-def allow_output_continuation(self, state):
-    return False
+[project.entry-points."opensprite_backend.agent_loops.v3"]
+example_main_retry_only = "opensprite_execution_example.plugin:create_plugin_factory"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opensprite_execution_example"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+filterwarnings = ["error"]
 ```
 
-True 不放寬核心資格、使用者設定、重試或大小限制；False 只否決恢復。
-範例允許合格的主模型 context-limit 重試，但否決 continuation 階段重試與自動續寫。
-模型、憑證、transcript、事件、預算、取消和持久化仍由核心管理。插件是受信任的同程序 Python，這個契約不是安全沙箱。
+換成你自己的 distribution、Python 模組和插件 ID。ID 為小寫英文字母開頭，後續可含小寫字母、數字、`_`、`.`、`-`，最多 64 字元；不可使用 `standard` 或 `no_recovery`。entry point 指向無參數的 factory provider，不是插件實例。`agent_loops.v3` 是 metadata 群組名稱，不需要建立同名 Python 模組。
 
-## 測試與 wheel
+## Host 契約與測試
 
-從完整 repository 根目錄執行：
+API v3 一次只提供一個主要 `next_turn()`，Host 內部管理重試與續寫，不支援任意多回合規劃。操作依序 await，不可並行、修改或複製 turn/result，且 finish 後不可再請求模型。回傳 Host 的原始結果，讓 Host 失敗和取消向上傳遞。
 
-```bash
-uv sync --project backend --dev
-uv run --project backend python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
-uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin
-```
+先用多組變動文字測試原始 turn/result、不同回覆、模型前後取消、Host 失敗、新實例與恢復判斷。再用實際核心測試 Provider 上下文超限及輸出截斷，斷言真正的請求次數、SQLite 狀態與 SSE。固定協定 fixture 可驗證控制流程；不能當成真實模型驗證。
 
-單元測試必須覆蓋原回合與結果、不同輸出、模型前後取消、失敗傳遞、新實例及策略的允許／否決。
-再安裝真正 wheel 驗證，不用 source import 代替：
+從專案根目錄、相容的後端開發環境執行：
 
 ```powershell
-$env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/execution-plugin-wheel/opensprite_execution_example-0.2.0-py3-none-any.whl).Path
+uv run --project backend python -m pytest examples/execution-plugin/tests -W error
+uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin
+$env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/execution-plugin-wheel/opensprite_execution_example-0.3.0-py3-none-any.whl).Path
 uv run --project backend python scripts/verify_execution_plugin_wheel.py
 ```
 
-腳本在暫存 target 離線安裝 wheel，另起隔離 Python 讀取真實 metadata、驗證載入來源，並透過真實 AgentLoop、SQLite 與 Provider adapter 回傳每次不同輸入的文字及 API v2 執行事件。
-此處的 Provider 是協定測試伺服器，驗證資料流與核心；不能宣稱任何付費模型或外部服務已測試。
-wheel 的 SHA-256、安裝版本及 profile 會輸出為 JSON。套件測試通過也不表示正式服務已安裝。
+驗證腳本離線安裝 wheel 到暫存 target，另起隔離 Python、不同工作目錄，檢查實際 distribution、entry point 與模組來源。透過真實 Host、SQLite、Provider adapter 使用 UUID 輸入；最後檢查回覆、API v3 記錄和取消。驗證腳本專為此範例；自己的插件需要自己的行為驗收。
 
-## 工作臺與 Docker
+## 匯入與安裝
 
-1. 在「設定 → 執行方式」匯入已審查的純 Python wheel，核對檔名、版本、API 與 SHA-256。
-2. 下載部署包到獨立目錄，閱讀 README，確認基底是含 API v2 的實際映像。
-3. 先備份完整使用者資料與當前映像，等待現有任務結束。
-4. 設定 `OPENSPRITE_PLUGIN_BUNDLE_DIR` 為部署包的絕對路徑，以既有 Compose project 和資料 volume 建置／重啟。
-5. 重新讀取部署狀態；必須確認 wheel identity 與實際安裝檔案一致，再選擇插件並套用至新任務。
-6. 送出不同文字的真 HTTP Run，核對動態結果、execution.selected 的 API／版本、取消及重新啟動後的讀取。
+1. 審查插件程式碼，建置純 Python wheel。工作臺「匯入 wheel」只檢查 metadata、ZIP 限制、相依套件與 RECORD，保存快取，不執行 Python。
+2. Docker 下載部署包，從含 API v3 的 OpenSprite 映像建置。需要的相依套件先存在基底；部署使用 `--no-index --no-deps`，不自動下載。
+3. 依包內 README 沿用原 Compose project、設定與 volume。先結束或取消活躍 Run，再替換唯一後端。不要執行 `down -v`。
+4. 重啟後返回「核對部署狀態」。確認 manifest、wheel SHA-256、entry point 及實際安裝檔案一致。選擇已安裝的 Agent Loop 作為草稿，再套用至新任務。
 
-匯入只做靜態檢查與保存，不在運行中的 backend pip install，不執行 Docker，也不熱替換已接受任務。
-API v1 要修改 entry point 群組與 factory，移除 execute_tools 等舊行為後重新建置，不能只改版本號。
-本機安裝須停止 backend，將 wheel 安裝至真正的 backend Python 環境，檢查依賴後再啟動；仍使用單一 `.opensprite` 寫入者。
-回復使用原映像／安裝環境和升級前完整資料備份，不刪除使用者資料或把舊程式直接套在新 schema。
+本機安裝則先停止唯一後端，將 wheel 安裝到實際程式安裝目錄的 Python 環境。例如 Windows：
 
-## 驗證證據
+```powershell
+$taskBackendPython = 'D:/ABS/opensprite/backend/.venv/Scripts/python.exe'
+uv pip install --python $taskBackendPython --offline --no-deps --force-reinstall ./tmp/execution-plugin-wheel/opensprite_execution_example-0.3.0-py3-none-any.whl
+uv pip check --python $taskBackendPython
+```
 
-| 驗證 | 證明範圍 |
-| --- | --- |
-| 範例 Host 單元測試 | 插件協調順序、結果物件、取消與策略 |
-| wheel 安裝腳本 | 實際套件來源、entry points、真核心與變動輸入資料流 |
-| 核心 integration tests | 接受、冪等、恢復、取消、Host 權威與錯誤清理 |
-| 獨立 Docker HTTP 任務 | 部署檔案、執行插件綁定、串流、持久化與取消 |
-| 瀏覽器桌面／平板／手機 | 實際操作、排版與錯誤／空白狀態 |
+Linux 使用 `/ABS/opensprite/backend/.venv/bin/python`。替換為真實位置，重啟後端再讀取清單。本機沒有部署 manifest 時顯示來源未驗證，不能宣稱已核對 exact wheel；選擇仍根據已安裝 metadata。
 
-未覆蓋的真實 Provider、插件或工作成果需另行驗證。此版其他擴充先不實作；新的能力要另訂需求、契約與測試。
+## 從 API v2 升級與回復
+
+把 Driver 的 execute 與 Policy 的兩個方法合在同一類別，factory 改為 API 3，保留一個 agent_loops.v3 entry point，再完整測試與重建 wheel。只改版本數字不足以完成升級。沒有自動包裝器、相容別名或舊版執行入口。
+
+標準/標準與標準/no_recovery 設定自動映射到新內建插件；外部組合保留原檔，必須明確選擇 API v3 插件後才可開始新任務。API v2 的歷史事件與舊 wheel 快取不被刪除。舊快取顯示需要更新，無法下載部署包。
+
+升級前停止服務並備份整個敏感 `.opensprite`，一起保存 `auth.json` 和 `config/credential.key`。新版 execution.json 為 schema 2，舊版不理解；回復時使用原映像與相容的完整備份，不能直接讓舊後端寫新設定。移除匯入快取不會解除安裝。
+
+插件在後端程序內執行，靜態檢查不提供安全沙箱；只安裝受信任套件。取消是合作式契約，不是強制隔離任意 Python 的機制。

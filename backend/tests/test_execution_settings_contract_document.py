@@ -10,13 +10,14 @@ def test_execution_contract_has_only_selection_and_metadata_operations() -> None
     assert set(document["paths"]) == {"/api/settings/execution"}
     assert set(document["paths"]["/api/settings/execution"]) == {"get", "put"}
     schemas = document["components"]["schemas"]
-    assert schemas["ExecutionSelection"]["required"] == ["loopId", "policyId"]
+    assert schemas["ExecutionSelection"]["required"] == ["pluginId"]
     assert schemas["ExecutionSelection"]["additionalProperties"] is False
-    assert set(schemas["ExecutionSelection"]["properties"]) == {"loopId", "policyId"}
-    assert schemas["ExecutionPlugin"]["properties"]["kind"]["enum"] == ["loop", "policy"]
+    assert set(schemas["ExecutionSelection"]["properties"]) == {"pluginId"}
+    assert "kind" not in schemas["ExecutionPlugin"]["properties"]
+    assert schemas["PutExecutionSettingsRequest"]["required"] == ["pluginId", "expectedRevision"]
     assert schemas["ExecutionPlugin"]["properties"]["status"]["enum"] == ["available", "incompatible", "unavailable"]
     assert schemas["ExecutionPlugin"]["properties"]["apiVersion"] == {"type": "integer", "minimum": 1}
-    assert document["x-persistence"]["default"] == {"loopId": "standard", "policyId": "standard"}
+    assert document["x-persistence"]["default"] == {"pluginId": "standard"}
     responses = document["paths"]["/api/settings/execution"]["put"]["responses"]
     assert responses["400"]["$ref"].endswith("/InvalidRequest")
     assert responses["503"]["$ref"].endswith("/Unavailable")

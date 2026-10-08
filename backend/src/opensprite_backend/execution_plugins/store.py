@@ -153,7 +153,7 @@ class ExecutionPackageStore:
                 if len(entries) >= MAX_PACKAGES or (self._root.exists() and len(list(self._root.iterdir())) >= MAX_PACKAGES):
                     raise ExecutionPackageError("package_too_large")
                 package_id = str(uuid4())
-                stored = StoredPackage(schemaVersion=1, id=package_id,
+                stored = StoredPackage(schemaVersion=2, id=package_id,
                     importedAt=datetime.now(UTC).isoformat(), inspection=inspection)
                 payload = json.dumps(stored.model_dump(), ensure_ascii=False, separators=(",", ":")).encode()
                 if len(payload) > MAX_CACHE_MANIFEST_BYTES:

@@ -7,7 +7,7 @@ Installation files and Python/frontend dependencies live elsewhere. The complete
 | --- | --- |
 | auth.json + config/credential.key | AES-256-GCM credentials and the per-installation random key; always backed up/restored together |
 | config/settings.json | AI model, budgets, mode, continuation/delivery and prompt logging; new schema v11 |
-| config/execution.json | Loop/policy default IDs, settings schema v1; runtime plugin API v2 |
+| config/execution.json | Single Agent Loop default ID and revision, settings schema v2; runtime plugin API v3 |
 | config/providers.json | Custom Provider/model catalog without plaintext credentials |
 | config/general.json + config/conversation.json | Locale/time zone and conversation UI preferences |
 | config/workspaces.json | Managed Workspace/mount metadata and active selection |

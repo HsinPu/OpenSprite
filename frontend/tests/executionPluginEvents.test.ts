@@ -19,6 +19,22 @@ it("reads the actual execution plugin IDs and versions from persisted history", 
   expect((await listRunEventHistory(runId)).events[0].data).toEqual(profile);
 });
 
+it("reads one API v3 plugin while retaining the API v2 history shape", async () => {
+  const unified = { pluginId: "example_main_retry_only", pluginVersion: "0.3.0", apiVersion: 3 };
+  respond(unified);
+  expect((await listRunEventHistory(runId)).events[0].data).toEqual(unified);
+});
+
+it.each([
+  { pluginId: "../private", pluginVersion: "0.3.0", apiVersion: 3 },
+  { pluginId: "example", pluginVersion: "", apiVersion: 3 },
+  { pluginId: "example", pluginVersion: "0.3.0", apiVersion: "3" },
+  { pluginId: "example", pluginVersion: "0.3.0", apiVersion: 3, policyId: "standard" },
+])("rejects malformed unified profiles", async data => {
+  respond(data);
+  await expect(listRunEventHistory(runId)).rejects.toMatchObject({ code: "malformed_response" });
+});
+
 it.each([
   { ...profile, apiVersion: 1 },
   { ...profile, loopId: "../external" },

@@ -19,7 +19,7 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 - `/#new-chat` 開啟空白對話；`/#chat=<uuid>` 保留已選對話，重新整理讀取持久化資料。
 - 文字回覆由 SSE 更新，終止後重新讀取 Run／Message。可取消、查看本次或歷史執行；文字核心不提供工具操作。
 - 設定提供一般、工作區、AI 模型、執行方式、隱私與關於。記憶及外觀是明確停用的 Demo。
-- 執行方式使用 API v2，選擇先成為草稿，套用後才影響新任務。wheel 匯入不代表已安裝；部署後須核對 runtime 狀態。
+- 執行方式使用 API v3，選擇先成為草稿，套用後才影響新任務。wheel 匯入不代表已安裝；部署後須核對 runtime 狀態。
 - 繁中／英文／日文、時區、啟動目的地、Enter 或 Ctrl/Cmd + Enter 傳送、自動跟隨及面板偏好由後端保存。IME 組字不傳送。
 
 「一次回答」只改變呈現，上游仍串流。Provider 金鑰只存在於密碼欄位的暫存狀態，送出、錯誤、取消或卸載時清除，不預填原始值。讀取設定失敗時提供重試，不以假預設覆寫已保存資料。
@@ -31,7 +31,7 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 | `src/app/` | 工作臺組裝、導覽與面板 |
 | `src/api/` | 型別化 HTTP／SSE client 與回應驗證 |
 | `src/features/chat/` | 訊息、執行診斷、取消與歷史 |
-| `src/features/settings/` | 設定、Loop／策略與 wheel 工作臺 |
+| `src/features/settings/` | 設定、單一 Agent Loop與 wheel 工作臺 |
 | `src/features/*-settings/` | 持久化設定 controller |
 | `src/i18n/` | 三語系 catalog 與 locale context |
 | `tests/` | Vitest、React Testing Library 與瀏覽器檢查素材 |

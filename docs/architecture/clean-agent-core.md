@@ -1,4 +1,4 @@
-# 乾淨 Agent 核心（0.21.31）
+# 乾淨 Agent 核心（0.21.33）
 
 ## 目前範圍
 
@@ -10,8 +10,8 @@ Tools／核准、Skills、自訂 Agent／Subagent／delegation、MCP 與排程�
 ## 可替換的部分
 
 執行插件仍以受信任 Python wheel 的 entry point 發現。
-`opensprite_backend.agent_loops.v2` 提供 DriverFactory；`opensprite_backend.execution_policies.v2` 提供策略 factory。
-factory 的 `api_version` 必須為整數 `2`，每次 `create()` 回傳新實例。
+`opensprite_backend.agent_loops.v3` 提供單一 Agent Loop factory；同一插件實例負責 execute 與兩個恢復判斷。
+factory 的 `api_version` 必須為整數 `3`，每次 `create()` 回傳新實例。
 Driver 只依序 await `checkpoint()`、`next_turn()`、`finish(turn)`，原樣回傳 Host 發出的結果。
 Host 管理 Provider、transcript、事件、取消、預算、恢復與唯一終止交易。
 模型訊息只有 system/user/assistant 文字；不接受 tool role、action definitions 或 tool finish reason。
@@ -20,7 +20,7 @@ Host 管理 Provider、transcript、事件、取消、預算、恢復與唯一�
 時間條件在每次收到片段時判斷，不建立額外計時執行緒；完成或取消前仍會排空已收到的片段。
 短回覆不必等模型結束才出現在介面，快速串流仍避免逐片段 SQLite 交易。
 
-API v1 的 `execute_tools` 等行為不能套用文字 Host，因此不提供自動相容轉接。
+API v1／v2 不提供自動相容轉接；外部插件須合併方法並重新建置。API v2 歷史執行紀錄仍可讀，舊 wheel 快取保留為需要更新。
 舊安裝套件只讀 metadata 並標示不相容，選取時不載入；舊匯入快取仍可查看／移除，不能下載部署包。
 後續任何擴充都需要新的明確需求、權威契約與驗證，這一版不預先建立萬用插件生命週期。
 
@@ -43,5 +43,5 @@ Provider catalog 舊工具欄位僅在讀取投影中去除；新保存不包含
 
 既有聊天／接受／冪等／取消／摘要／輸出續寫與 hostile Driver 測試維持。
 新增三種原生 Provider 的文字串流及 action 回應拒絕、retired routes 404、套件不可匯入、fresh schema、v20 真實 schema fixture 保存、AI 設定與密文保留測試。
-範例單元測試與實際 wheel 安裝測試分開，後者透過真實 AgentLoop、SQLite 與 Provider adapter 使用每次不同的輸入，確認動態輸出與 API v2 執行紀錄。
+範例單元測試與實際 wheel 安裝測試分開，後者透過真實 AgentLoop、SQLite 與 Provider adapter 使用每次不同的輸入，確認動態輸出與 API v3 執行紀錄。
 最後在獨立 Docker 資料根目錄驗證真 HTTP 任務、部署內容及桌面／平板／手機介面；正式服務不在此分支階段更新。

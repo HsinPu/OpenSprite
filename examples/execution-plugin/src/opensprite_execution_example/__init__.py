@@ -1,1 +1,1 @@
-"""A small trusted execution-plugin example, independent of StandardDriver."""
+"""A small trusted Agent Loop plugin using the public API v3 contract."""

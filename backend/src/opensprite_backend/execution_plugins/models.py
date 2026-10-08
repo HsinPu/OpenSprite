@@ -48,7 +48,7 @@ class WheelInspection(StrictModel):
 
 
 class StoredPackage(StrictModel):
-    schemaVersion: Literal[1]
+    schemaVersion: Literal[1, 2]
     id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     importedAt: str
     inspection: WheelInspection
@@ -65,7 +65,7 @@ class PackageSummary(StrictModel):
     requiresPython: str | None
     requiresDist: list[str]
     plugins: list[PackagePlugin]
-    runtimeStatus: Literal["not_installed", "confirmed", "unverified", "mismatch"]
+    runtimeStatus: Literal["not_installed", "confirmed", "unverified", "mismatch", "needs_update"]
 
 
 class RuntimeIdentity(StrictModel):
@@ -88,7 +88,7 @@ class DeploymentPackage(StrictModel):
 
 
 class DeploymentManifest(StrictModel):
-    schemaVersion: Literal[1]
+    schemaVersion: Literal[1, 2]
     baseImage: str
     packages: list[DeploymentPackage]
 

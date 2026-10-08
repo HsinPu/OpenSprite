@@ -10,7 +10,7 @@ import type { Locale } from "../src/i18n/catalog";
 const api = vi.hoisted(() => ({ get: vi.fn(), import: vi.fn(), remove: vi.fn(), download: vi.fn() }));
 vi.mock("../src/api/executionPluginPackages", async (original) => ({ ...await original<typeof import("../src/api/executionPluginPackages")>(), getExecutionPackages: api.get, importExecutionPackage: api.import, removeExecutionPackage: api.remove, downloadExecutionDeployment: api.download }));
 const wheel: ExecutionPackage = {
-  id: "c5800245-3695-4823-823e-f926e5b1528f", fileName: "example_plugin-0.1.0-py3-none-any.whl", distributionName: "example-plugin", version: "0.1.0", sha256: "a".repeat(64), sizeBytes: 4000, importedAt: "2026-10-08T00:00:00Z", requiresPython: ">=3.12,<3.14", requiresDist: ["opensprite-backend>=0.21.27,<0.22"], plugins: [{ id: "example_loop", kind: "loop", apiVersion: 2, entryPoint: "example_plugin:create_loop_factory" }], runtimeStatus: "not_installed",
+  id: "c5800245-3695-4823-823e-f926e5b1528f", fileName: "example_plugin-0.1.0-py3-none-any.whl", distributionName: "example-plugin", version: "0.1.0", sha256: "a".repeat(64), sizeBytes: 4000, importedAt: "2026-10-08T00:00:00Z", requiresPython: ">=3.12,<3.14", requiresDist: ["opensprite-backend>=0.21.27,<0.22"], plugins: [{ id: "example_loop", kind: "loop", apiVersion: 3, entryPoint: "example_plugin:create_loop_factory" }], runtimeStatus: "not_installed",
 };
 const empty: ExecutionPackageCatalog = { packages: [], runtime: { kind: "docker", baseImage: "opensprite:local", manifestStatus: "missing" } };
 const populated: ExecutionPackageCatalog = { ...empty, packages: [wheel] };
@@ -52,7 +52,7 @@ describe("execution package workflow", () => {
     const retired = { ...wheel, plugins: wheel.plugins.map(plugin => ({ ...plugin, apiVersion: 1 })) };
     api.get.mockResolvedValue({ ...empty, packages: [retired] });
     render(<Manager />);
-    await screen.findByText("插件 API 不相容；需要 API v2");
+    await screen.findByText("插件 API 不相容；需要 API v3");
     const download = screen.getByRole("button", { name: /下載.*example-plugin/ });
     expect(download.hasAttribute("disabled")).toBe(true);
     fireEvent.click(download);

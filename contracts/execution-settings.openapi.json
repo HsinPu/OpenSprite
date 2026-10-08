@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite local execution settings API",
     "version": "0.1.0-draft",
-    "description": "Select trusted installed Agent Loop and execution policy plugins using Host API v2. Wheel import and deployment bundles are defined by execution-plugin-packages.openapi.json."
+    "description": "Select one trusted installed Agent Loop using API v3. Import and Docker bundles are defined in execution-plugin-packages.openapi.json."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [
@@ -19,19 +19,19 @@
   },
   "x-persistence": {
     "path": ".opensprite/config/execution.json",
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "default": {
-      "loopId": "standard",
-      "policyId": "standard"
+      "pluginId": "standard"
     },
-    "lazyCreation": "The first successful PUT creates the settings file. GET never writes."
+    "lazyCreation": "Absent settings stay implicit until PUT. Reading known v1 built-in pairs atomically migrates once; external pairs remain intact until explicit selection.",
+    "revision": "Revision 0 denotes absent settings or an external v1 pair. PUT requires expectedRevision and increments it."
   },
-  "x-execution-selection": "Changes apply only to future accepted runs. Accepted runs retain plugin bindings and versions. GET preserves unavailable saved IDs; PUT and run acceptance validate availability. API v1 packages are incompatible and are never loaded.",
-  "x-trust": "Plugins are trusted Python packages installed in the backend environment. Catalog discovery reads metadata. Selection validates the selected factory. These plugins execute in the backend process and are not sandboxed.",
+  "x-execution-selection": "One plugin ID and version per accepted Run, persisted atomically with admission. Replays use the original profile. Unavailable saved IDs remain visible; external v1 pairs block new Runs until explicit API v3 selection. Historical API v2 events remain readable.",
+  "x-trust": "Discovery, GET and PUT inspect metadata only. The selected factory is loaded at Run admission and creates one fresh complete plugin per Run. Trusted plugins execute in-process with backend privileges.",
   "tags": [
     {
       "name": "execution-settings",
-      "description": "Agent Loop and execution policy selection."
+      "description": "Single Agent Loop selection."
     }
   ],
   "paths": {
@@ -72,7 +72,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ExecutionSelection"
+                "$ref": "#/components/schemas/PutExecutionSettingsRequest"
               }
             }
           }
@@ -96,6 +96,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "409": {
+            "$ref": "#/components/responses/RevisionConflict"
           }
         }
       }
@@ -120,14 +123,10 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "loopId",
-          "policyId"
+          "pluginId"
         ],
         "properties": {
-          "loopId": {
-            "$ref": "#/components/schemas/PluginId"
-          },
-          "policyId": {
+          "pluginId": {
             "$ref": "#/components/schemas/PluginId"
           }
         }
@@ -137,7 +136,6 @@
         "additionalProperties": false,
         "required": [
           "id",
-          "kind",
           "name",
           "description",
           "version",
@@ -147,13 +145,6 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/PluginId"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "loop",
-              "policy"
-            ]
           },
           "name": {
             "type": "string",
@@ -167,7 +158,7 @@
           "version": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 64
           },
           "apiVersion": {
             "type": "integer",
@@ -188,20 +179,45 @@
         "additionalProperties": false,
         "required": [
           "selection",
+          "revision",
+          "migration",
           "plugins"
         ],
         "properties": {
           "selection": {
-            "$ref": "#/components/schemas/ExecutionSelection"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "plugins": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExecutionPlugin"
             },
-            "description": "Unique identities by kind and ID. IDs may be shared across different kinds."
+            "description": "Unique plugin IDs. Available plugins implement API v3."
+          },
+          "migration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LegacySelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
-        }
+        },
+        "description": "selection is null exactly when migration is present; migration always has revision 0."
       },
       "ErrorCode": {
         "type": "string",
@@ -209,7 +225,9 @@
           "invalid_request",
           "plugin_unavailable",
           "settings_store_unavailable",
-          "internal_error"
+          "internal_error",
+          "revision_conflict",
+          "migration_required"
         ]
       },
       "ErrorDetail": {
@@ -243,11 +261,46 @@
             "$ref": "#/components/schemas/ErrorDetail"
           }
         }
+      },
+      "PutExecutionSettingsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pluginId",
+          "expectedRevision"
+        ],
+        "properties": {
+          "pluginId": {
+            "$ref": "#/components/schemas/PluginId"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "LegacySelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "loopId",
+          "policyId"
+        ],
+        "properties": {
+          "loopId": {
+            "$ref": "#/components/schemas/PluginId"
+          },
+          "policyId": {
+            "$ref": "#/components/schemas/PluginId"
+          }
+        },
+        "description": "Inert migration information, never an executable selection."
       }
     },
     "responses": {
       "InvalidRequest": {
-        "description": "Malformed fields or an unknown loop/policy ID. error.code=invalid_request; retryable=false.",
+        "description": "Malformed fields or unknown plugin ID. error.code=invalid_request; retryable=false.",
         "content": {
           "application/json": {
             "schema": {
@@ -268,6 +321,16 @@
       },
       "InternalError": {
         "description": "An unexpected backend failure. error.code=internal_error; retryable=false.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "RevisionConflict": {
+        "description": "Settings changed; reload before applying. error.code=revision_conflict; retryable=false.",
         "content": {
           "application/json": {
             "schema": {

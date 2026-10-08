@@ -1,7 +1,7 @@
 <div align="center">
   <img src="frontend/public/brand/opensprite-logo.png" alt="OpenSprite" width="88" />
   <h1>OpenSprite</h1>
-  <p>本機 Agent 工作臺 · 文字核心 · 可替換的 Agent Loop 與執行策略</p>
+  <p>本機 Agent 工作臺 · 文字核心 · 可替換的 Agent Loop</p>
   <p>
     <a href="#快速開始">快速開始</a> ·
     <a href="#使用工作臺">使用工作臺</a> ·
@@ -12,7 +12,7 @@
 
 OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Python 本機服務管理模型請求、上下文、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
 
-目前產品版本為 `0.21.32`。執行插件使用 **Host API v2**。
+目前產品版本為 `0.21.33`。執行插件使用 **Host API v3**。
 
 ![OpenSprite Agent 工作臺](docs/screenshots/agent-workbench.jpg)
 
@@ -26,7 +26,7 @@ OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個
 | 模型連線 | OpenAI、Anthropic、OpenRouter 與自訂 OpenAI-compatible Provider |
 | 上下文管理 | Context／輸出預算、歷史摘要、符合設定的輸出續寫 |
 | 執行控制 | 取消、完成／失敗狀態、歷史執行與診斷事件 |
-| 執行插件 | 選擇 Loop／策略、匯入 wheel、下載部署包、核對安裝狀態 |
+| 執行插件 | 選擇 Agent Loop、匯入 wheel、下載部署包、核對安裝狀態 |
 | 工作區 | 對話分組、受管理目錄與掛載中繼資料；文字核心不讀寫工作區檔案 |
 | 本機設定 | 繁中／英文／日文、時區、鍵盤傳送偏好與存取模式 |
 
@@ -106,24 +106,24 @@ cd OpenSprite
 
 ## 執行插件
 
-Loop 編排 Host 操作，策略決定是否允許符合核心條件的恢復與續寫。Provider、transcript、預算、取消與資料保存由 Host 管理。
+單一 Loop 插件編排 Host 操作，同一實例判斷是否允許符合核心條件的恢復與續寫。Provider、transcript、預算、取消與資料保存由 Host 管理。
 
 ```mermaid
 flowchart LR
   UI[Agent 工作臺] --> Run[Run 設定快照]
-  Run --> Loop[Loop / Policy]
-  Loop --> Host[Host API v2]
+  Run --> Loop[Agent Loop]
+  Loop --> Host[Host API v3]
   Host --> Provider[Provider]
   Host --> State[文字 / 事件 / SQLite]
 ```
 
-Host API v2 僅提供 `checkpoint()`、`next_turn()`、`finish(turn)`。API v1 插件不相容，須更新 entry point、factory 與行為後重新建置。
+Host API v3 僅提供 `checkpoint()`、`next_turn()`、`finish(turn)`。API v1／v2 插件須合併執行與恢復方法、更新 entry point／factory 並重新建置。舊外部選擇保留原檔，套用 API v3 插件後才能建立新任務；歴史紀錄維持可讀。
 
 安裝流程：**匯入 wheel → 下載部署包 → 在主機安裝／建置映像 → 重啟 → 核對狀態 → 選擇並套用至新任務**。匯入只做靜態檢查與快取，不會安裝套件。
 
 | 資源 | 內容 |
 | --- | --- |
-| [插件作者指南](docs/architecture/execution-plugin-authoring.md) | Loop／策略契約、測試、wheel、Docker 與回復 |
+| [插件作者指南](docs/architecture/execution-plugin-authoring.md) | Agent Loop契約、測試、wheel、Docker 與回復 |
 | [可建置範例](examples/execution-plugin/README.md) | 完整 manifest、原始碼與測試；工作臺也可下載 ZIP |
 | [插件架構](docs/architecture/agent-execution-plugins.md) | 版本固定、runtime 識別與核心權限 |
 

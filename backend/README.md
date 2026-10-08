@@ -5,7 +5,7 @@ Python 3.12–3.13 / FastAPI 的本機文字 Agent 服務。HTTP／SSE 的權威
 ## 職責與邊界
 
 - `application/`：接受文字任務、模型／工作區／插件快照與取消。
-- `agent/`：Host API v2、Loop／策略、上下文預算、摘要及輸出續寫；依賴 persistence 與 Provider 介面。
+- `agent/`：Host API v3、單一 Agent Loop、上下文預算、摘要及輸出續寫；依賴 persistence 與 Provider 介面。
 - `inference/`：OpenAI Responses、Anthropic Messages、OpenRouter／compatible Chat Completions 的文字串流；拒絕工具或 action 回應。
 - `conversations/`：SQLite v21 的對話、訊息、Run、事件與摘要。新資料庫只有五張核心表。
 - `providers/` 與 `credentials/`：Provider 設定、能力快照與 AES-256-GCM 密文。

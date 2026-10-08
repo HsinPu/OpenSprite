@@ -1184,39 +1184,36 @@
         }
       },
       "ExecutionSelectedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "loopId",
-          "loopVersion",
-          "policyId",
-          "policyVersion",
-          "apiVersion"
-        ],
-        "properties": {
-          "loopId": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pluginId",
+              "pluginVersion",
+              "apiVersion"
+            ],
+            "properties": {
+              "pluginId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              },
+              "pluginVersion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "apiVersion": {
+                "type": "integer",
+                "const": 3
+              }
+            }
           },
-          "policyId": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
-          },
-          "loopVersion": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "policyVersion": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "apiVersion": {
-            "type": "integer",
-            "const": 2
+          {
+            "$ref": "#/components/schemas/LegacyExecutionSelectedEventData"
           }
-        }
+        ],
+        "description": "New API v3 profile is stored in the same transaction as Run acceptance. API v2 history remains readable."
       },
       "EmptyEventData": {
         "description": "Legacy compaction start or run cancellation.",
@@ -2062,6 +2059,42 @@
             ]
           }
         }
+      },
+      "LegacyExecutionSelectedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "loopId",
+          "loopVersion",
+          "policyId",
+          "policyVersion",
+          "apiVersion"
+        ],
+        "properties": {
+          "loopId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "policyId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "loopVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "policyVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "apiVersion": {
+            "type": "integer",
+            "const": 2
+          }
+        },
+        "description": "Read-only API v2 historical profile. Never loads retired plugins."
       }
     },
     "responses": {

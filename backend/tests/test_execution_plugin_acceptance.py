@@ -62,13 +62,13 @@ def test_setting_change_affects_next_run_and_replay_does_not_read_current_settin
             first = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
                                         client_request_id=request_id, message="first request")
             await asyncio.wait_for(started.wait(), 5)
-            await settings.update("standard", "no_recovery")
+            await settings.update("no_recovery", 0)
             release.set()
             first_result = await asyncio.wait_for(manager.wait(first.run.id), 5)
             assert first_result.status is RunStatus.COMPLETED
             assert first_result.completion_reason is CompletionReason.STOP
             assert first_result.partial_text == "accepted before change continued by pinned standard policy"
-            assert selected_profile(repository, first.run.id)["policyId"] == "standard"
+            assert selected_profile(repository, first.run.id)["pluginId"] == "standard"
 
             second = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
                                          client_request_id=str(uuid4()), message="next request")
@@ -76,7 +76,7 @@ def test_setting_change_affects_next_run_and_replay_does_not_read_current_settin
             assert second_result.status is RunStatus.COMPLETED
             assert second_result.completion_reason is CompletionReason.OUTPUT_LIMIT
             assert second_result.partial_text == "next run stops at output limit"
-            assert selected_profile(repository, second.run.id)["policyId"] == "no_recovery"
+            assert selected_profile(repository, second.run.id)["pluginId"] == "no_recovery"
             assert len(gateway.requests) == 3
 
             # A corrupt current settings file must not break an already accepted
@@ -85,7 +85,7 @@ def test_setting_change_affects_next_run_and_replay_does_not_read_current_settin
             replay = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
                                          client_request_id=request_id, message="first request")
             assert replay.replayed and replay.run.id == first.run.id
-            assert selected_profile(repository, replay.run.id)["policyId"] == "standard"
+            assert selected_profile(repository, replay.run.id)["pluginId"] == "standard"
             assert len(gateway.requests) == 3
         finally:
             release.set()
@@ -102,7 +102,7 @@ def test_unavailable_selected_plugin_fails_before_persisting_user_message(tmp_pa
     settings = ExecutionSettingsService(paths, catalog)
     paths.execution_settings_file.parent.mkdir(parents=True, exist_ok=True)
     paths.execution_settings_file.write_text(
-        '{"version":1,"loopId":"broken","policyId":"standard"}', encoding="utf-8")
+        '{"version":2,"revision":1,"pluginId":"broken"}', encoding="utf-8")
     chat._execution_settings = settings
     chat._execution_plugins = catalog
 

@@ -13,6 +13,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 const statusKeys: Record<ExecutionPackage["runtimeStatus"], MessageKey> = {
   not_installed: "execution.packages.status.notInstalled", confirmed: "execution.packages.status.confirmed",
   unverified: "execution.packages.status.unverified", mismatch: "execution.packages.status.mismatch",
+  needs_update: "execution.packages.status.needsUpdate",
 };
 const errorKeys: Record<ExecutionPackageErrorCode, MessageKey> = {
   invalid_request: "execution.packages.error.invalidRequest", invalid_package: "execution.packages.error.invalidPackage",
@@ -25,7 +26,7 @@ function errorText(error: unknown, t: Translator) {
   return t(errorKeys[error instanceof ExecutionPackageApiError ? error.code : "internal_error"]);
 }
 const sizeText = (size: number) => `${(size / 1024).toFixed(1)} KiB`;
-const compatibleApi = (item: ExecutionPackage) => item.plugins.every(plugin => plugin.apiVersion === 2);
+const compatibleApi = (item: ExecutionPackage) => item.plugins.every(plugin => plugin.apiVersion === 3 && plugin.kind === "loop");
 type Pending = { kind: "import" | "remove" | "download"; id?: string };
 
 export function ExecutionPackageManager({ active, catalogBusy, onRefreshCatalog, onGuide }: { active: boolean; catalogBusy: boolean; onRefreshCatalog: () => Promise<void>; onGuide: () => void }) {

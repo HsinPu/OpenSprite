@@ -16,10 +16,12 @@ _ERRORS = {
     ExecutionSettingsErrorCode.INVALID_REQUEST: (400, "Request validation failed.", False),
     ExecutionSettingsErrorCode.PLUGIN_UNAVAILABLE: (503, "Execution plugins are unavailable.", True),
     ExecutionSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE: (503, "Execution settings are unavailable.", True),
+    ExecutionSettingsErrorCode.REVISION_CONFLICT: (409, "Execution settings changed. Reload before applying.", False),
+    ExecutionSettingsErrorCode.MIGRATION_REQUIRED: (409, "Choose an API v3 Agent Loop in execution settings.", False),
     ExecutionSettingsErrorCode.INTERNAL_ERROR: (500, "An internal error occurred.", False),
 }
 GET_ERROR_RESPONSES = {500: {"model": ExecutionSettingsErrorEnvelope}, 503: {"model": ExecutionSettingsErrorEnvelope}}
-PUT_ERROR_RESPONSES = {400: {"model": ExecutionSettingsErrorEnvelope}, **GET_ERROR_RESPONSES}
+PUT_ERROR_RESPONSES = {400: {"model": ExecutionSettingsErrorEnvelope}, 409: {"model": ExecutionSettingsErrorEnvelope}, **GET_ERROR_RESPONSES}
 
 
 def execution_settings_error_response(code: ExecutionSettingsErrorCode) -> JSONResponse:
@@ -39,4 +41,4 @@ async def get_execution_settings(settings: ExecutionSettingsOperations = Depends
 
 @router.put("/api/settings/execution", operation_id="putExecutionSettings", response_model=ExecutionSettings, responses=PUT_ERROR_RESPONSES, tags=["execution-settings"])
 async def put_execution_settings(payload: PutExecutionSettingsRequest, settings: ExecutionSettingsOperations = Depends(_execution_settings)) -> ExecutionSettings:
-    return await settings.update(payload.loopId, payload.policyId)
+    return await settings.update(payload.pluginId, payload.expectedRevision)

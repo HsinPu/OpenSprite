@@ -505,6 +505,7 @@ class SqliteConversationRepository:
         workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
         workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
+        execution_profile: Mapping[str, object] | None = None,
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -703,6 +704,11 @@ class SqliteConversationRepository:
                 ).fetchone()
                 if conversation_row is None or run_row is None:
                     raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
+                if execution_profile is not None:
+                    if execution_profile.get("apiVersion") != 3:
+                        raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+                    self._append_event(connection, run_id, resolved_conversation_id,
+                                       RunEventType.EXECUTION_SELECTED, execution_profile, now)
                 connection.commit()
                 return StartRunResult(
                     conversation=self._conversation(conversation_row),
@@ -1702,7 +1708,7 @@ class SqliteConversationRepository:
         event_type = RunEventType(row["type"])
         if event_type is RunEventType.MODEL_STARTED:
             data.pop("toolNames", None)
-        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") != 2:
+        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") not in {2, 3}:
             return None
         if event_type is RunEventType.MODEL_ATTEMPT:
             # v1 receipts and action attempts remain stored, but are not current diagnostics.
@@ -1879,12 +1885,17 @@ class SqliteConversationRepository:
     ) -> None:
         keys = set(data)
         if event_type is RunEventType.EXECUTION_SELECTED:
-            if keys != {"loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"} or type(data.get("apiVersion")) is not int or data["apiVersion"] != 2:
+            api = data.get("apiVersion")
+            if type(api) is not int or api not in {2, 3}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            for key in ("loopId", "policyId"):
+            identifiers = ("pluginId",) if api == 3 else ("loopId", "policyId")
+            versions = ("pluginVersion",) if api == 3 else ("loopVersion", "policyVersion")
+            if keys != {"apiVersion", *identifiers, *versions}:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            for key in identifiers:
                 if not isinstance(data[key], str) or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", data[key]) is None:
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            for key in ("loopVersion", "policyVersion"):
+            for key in versions:
                 if not SqliteConversationRepository._is_bounded_text(data[key], maximum=64):
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

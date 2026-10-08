@@ -83,9 +83,9 @@ def verify_distribution(package: DeploymentPackage, *, distribution_lookup=metad
                     return False
                 elif not path.is_dir():
                     return False
-        groups = {"loop": "opensprite_backend.agent_loops.v2", "policy": "opensprite_backend.execution_policies.v2"}
-        if not 1 <= len(package.plugins) <= 32 or not all(plugin.apiVersion == 2 and any(
-            point.group == groups[plugin.kind] and point.name == plugin.id and point.value == plugin.entryPoint
+        groups = {"loop": "agent_loops", "policy": "execution_policies"}
+        if not 1 <= len(package.plugins) <= 32 or not all(plugin.apiVersion in {1, 2, 3} and (plugin.apiVersion != 3 or plugin.kind == "loop") and any(
+            point.group == f"opensprite_backend.{groups[plugin.kind]}.v{plugin.apiVersion}" and point.name == plugin.id and point.value == plugin.entryPoint
             for point in dist.entry_points) for plugin in package.plugins):
             return False
         return True
@@ -141,6 +141,8 @@ class RuntimePackageIdentity:
         return RuntimeIdentity(kind=self.kind, baseImage=self.base_image, manifestStatus=status), manifest
 
     def package_status(self, inspection, manifest):
+        if any(plugin.apiVersion != 3 or plugin.kind != "loop" for plugin in inspection.plugins):
+            return "needs_update"
         try:
             dist = self.lookup(inspection.distributionName)
         except metadata.PackageNotFoundError:

@@ -13,7 +13,7 @@ def test_package_contract_defines_only_import_inventory_remove_and_bundle():
     request = post["requestBody"]["content"]["multipart/form-data"]["schema"]
     assert request["required"] == ["file"] and request["additionalProperties"] is False
     schemas = document["components"]["schemas"]
-    assert schemas["PackageSummary"]["properties"]["runtimeStatus"]["enum"] == ["not_installed", "confirmed", "unverified", "mismatch"]
+    assert schemas["PackageSummary"]["properties"]["runtimeStatus"]["enum"] == ["not_installed", "confirmed", "unverified", "mismatch", "needs_update"]
     assert schemas["PackageSummary"]["properties"]["sizeBytes"]["maximum"] == 10 * 1024 * 1024
     assert "same-origin" in str(document["x-transport-security"])
     assert "same ID/version" in document["x-deployment"] or "Same ID/version" in document["x-deployment"]

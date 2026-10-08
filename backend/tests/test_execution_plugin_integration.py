@@ -28,6 +28,12 @@ class AlternateDriver:
     host: object = None
     operations: list[str] = field(default_factory=list)
 
+    def allow_context_retry(self, state):
+        return True
+
+    def allow_output_continuation(self, state):
+        return True
+
     async def execute(self, host):
         self.host = host
         self.operations.append("checkpoint")
@@ -40,7 +46,7 @@ class AlternateDriver:
 
 @dataclass
 class AlternateFactory:
-    api_version: int = 2
+    api_version: int = 3
     instances: list[AlternateDriver] = field(default_factory=list)
 
     def create(self):
@@ -52,7 +58,7 @@ class AlternateFactory:
 def binding(*, policy="standard"):
     factory = AlternateFactory()
     point = InstalledPoint("alternate", LOOPS, lambda: factory)
-    selection = ExecutionPluginCatalog((point,)).resolve("alternate", policy)
+    selection = ExecutionPluginCatalog((point,)).resolve("alternate")
     return selection, factory
 
 
@@ -84,7 +90,7 @@ def test_replaced_driver_preserves_cancellation_and_partial_output(tmp_path):
         run = accepted(repository)
         fixed_workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         try:
-            await manager.start(run.id, fixed_workspace, execution_plugins=selection)
+            await manager.start(run.id, fixed_workspace, execution_plugin=selection)
             await asyncio.wait_for(started.wait(), 5)
             await manager.cancel(run.id)
             result = await asyncio.wait_for(manager.wait(run.id), 5)

@@ -1,28 +1,35 @@
-# Agent execution plugins
+# Agent Loop plugins — API v3
 
-## Host API v2
+An installed trusted Python wheel exports a no-argument factory provider through **only** `opensprite_backend.agent_loops.v3`. A factory advertises integer `api_version = 3` and its synchronous `create()` returns a fresh complete plugin for every Run.
 
-Installed trusted Python packages export no-argument factory providers using `opensprite_backend.agent_loops.v2` and/or `opensprite_backend.execution_policies.v2` entry points.
-IDs are stable lowercase identifiers and must not collide. Factories expose integer `api_version = 2`; each `create()` returns a fresh Driver or policy.
-Discovery reads metadata without importing code. Only selected compatible entry points are loaded at task acceptance; missing, duplicate, failing or incompatible plugins cannot start a new task.
+The same instance implements `async execute(host)`, `allow_context_retry(state)` and `allow_output_continuation(state)`. There is one executable plugin category, one selection, one package version and one Run-local instance. Recovery callbacks return an actual bool synchronously; they must be fast and perform no I/O.
 
-The text Host exposes `checkpoint()`, `next_turn() -> ModelTurn`, and `finish(turn) -> DriverResult`.
-ModelTurn contains text and `final`/`output_limit`; it has no action fields.
-Calls are sequential. Turns and results must be the unchanged, same objects issued by the Host.
-The core retains credentials, endpoint snapshots, messages, budget calculations, context recovery, output continuation, cancellation, events and persistence.
+Discovery and settings GET/PUT read metadata without importing Python. Admission resolves and pins the selected factory and package version. A load failure rejects admission without a user message or Run; instance creation or execution failure terminally fails the accepted Run with a sanitized error. No fallback silently changes the selected plugin.
 
-Policies synchronously return a real bool from `allow_context_retry(ContextRetryState)` and `allow_output_continuation(CompletionState)`.
-True allows only core-eligible recovery; False vetoes it. Built-ins are standard and no_recovery, version 2.0.0.
-The standard Driver performs checkpoint → next_turn → finish.
+## Core authority
 
-## Selection and deployment
+`opensprite_backend.agent.plugin` defines the public contract and immutable `ModelTurn`, `DriverResult`, `ContextRetryState` and `CompletionState`. The Host exposes `checkpoint()`, `next_turn()` and `finish(turn)`. API v3 permits one main `next_turn`; eligible recovery and output continuation stay inside the Host. This version does not add multi-turn planning.
 
-`config/execution.json` schema v1 stores Loop/policy IDs. API v2 is the execution interface version, not the settings-file version.
-Accepted tasks retain binding objects and package versions; later changes affect new tasks only. `execution.selected` records API 2 and both IDs/versions.
-The workbench imports a wheel into `.opensprite/cache/execution-plugin-packages` using bounded static metadata/RECORD validation; it does not run code or install packages.
-Deployment bundles build a new image, install the exact wheel, record provenance and use the existing single-writer data volume after a controlled restart.
-Installed files are checked against wheel identity; an ID/version match alone is insufficient to confirm deployment.
+Host calls must be awaited sequentially. The unchanged Host-issued turn goes to finish; the unchanged Host-issued result is returned. No model operation follows finish. Core gates, budgets and configured bounds precede recovery callbacks; True cannot grant extra retries, continuation, prompt changes or credentials. The core retains Provider endpoints, transcripts, cancellation, SSE, context compaction and all persistence. A plugin can veto eligible recovery.
 
-API v1 is incompatible with the text Host and is never loaded. Old cached packages can be inspected or removed, but cannot be newly imported, selected or deployed.
-There is no auto-converter, hot reload, universal extension manager or security sandbox.
+The `standard` built-in allows core-eligible recovery and configured continuation. `no_recovery` uses the same text flow and vetoes both. Both are version 3.0.0. Plugins are trusted in-process Python, not a sandbox. Cancellation of Python code is cooperative; the core cannot forcibly terminate arbitrary uncooperative code.
+
+## Admission and immutable history
+
+New production Runs store `execution.selected` in the same SQLite transaction as acceptance:
+
+```json
+{"pluginId":"standard","pluginVersion":"3.0.0","apiVersion":3}
+```
+
+An idempotent replay is checked before mutable settings or loading factories; it neither rebinds the plugin nor makes another model request. Changes affect new Runs only. Existing API v2 profile events retain their raw bytes and remain readable as historical Loop/policy metadata; no API v2 code is loaded.
+
+`config/execution.json` schema 2 stores `version`, positive `revision` and `pluginId`. Absent settings implicitly select standard at revision 0 without creating data. PUT requires `expectedRevision` and increments it under the sole settings writer's lock; stale writes return 409 without overwriting. Known schema-1 pairs standard/standard and standard/no_recovery migrate atomically once. Any external pair stays unchanged, reports explicit migration information, and blocks new Runs until an API v3 choice is applied. Back up the complete sensitive `.opensprite` before upgrading.
+
+## Wheel and Docker
+
+Static bounded ZIP/metadata/dependency/RECORD validation never imports code. New imports accept only agent_loops.v3. Cache schema 2 is written for new packages; schema 1 remains readable for inert history. API v1/v2 cached wheels report `needs_update` and cannot be redeployed. Retired policy groups are recognized only during old-cache inspection.
+
+Deployment bundles install the exact wheel offline into a derived image, check installed files and entry points, and write schema-2 provenance. Runtime verification reads old provenance too without executing plugin code. A same ID/version does not prove an exact deployment. Use an API v3 base image and rebuild all retired external plugins; a bundle fails if retaining an incompatible deployed package. Keep the existing Compose project and single-writer data volume and end active Runs before restart. Import does not install or select; return to verify deployment and explicitly apply the discovered Loop.
+
 See [authoring](execution-plugin-authoring.md) and [clean core](clean-agent-core.md).
