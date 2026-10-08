@@ -20,7 +20,6 @@ ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
 OutputContinuation = Literal["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
 MessageRole = Literal["user", "assistant"]
-RunSource = Literal["user", "schedule"]
 MAX_ASSISTANT_CHARS = 1_048_576
 
 
@@ -51,13 +50,6 @@ class RunEventType(str, Enum):
     MODEL_STARTED = "model.started"
     RESPONSE_CONTINUATION_STARTED = "response.continuation.started"
     ASSISTANT_DELTA = "assistant.delta"
-    TOOL_APPROVAL_REQUESTED = "tool.approval_requested"
-    TOOL_APPROVAL_DECIDED = "tool.approval_decided"
-    TOOL_STARTED = "tool.started"
-    TOOL_COMPLETED = "tool.completed"
-    SKILL_LOADED = "skill.loaded"
-    SKILL_LOAD_FAILED = "skill.load_failed"
-    TOOL_FAILED = "tool.failed"
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
     RUN_CANCELLED = "run.cancelled"
@@ -74,7 +66,6 @@ class StoreFailure(str, Enum):
     DATABASE_UNAVAILABLE = "database_unavailable"
     REVISION_CONFLICT = "revision_conflict"
     WORKSPACE_MISMATCH = "workspace_mismatch"
-    WORKSPACE_MANAGED_BY_SCHEDULE = "workspace_managed_by_schedule"
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +84,6 @@ class ConversationSummary:
     updated_at: datetime
     workspace_id: str = DEFAULT_WORKSPACE_ID
     revision: int = 1
-    workspace_managed_by_schedule: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +129,6 @@ class RunSnapshot:
     output_continuation: OutputContinuation = "5"
     log_full_prompts: bool = False
     completion_reason: CompletionReason | None = None
-    source: RunSource = "user"
-    occurrence_id: str | None = None
     workspace_id: str = DEFAULT_WORKSPACE_ID
     workspace_revision: int = 1
     workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME

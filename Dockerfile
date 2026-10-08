@@ -14,7 +14,6 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
-# MCP stdio requires an absolute executable that is not a symbolic link.
 RUN python -m venv --copies --without-pip .venv \
     && uv sync --locked --no-dev --no-install-project
 COPY backend/src ./src

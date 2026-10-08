@@ -4,10 +4,6 @@ from __future__ import annotations
 from opensprite_backend.providers.catalog_models import BUILTIN_PROVIDER_IDS, ProviderEndpointSnapshot
 from opensprite_backend.providers.catalog_store import CatalogError
 from opensprite_backend.providers.custom_service import CustomProviderService
-from opensprite_backend.skills.service import SkillsService
-from opensprite_backend.skills.models import SkillExecutionSnapshot, SkillError
-from opensprite_backend.custom_agents.service import CustomAgentsService
-from opensprite_backend.custom_agents.models import AgentExecutionSnapshot, AgentError
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -18,6 +14,7 @@ from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError
 from opensprite_backend.execution_settings import ExecutionSettingsOperations, ExecutionSettingsError
 from opensprite_backend.ai_settings import AiSettingsOperations, SettingsStoreError
+from opensprite_backend.models import ModelSelection
 from opensprite_backend.conversations.models import (
     ConversationPage,
     ConversationSummary,
@@ -38,7 +35,6 @@ from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnections,
 )
-from opensprite_backend.schedules.models import ExecutionProfile
 from opensprite_backend.workspaces import (
     DEFAULT_WORKSPACE_ID,
     WorkspaceError,
@@ -66,15 +62,12 @@ class ChatErrorCode(StrEnum):
     AGENT_LIMIT_REACHED = "agent_limit_reached"
     CONTEXT_LIMIT_EXCEEDED = "context_limit_exceeded"
     CONTEXT_PREPARATION_FAILED = "context_preparation_failed"
-    TOOL_FAILURE = "tool_failure"
-    SCHEDULED_TOOL_APPROVAL_REQUIRED = "scheduled_tool_approval_required"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INTERNAL_ERROR = "internal_error"
     WORKSPACE_NOT_FOUND = "workspace_not_found"
     WORKSPACE_MISMATCH = "workspace_mismatch"
     WORKSPACE_STORE_UNAVAILABLE = "workspace_store_unavailable"
     REVISION_CONFLICT = "revision_conflict"
-    WORKSPACE_MANAGED_BY_SCHEDULE = "workspace_managed_by_schedule"
 
 
 class AgentChatError(Exception):
@@ -119,7 +112,6 @@ class AgentChatOperations(Protocol):
         workspace_id: str,
         client_request_id: str,
         message: str,
-        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult: ...
 
     async def get_run(self, run_id: str) -> RunSnapshot: ...
@@ -178,9 +170,8 @@ class UnavailableAgentChat:
         workspace_id: str,
         client_request_id: str,
         message: str,
-        skill_ids: tuple[str, ...] = (),
     ):
-        del conversation_id, workspace_id, client_request_id, message, skill_ids
+        del conversation_id, workspace_id, client_request_id, message
         raise self._unavailable()
 
     async def get_run(self, run_id: str):
@@ -219,8 +210,6 @@ class AgentChatService:
         workspace_mutation_gate: WorkspaceMutationGate,
         *,
         event_notifier: RunEventNotifier | None = None,
-        skills: SkillsService | None = None,
-        custom_agents: CustomAgentsService | None = None,
         custom_providers: CustomProviderService | None = None,
         execution_settings: ExecutionSettingsOperations | None = None,
         execution_plugins: ExecutionPluginCatalog | None = None,
@@ -236,8 +225,6 @@ class AgentChatService:
         self._provider_connections = provider_connections
         self._run_manager = run_manager
         self._workspaces = workspaces
-        self._skills = skills
-        self._custom_agents = custom_agents
         self._custom_providers = custom_providers
         self._execution_settings = execution_settings
         self._execution_plugins = execution_plugins
@@ -345,12 +332,10 @@ class AgentChatService:
         workspace_id: str,
         client_request_id: str,
         message: str,
-        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
         replay = await self._find_run_request(
             conversation_id=conversation_id, workspace_id=workspace_id,
             client_request_id=client_request_id, message=message,
-            source="user", occurrence_id=None, skill_ids=skill_ids,
         )
         if replay is not None:
             return replay
@@ -360,60 +345,25 @@ class AgentChatService:
             raise AgentChatError(ChatErrorCode.SETTINGS_STORE_UNAVAILABLE) from error
         if settings.model is None:
             raise AgentChatError(ChatErrorCode.MODEL_NOT_SELECTED)
-        profile = ExecutionProfile(
-            settings.model.provider_id,
-            settings.model.model_id,
-            settings.responseMode.value,
-            settings.model.context_budget,
-            settings.model.output_budget,
-            settings.outputContinuation.value,
-        )
+        profile = settings.model
         return await self._start_configured_run(
             conversation_id=conversation_id,
             workspace_id=workspace_id,
             client_request_id=client_request_id,
             message=message,
             profile=profile,
-            source="user",
-            occurrence_id=None,
             log_full_prompts=settings.logFullPrompts,
-            skill_ids=skill_ids,
+            response_mode=settings.responseMode.value,
+            output_continuation=settings.outputContinuation.value,
         )
 
-    async def start_scheduled_run(
-        self,
-        *,
-        conversation_id: str | None,
-        occurrence_id: str,
-        message: str,
-        profile: ExecutionProfile,
-        workspace_id: str = DEFAULT_WORKSPACE_ID,
-    ) -> StartRunResult:
-        replay = await self._find_run_request(
-            conversation_id=conversation_id, workspace_id=workspace_id,
-            client_request_id=occurrence_id, message=message,
-            source="schedule", occurrence_id=occurrence_id,
-        )
-        if replay is not None:
-            return replay
-        return await self._start_configured_run(
-            conversation_id=conversation_id,
-            workspace_id=workspace_id,
-            client_request_id=occurrence_id,
-            message=message,
-            profile=profile,
-            source="schedule",
-            occurrence_id=occurrence_id,
-            log_full_prompts=False,
-        )
 
     async def wait_run(self, run_id: str) -> RunSnapshot | None:
         return await self._run_manager.wait(run_id)
 
     async def _find_run_request(
         self, *, conversation_id: str | None, workspace_id: str,
-        client_request_id: str, message: str, source: str,
-        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+        client_request_id: str, message: str,
     ) -> StartRunResult | None:
         async with self._workspace_mutation_gate.hold():
             try:
@@ -421,7 +371,6 @@ class AgentChatService:
                     self._repository.find_run_request,
                     conversation_id=conversation_id, workspace_id=workspace_id,
                     client_request_id=client_request_id, message=message,
-                    source=source, occurrence_id=occurrence_id, skill_ids=skill_ids,
                 )
             except ConversationStoreError as error:
                 raise _store_error(error) from error
@@ -433,11 +382,10 @@ class AgentChatService:
         workspace_id: str,
         client_request_id: str,
         message: str,
-        profile: ExecutionProfile,
-        source: str,
-        occurrence_id: str | None,
+        profile: ModelSelection,
         log_full_prompts: bool,
-        skill_ids: tuple[str, ...] = (),
+        response_mode: str,
+        output_continuation: str,
     ) -> StartRunResult:
         is_custom = profile.provider_id not in BUILTIN_PROVIDER_IDS
         if not is_custom:
@@ -456,15 +404,6 @@ class AgentChatService:
         async with self._workspace_mutation_gate.hold():
             try:
                 provider_endpoint = None
-                policies = (await self._ai_settings.get()).providerToolPolicies
-                def builtin_endpoint(identifier):
-                    policy = policies.get(identifier)
-                    if policy is None:
-                        return None
-                    protocol = {"openai": "openai_responses", "anthropic": "anthropic_messages", "openrouter": "openrouter"}[identifier]
-                    return ProviderEndpointSnapshot(identifier, 1, protocol, "", "bearer", non_streaming_tools=policy.transport == "non_streaming", tools_enabled=policy.toolsEnabled, disabled_models=tuple(policy.disabledModels))
-                if not is_custom:
-                    provider_endpoint = builtin_endpoint(profile.provider_id)
                 if is_custom:
                     if self._custom_providers is None:
                         raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED)
@@ -473,29 +412,6 @@ class AgentChatService:
                     except CatalogError:
                         raise AgentChatError(ChatErrorCode.PROVIDER_NOT_CONNECTED) from None
                 workspace = self._workspaces.execution_context(workspace_id)
-                try:
-                    agent_snapshot = self._custom_agents.snapshot(workspace_id) if self._custom_agents else AgentExecutionSnapshot()
-                except AgentError:
-                    # Bad Agent configuration must not prevent ordinary chat.
-                    agent_snapshot = AgentExecutionSnapshot()
-                if self._custom_providers is not None or policies:
-                    endpoints = {provider_endpoint.provider_id: provider_endpoint} if provider_endpoint is not None else {}
-                    for candidate in agent_snapshot.available:
-                        identifier = candidate.definition.provider_id if candidate.definition is not None else None
-                        if identifier in BUILTIN_PROVIDER_IDS and identifier not in endpoints:
-                            builtin = builtin_endpoint(identifier)
-                            if builtin is not None:
-                                endpoints[identifier] = builtin
-                        if identifier and identifier not in BUILTIN_PROVIDER_IDS and identifier not in endpoints:
-                            if self._custom_providers is None:
-                                continue
-                            try:
-                                endpoints[identifier] = await asyncio.to_thread(self._custom_providers.execution_endpoint, identifier)
-                            except CatalogError:
-                                # An unavailable child provider must not prevent ordinary chat.
-                                continue
-                    agent_snapshot = AgentExecutionSnapshot(agent_snapshot.available, tuple(endpoints.values()))
-                skill_snapshot = self._skills.snapshot(workspace_id, skill_ids) if self._skills else SkillExecutionSnapshot()
                 execution_binding = None
                 if self._execution_settings is not None and self._execution_plugins is not None:
                     try:
@@ -503,8 +419,6 @@ class AgentChatService:
                         execution_binding = await asyncio.to_thread(self._execution_plugins.resolve, selected_loop, selected_policy)
                     except (ExecutionPluginError, ExecutionSettingsError):
                         raise AgentChatError(ChatErrorCode.SETTINGS_STORE_UNAVAILABLE) from None
-                if skill_ids and self._skills is None:
-                    raise SkillError("skill_unavailable")
                 accepted = await asyncio.to_thread(
                     self._repository.start_run,
                     conversation_id=conversation_id,
@@ -512,35 +426,26 @@ class AgentChatService:
                     message=message,
                     provider_id=profile.provider_id,
                     model_id=profile.model_id,
-                    response_mode=profile.response_mode,
+                    response_mode=response_mode,
                     context_budget=profile.context_budget,
                     output_budget=profile.output_budget,
-                    output_continuation=profile.output_continuation,
+                    output_continuation=output_continuation,
                     log_full_prompts=log_full_prompts,
-                    source=source,
-                    occurrence_id=occurrence_id,
                     workspace_id=workspace.id,
                     workspace_revision=workspace.revision,
                     workspace_name_snapshot=workspace.name,
                     workspace_root_hash=workspace.root_hash,
                     workspace_mount_manifest_hash=workspace.mount_manifest_hash,
-                    skill_ids=skill_ids,
-                )
+                        )
             except WorkspaceError as error:
                 raise _workspace_error(error) from error
             except ConversationStoreError as error:
                 raise _store_error(error) from error
             if not accepted.replayed and accepted.run.status is RunStatus.QUEUED:
-                if execution_binding is not None:
-                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot, provider_endpoint, execution_plugins=execution_binding)
-                elif provider_endpoint is not None:
-                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot, provider_endpoint)
-                elif self._custom_agents is not None:
-                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot, agent_snapshot)
-                elif self._skills is None:
-                    await self._run_manager.start(accepted.run.id, workspace)
-                else:
-                    await self._run_manager.start(accepted.run.id, workspace, skill_snapshot)
+                await self._run_manager.start(
+                    accepted.run.id, workspace, provider_endpoint,
+                    execution_plugins=execution_binding,
+                )
         return accepted
 
     async def get_run(self, run_id: str) -> RunSnapshot:
@@ -619,7 +524,7 @@ def _store_error(error: ConversationStoreError) -> AgentChatError:
         StoreFailure.DATABASE_UNAVAILABLE: ChatErrorCode.DATABASE_UNAVAILABLE,
         StoreFailure.REVISION_CONFLICT: ChatErrorCode.REVISION_CONFLICT,
         StoreFailure.WORKSPACE_MISMATCH: ChatErrorCode.WORKSPACE_MISMATCH,
-        StoreFailure.WORKSPACE_MANAGED_BY_SCHEDULE: ChatErrorCode.WORKSPACE_MANAGED_BY_SCHEDULE,
+
     }[error.failure]
     return AgentChatError(code)
 

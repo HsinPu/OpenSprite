@@ -31,7 +31,7 @@ def valid_attempt_payload(data: dict[str, object]) -> bool:
     if (data["attemptNumber"] == 1) != (data["retryOfAttemptId"] is None) or (data["retryOfAttemptId"] is None) != (data["retryCause"] is None):
         return False
     if data["status"] == "completed":
-        return data["finishReason"] in ("final", "tool_calls", "output_limit") and all(
+        return data["finishReason"] in ("final", "output_limit") and all(
             data[key] is None or (type(data[key]) is int and 0 <= data[key] <= 2**53 - 1)
             for key in ("inputTokens", "outputTokens"))
     if data["status"] == "failed":

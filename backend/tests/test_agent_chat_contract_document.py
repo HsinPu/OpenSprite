@@ -18,6 +18,14 @@ def load_contract() -> dict[str, Any]:
     return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
+def test_public_error_codes_match_the_current_text_core() -> None:
+    from opensprite_backend.application import ChatErrorCode
+
+    schema_codes = load_contract()["components"]["schemas"]["ErrorCode"]["enum"]
+    assert len(schema_codes) == len(set(schema_codes))
+    assert set(schema_codes) == {code.value for code in ChatErrorCode}
+
+
 def test_contract_is_openapi_31_json() -> None:
     contract = load_contract()
 
@@ -130,7 +138,7 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "createdAt",
     ]
     assert schemas["MessageRole"]["enum"] == ["user", "assistant"]
-    assert "workspaceManagedBySchedule" in schemas["ConversationSummary"]["required"]
+    assert "workspaceManagedBySchedule" not in schemas["ConversationSummary"]["properties"]
 
 
 def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
@@ -148,13 +156,6 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "model.attempt",
         "response.continuation.started",
         "assistant.delta",
-        "tool.approval_requested",
-        "tool.approval_decided",
-        "tool.started",
-        "tool.completed",
-        "tool.failed",
-        "skill.loaded",
-        "skill.load_failed",
         "run.completed",
         "run.failed",
         "run.cancelled",
@@ -182,7 +183,6 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "contextTokens",
         "contextLimitTokens",
         "inputBudgetTokens",
-        "toolNames",
     }
     for field in ("contextTokens", "contextLimitTokens", "inputBudgetTokens"):
         assert schemas["ModelStartedEventData"]["properties"][field]["minimum"] == 1

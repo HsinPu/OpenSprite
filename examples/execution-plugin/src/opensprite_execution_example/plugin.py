@@ -5,27 +5,17 @@ from opensprite_backend.agent.strategies import CompletionState, ContextRetrySta
 
 
 class CheckpointedDriver:
-    """Resolve each tool-producing turn before requesting or finishing another.
-
-    The extra checkpoint between a model turn and its tools demonstrates a
-    driver-owned cancellation boundary. Core host operations also enforce
-    cancellation and hard limits. This driver does not inspect hidden state,
-    manufacture an answer, or implement a second model/tool gateway.
-    """
+    """Add cancellation checkpoints around the core-owned model turn."""
 
     async def execute(self, host: ExecutionHost) -> DriverResult:
         await host.checkpoint()
-        while True:
-            turn = await host.next_turn()
-            if not turn.tool_calls:
-                return await host.finish(turn)
-            await host.checkpoint()
-            await host.execute_tools(turn)
-            await host.checkpoint()
+        turn = await host.next_turn()
+        await host.checkpoint()
+        return await host.finish(turn)
 
 
 class CheckpointedDriverFactory:
-    api_version = 1
+    api_version = 2
 
     def create(self) -> CheckpointedDriver:
         return CheckpointedDriver()
@@ -46,7 +36,7 @@ class MainRetryOnlyPolicy:
 
 
 class MainRetryOnlyPolicyFactory:
-    api_version = 1
+    api_version = 2
 
     def create(self) -> MainRetryOnlyPolicy:
         return MainRetryOnlyPolicy()

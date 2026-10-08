@@ -427,9 +427,8 @@ try {
     Write-Host "  User data: $userDataRootPath"
     Write-Host '    config\: settings, local access and encryption key'
     Write-Host '    auth.json: encrypted provider credentials (back up with config\credential.key)'
-    Write-Host '    data\opensprite.db: conversations, runs and schedules'
+    Write-Host '    data\opensprite.db: conversations, runs and summaries'
     Write-Host '    workspace\: managed workspaces and their files'
-    Write-Host '    skills\, agents\, archive\: installed definitions and archived copies'
     Write-Host '    logs\, state\, cache\: logs, runtime state and cache'
     Write-Host '  Data locations are created as needed; this list does not mean they all exist.'
     if ($SkipStartupRegistration) {

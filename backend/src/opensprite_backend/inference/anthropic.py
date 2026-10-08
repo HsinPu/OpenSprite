@@ -16,23 +16,13 @@ from .models import (
     ModelRequest,
     ModelStreamEvent,
     ModelTextDelta,
-    ModelToolCall,
-    ModelToolDefinition,
     ModelUsage,
 )
 from .reasoning import request_effort, invalid_response
-from .sse import load_json_arguments, load_json_object
+from .sse import load_json_object
 
 
 ANTHROPIC_MESSAGES_URL: Final = "https://api.anthropic.com/v1/messages"
-
-
-@dataclass(slots=True)
-class _ToolBlock:
-    call_id: str
-    name: str
-    initial_input: dict[str, object]
-    partial_json: str = ""
 
 
 class AnthropicInferenceAdapter:
@@ -53,24 +43,11 @@ class AnthropicInferenceAdapter:
         }
         if system:
             body["system"] = system
-        if request.tools:
-            body["tools"] = _tools(request.tools)
-            body["tool_choice"] = {"type": "auto"}
         selected_effort = request_effort(request)
         if selected_effort is not None:
             body["output_config"] = {"effort": selected_effort}
 
-        if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
-            body["stream"] = False
-            async for raw in self._http.payloads(
-                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Accept": "application/json", "Content-Type": "application/json"},
-                body=body,
-            ):
-                for event in _complete_response(load_json_object(raw)):
-                    yield event
-            return
 
-        tools: dict[int, _ToolBlock] = {}
         input_tokens: int | None = None
         output_tokens: int | None = None
         stop_reason: str | None = None
@@ -107,18 +84,6 @@ class AnthropicInferenceAdapter:
                         raise invalid_response()
                     if text:
                         yield ModelTextDelta(text)
-                elif block_type == "tool_use":
-                    call_id = block.get("id")
-                    name = block.get("name")
-                    initial = block.get("input")
-                    if (
-                        type(call_id) is not str
-                        or type(name) is not str
-                        or type(initial) is not dict
-                        or index in tools
-                    ):
-                        raise invalid_response()
-                    tools[index] = _ToolBlock(call_id, name, initial)
                 elif block_type not in {"thinking", "redacted_thinking"}:
                     raise invalid_response()
             elif event_type == "content_block_delta":
@@ -133,13 +98,6 @@ class AnthropicInferenceAdapter:
                         raise invalid_response()
                     if text:
                         yield ModelTextDelta(text)
-                elif delta_type == "input_json_delta":
-                    partial = delta.get("partial_json")
-                    if type(partial) is not str or index not in tools:
-                        raise invalid_response()
-                    tools[index].partial_json += partial
-                    if len(tools[index].partial_json.encode("utf-8")) > 65536:
-                        raise invalid_response()
                 elif delta_type not in {
                     "thinking_delta",
                     "signature_delta",
@@ -150,17 +108,6 @@ class AnthropicInferenceAdapter:
                 index = payload.get("index")
                 if type(index) is not int:
                     raise invalid_response()
-                block = tools.pop(index, None)
-                if block is not None:
-                    arguments = (
-                        load_json_arguments(block.partial_json)
-                        if block.partial_json
-                        else block.initial_input
-                    )
-                    try:
-                        yield ModelToolCall(block.call_id, block.name, arguments)
-                    except ValueError as error:
-                        raise invalid_response() from error
             elif event_type == "message_delta":
                 delta = payload.get("delta")
                 if type(delta) is not dict:
@@ -172,14 +119,12 @@ class AnthropicInferenceAdapter:
                     stop_reason = reason
                 output_tokens = _token_value(payload.get("usage"), "output_tokens")
             elif event_type == "message_stop":
-                if stopped or not started or tools or stop_reason is None:
+                if stopped or not started or stop_reason is None:
                     raise invalid_response()
                 stopped = True
                 if input_tokens is not None or output_tokens is not None:
                     yield ModelUsage(input_tokens, output_tokens)
-                if stop_reason == "tool_use":
-                    yield ModelCompleted(ModelFinishReason.TOOL_CALLS)
-                elif stop_reason == "end_turn":
+                if stop_reason == "end_turn":
                     yield ModelCompleted(ModelFinishReason.FINAL)
                 elif stop_reason in {"max_tokens", "model_context_window_exceeded"}:
                     yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)
@@ -193,104 +138,9 @@ class AnthropicInferenceAdapter:
             raise invalid_response()
 
 
-def _complete_response(payload: dict[str, object]) -> list[ModelStreamEvent]:
-    """Do not expose partial or malformed tool blocks to the agent loop."""
-    content = payload.get("content")
-    reason = payload.get("stop_reason")
-    if payload.get("type") != "message" or payload.get("role") != "assistant" or type(content) is not list:
-        raise invalid_response()
-    if reason not in {"tool_use", "end_turn", "max_tokens", "model_context_window_exceeded"}:
-        raise invalid_response()
-    events: list[ModelStreamEvent] = []
-    ids: set[str] = set()
-    for block in content:
-        if type(block) is not dict:
-            raise invalid_response()
-        kind = block.get("type")
-        if kind == "text":
-            text = block.get("text")
-            if type(text) is not str:
-                raise invalid_response()
-            events.extend(ModelTextDelta(text[i:i + 16384]) for i in range(0, len(text), 16384))
-        elif kind == "tool_use":
-            if reason != "tool_use":
-                raise invalid_response()
-            try:
-                call = ModelToolCall(block.get("id"), block.get("name"), block.get("input"))
-            except (TypeError, ValueError) as error:
-                raise invalid_response() from error
-            if call.call_id in ids:
-                raise invalid_response()
-            ids.add(call.call_id)
-            events.append(call)
-        elif kind not in {"thinking", "redacted_thinking"}:
-            raise invalid_response()
-    if reason == "tool_use" and not ids:
-        raise invalid_response()
-    usage = payload.get("usage")
-    input_tokens = _token_value(usage, "input_tokens")
-    output_tokens = _token_value(usage, "output_tokens")
-    if input_tokens is not None or output_tokens is not None:
-        events.append(ModelUsage(input_tokens, output_tokens))
-    finish = ModelFinishReason.TOOL_CALLS if ids else ModelFinishReason.FINAL if reason == "end_turn" else ModelFinishReason.OUTPUT_LIMIT
-    return [*events, ModelCompleted(finish)]
-
-
-def _messages(
-    messages: tuple[ModelMessage, ...],
-) -> tuple[str, list[dict[str, object]]]:
-    system_parts: list[str] = []
-    result: list[dict[str, object]] = []
-    pending_tool_results: list[dict[str, object]] = []
-
-    def flush_tool_results() -> None:
-        if pending_tool_results:
-            result.append({"role": "user", "content": list(pending_tool_results)})
-            pending_tool_results.clear()
-
-    for message in messages:
-        if message.role == "system":
-            system_parts.append(message.content)
-        elif message.role == "tool":
-            pending_tool_results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": message.tool_call_id,
-                    "content": message.content,
-                }
-            )
-        elif message.role == "assistant" and message.tool_calls:
-            flush_tool_results()
-            content: list[dict[str, object]] = []
-            if message.content:
-                content.append({"type": "text", "text": message.content})
-            content.extend(
-                {
-                    "type": "tool_use",
-                    "id": call.call_id,
-                    "name": call.name,
-                    "input": call.arguments,
-                }
-                for call in message.tool_calls
-            )
-            result.append({"role": "assistant", "content": content})
-        else:
-            flush_tool_results()
-            result.append({"role": message.role, "content": message.content})
-    flush_tool_results()
-    return "\n\n".join(system_parts), result
-
-
-def _tools(tools: tuple[ModelToolDefinition, ...]) -> list[dict[str, object]]:
-    return [
-        {
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.input_schema,
-            "strict": True,
-        }
-        for tool in tools
-    ]
+def _messages(messages: tuple[ModelMessage, ...]) -> tuple[str, list[dict[str, object]]]:
+    system = "\n\n".join(message.content for message in messages if message.role == "system")
+    return system, [{"role": message.role, "content": message.content} for message in messages if message.role != "system"]
 
 
 def _token_value(value: object, name: str) -> int | None:

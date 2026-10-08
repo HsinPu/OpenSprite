@@ -3,12 +3,12 @@ import { listCustomProviders } from "../src/api/customProviders";
 import { createCustomProvider, getCustomProvider, listCustomModels, refreshCustomModels, updateCustomProvider, deleteCustomProvider, updateCustomModel, deleteCustomModel } from "../src/api/customProviders";
 
 const id = "11111111-1111-4111-8111-111111111111";
-const model = { key: "22222222-2222-4222-8222-222222222222", model_id: "local", name: "Local", context_limit: 32000, output_limit: 4000, tools: false, source: "manual" };
+const model = { key: "22222222-2222-4222-8222-222222222222", model_id: "local", name: "Local", context_limit: 32000, output_limit: 4000, source: "manual" };
 const provider = { id, name: "Local", revision: 1, protocol: "openai_chat_completions", base_url: "https://example.com/v1", auth_mode: "none", allow_insecure_local: false, created_at: "2026-09-10T00:00:00+00:00", updated_at: "2026-09-10T00:00:00+00:00", models: [model] };
 
 describe("custom provider API", () => {
-  it("accepts provider tool policy and rejects malformed flags", async () => {
-    const configured = { ...provider, tools_enabled: false, non_streaming_tools: true };
+  it("accepts the text provider and rejects retired tool flags", async () => {
+    const configured = { ...provider };
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(configured)))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...configured, tools_enabled: "true" }))));
@@ -46,7 +46,7 @@ describe("custom provider API", () => {
     vi.stubGlobal("fetch", fetch);
     await updateCustomProvider(id, { name: "Local", baseUrl: provider.base_url, protocol: "openai_chat_completions", authMode: "bearer", allowInsecureLocal: false, expectedRevision: 1 });
     expect(JSON.parse(fetch.mock.calls[0][1].body)).not.toHaveProperty("apiKey");
-    await updateCustomModel(id, model.key, { modelId: "local", name: "Local", contextLimit: 32000, outputLimit: 4000, tools: false, expectedRevision: 1 });
+    await updateCustomModel(id, model.key, { modelId: "local", name: "Local", contextLimit: 32000, outputLimit: 4000, expectedRevision: 1 });
     expect(fetch.mock.calls[1][0]).toBe(`/api/providers/${id}/models/${model.key}`);
     expect(fetch.mock.calls[1][1].method).toBe("PUT");
     await deleteCustomModel(id, model.key, 2);

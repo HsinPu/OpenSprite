@@ -38,19 +38,6 @@ from .api.provider_routes import (
     provider_error_response,
     router as provider_router,
 )
-from .api.mcp_routes import mcp_error_response, router as mcp_router
-from .api.tool_approval_routes import (
-    router as tool_approval_router,
-    tool_approval_error_response,
-)
-from .api.tool_settings_routes import (
-    router as tool_settings_router,
-    tool_settings_error_response,
-)
-from .api.schedule_routes import (
-    router as schedule_router,
-    schedule_error_response,
-)
 from .api.workspace_routes import (
     router as workspace_router,
     workspace_error_response,
@@ -80,9 +67,6 @@ from .models import (
     ErrorCode,
     GeneralSettingsErrorCode,
     HealthResponse,
-    McpErrorCode,
-    ToolSettingsErrorCode,
-    ToolApprovalErrorCode,
 )
 from .ai_settings import (
     AiSettingsOperations,
@@ -105,22 +89,6 @@ from .conversation_settings import (
     ConversationSettingsStoreError,
     UnavailableConversationSettings,
 )
-from .tool_settings import (
-    ToolNotFoundError,
-    ToolSettingsOperations,
-    ToolSettingsStoreError,
-    UnavailableToolSettings,
-)
-from .mcp import McpConnections, UnavailableMcpConnections
-from .mcp.config import McpConfigStoreError
-from .mcp.manager import McpConnectionError
-from .tools.approval import (
-    ToolApprovalError,
-    ToolApprovalOperations,
-    UnavailableToolApprovals,
-)
-from .schedules.repository import ScheduleFailure, ScheduleStoreError
-from .schedules.service import ScheduleOperations, UnavailableSchedules
 from .workspaces import (
     UnavailableWorkspaces,
     WorkspaceError,
@@ -140,13 +108,9 @@ def create_app(
     execution_settings: ExecutionSettingsOperations | None = None,
     execution_packages: ExecutionPackageOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
-    tool_settings: ToolSettingsOperations | None = None,
-    mcp_connections: McpConnections | None = None,
     local_path_picker: LocalPathPickerOperations | None = None,
     local_authentication: LocalAuthenticationOperations | None = None,
-    tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
-    schedules: ScheduleOperations | None = None,
     workspaces: WorkspaceOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
@@ -188,12 +152,6 @@ def create_app(
         if conversation_settings is not None
         else UnavailableConversationSettings()
     )
-    app.state.tool_settings = (
-        tool_settings if tool_settings is not None else UnavailableToolSettings()
-    )
-    app.state.mcp_connections = (
-        mcp_connections if mcp_connections is not None else UnavailableMcpConnections()
-    )
     app.state.local_path_picker = (
         local_path_picker
         if local_path_picker is not None
@@ -204,13 +162,9 @@ def create_app(
         if local_authentication is not None
         else UnavailableLocalAuthentication()
     )
-    app.state.tool_approvals = (
-        tool_approvals if tool_approvals is not None else UnavailableToolApprovals()
-    )
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
     )
-    app.state.schedules = schedules if schedules is not None else UnavailableSchedules()
     app.state.workspaces = workspaces if workspaces is not None else UnavailableWorkspaces()
     if enforce_authentication:
         app.add_middleware(
@@ -241,8 +195,6 @@ def create_app(
             return auth_error_response("invalid_request")
         if request.url.path == "/api/local-paths/pick":
             return local_path_error_response("invalid_request")
-        if request.url.path.startswith("/api/schedules"):
-            return schedule_error_response(ScheduleFailure.INVALID_REQUEST)
         if request.url.path.startswith("/api/workspaces"):
             return workspace_error_response(WorkspaceFailure.INVALID_REQUEST)
         if request.url.path.startswith("/api/conversations") or request.url.path.startswith("/api/runs"):
@@ -297,42 +249,6 @@ def create_app(
             ConversationSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
-    async def tool_settings_store_error_handler(
-        request: Request,
-        exc: ToolSettingsStoreError,
-    ) -> JSONResponse:
-        del request, exc
-        return tool_settings_error_response(
-            ToolSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
-        )
-
-    async def tool_not_found_error_handler(
-        request: Request,
-        exc: ToolNotFoundError,
-    ) -> JSONResponse:
-        del request, exc
-        return tool_settings_error_response(ToolSettingsErrorCode.TOOL_NOT_FOUND)
-
-    async def mcp_config_store_error_handler(
-        request: Request,
-        exc: McpConfigStoreError,
-    ) -> JSONResponse:
-        del request, exc
-        return mcp_error_response(McpErrorCode.MCP_STORE_UNAVAILABLE)
-
-    async def mcp_connection_error_handler(
-        request: Request,
-        exc: McpConnectionError,
-    ) -> JSONResponse:
-        del request
-        return mcp_error_response(exc.code, retryable=exc.retryable)
-
-    async def tool_approval_error_handler(
-        request: Request,
-        exc: ToolApprovalError,
-    ) -> JSONResponse:
-        del request
-        return tool_approval_error_response(exc.code)
 
     async def agent_chat_error_handler(
         request: Request,
@@ -341,12 +257,6 @@ def create_app(
         del request
         return chat_error_response(exc.code)
 
-    async def schedule_store_error_handler(
-        request: Request,
-        exc: ScheduleStoreError,
-    ) -> JSONResponse:
-        del request
-        return schedule_error_response(exc.failure)
 
     async def workspace_error_handler(
         request: Request,
@@ -364,13 +274,6 @@ def create_app(
             # and omit exception reprs/traces at this input boundary.
             _LOGGER.error("execution plugin package request failed")
             return await execution_package_error_handler(request, ExecutionPackageError("internal_error"))
-        if request.url.path == "/api/agents" or request.url.path.startswith("/api/agents/"):
-            # Response validation can embed the whole definition in its error.
-            # Never log an exception repr/trace from this content boundary.
-            _LOGGER.error("custom agent management request failed")
-            return JSONResponse(status_code=500, content={"error": {
-                "code": "internal_error", "message": "Agent operation could not be completed.", "retryable": False,
-            }})
         _LOGGER.exception("request failed path=%s", request.url.path, exc_info=exc)
         if request.url.path.startswith("/api/workspaces"):
             return workspace_error_response(WorkspaceFailure.INTERNAL_ERROR)
@@ -411,32 +314,8 @@ def create_app(
         cast(ExceptionHandler, conversation_settings_store_error_handler),
     )
     app.add_exception_handler(
-        ToolSettingsStoreError,
-        cast(ExceptionHandler, tool_settings_store_error_handler),
-    )
-    app.add_exception_handler(
-        ToolNotFoundError,
-        cast(ExceptionHandler, tool_not_found_error_handler),
-    )
-    app.add_exception_handler(
-        McpConfigStoreError,
-        cast(ExceptionHandler, mcp_config_store_error_handler),
-    )
-    app.add_exception_handler(
-        McpConnectionError,
-        cast(ExceptionHandler, mcp_connection_error_handler),
-    )
-    app.add_exception_handler(
-        ToolApprovalError,
-        cast(ExceptionHandler, tool_approval_error_handler),
-    )
-    app.add_exception_handler(
         AgentChatError,
         cast(ExceptionHandler, agent_chat_error_handler),
-    )
-    app.add_exception_handler(
-        ScheduleStoreError,
-        cast(ExceptionHandler, schedule_store_error_handler),
     )
     app.add_exception_handler(
         WorkspaceError,
@@ -463,24 +342,10 @@ def create_app(
     app.include_router(execution_settings_router)
     app.include_router(execution_package_router)
     app.include_router(conversation_settings_router)
-    app.include_router(tool_settings_router)
-    app.include_router(mcp_router)
     app.include_router(local_path_router)
-    app.include_router(tool_approval_router)
     app.include_router(provider_router)
     from .api.custom_provider_routes import router as custom_provider_router
     app.include_router(custom_provider_router)
     app.include_router(chat_router)
-    app.include_router(schedule_router)
     app.include_router(workspace_router)
-    from .api.skill_routes import router as skills_router, skill_error_handler
-    from .skills.models import SkillError
-    app.include_router(skills_router)
-    app.add_exception_handler(SkillError, skill_error_handler)
-    from .api.custom_agent_routes import router as custom_agents_router, agent_error_handler
-    from .custom_agents.models import AgentError
-    app.include_router(custom_agents_router)
-    from .api.subagent_routes import router as subagent_router
-    app.include_router(subagent_router)
-    app.add_exception_handler(AgentError, agent_error_handler)
     return app

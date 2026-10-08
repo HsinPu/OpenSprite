@@ -142,7 +142,7 @@ def test_summary_generator_is_bounded_and_never_exposes_tools() -> None:
         assert result.summary.startswith("Goals and constraints")
         assert result.input_tokens == 120
         assert result.output_tokens == 20
-        assert gateway.requests[0].tools == ()
+        assert not hasattr(gateway.requests[0], "tools")
         assert gateway.requests[0].max_output_tokens == 2_048
         assert gateway.requests[0].response_mode == "default"
 

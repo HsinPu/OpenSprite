@@ -73,7 +73,6 @@ class WorkspaceCatalogState:
 @dataclass(frozen=True, slots=True)
 class WorkspaceUsage:
     conversation_count: int = 0
-    schedule_count: int = 0
     active_run_count: int = 0
 
 

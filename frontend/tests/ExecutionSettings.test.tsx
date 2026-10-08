@@ -15,9 +15,9 @@ vi.mock("../src/api/executionPluginPackages", async (original) => ({ ...await or
 const settings: ExecutionData = {
   selection: { loopId: "standard", policyId: "standard" },
   plugins: [
-    { id: "standard", kind: "loop", name: "Standard Loop", description: "Default loop", version: "1.0.0", apiVersion: 1, status: "available" },
-    { id: "standard", kind: "policy", name: "Standard", description: "Default recovery", version: "1.0.0", apiVersion: 1, status: "available" },
-    { id: "no_recovery", kind: "policy", name: "No recovery", description: "No automatic recovery", version: "1.0.0", apiVersion: 1, status: "available" },
+    { id: "standard", kind: "loop", name: "Standard Loop", description: "Default loop", version: "2.0.0", apiVersion: 2, status: "available" },
+    { id: "standard", kind: "policy", name: "Standard", description: "Default recovery", version: "2.0.0", apiVersion: 2, status: "available" },
+    { id: "no_recovery", kind: "policy", name: "No recovery", description: "No automatic recovery", version: "2.0.0", apiVersion: 2, status: "available" },
     { id: "future", kind: "policy", name: "Future policy", description: "Future API", version: "2.0.0", apiVersion: 2, status: "incompatible" },
   ],
 };
@@ -59,7 +59,7 @@ describe("execution plugin workbench", () => {
     expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
     await screen.findByRole("radio", { name: radio });
     expect(screen.getByRole("tab", { name: policy })).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: savedTitle })).getAllByText(/1\.0\.0/)).toHaveLength(2);
+    expect(within(screen.getByRole("region", { name: savedTitle })).getAllByText(/2\.0\.0/)).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: guide }));
     const link = await screen.findByRole("link", { name: download });
     expect(link.getAttribute("href")).toBe("/execution-plugin-example.zip");
@@ -195,9 +195,9 @@ describe("execution plugin workbench", () => {
     fireEvent.click(screen.getByRole("tab", { name: "執行策略" }));
     fireEvent.click(screen.getByRole("button", { name: "查看 不自動重試或續寫 詳情" }));
     const drawer = await screen.findByRole("dialog", { name: "插件詳情" });
-    expect(within(drawer).getByText("不自動重試上下文超限，也不接續被截斷的模型輸出。一般工具呼叫與工具核准仍正常執行。")).toBeTruthy();
+    expect(within(drawer).getByText("不自動重試上下文超限，也不接續被截斷的模型輸出。")).toBeTruthy();
     expect(within(drawer).getByText("no_recovery")).toBeTruthy();
-    expect(within(drawer).getByText("1.0.0")).toBeTruthy();
+    expect(within(drawer).getByText("2.0.0")).toBeTruthy();
     fireEvent.click(within(drawer).getByRole("button", { name: "選為草稿" }));
     expect(within(savedRegion()).getByText("標準策略")).toBeTruthy();
     expect(applyButton().hasAttribute("disabled")).toBe(false);
@@ -224,11 +224,11 @@ describe("execution plugin workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "安裝說明" }));
     const drawer = await screen.findByRole("dialog", { name: "開發說明" });
     expect(within(drawer).getByText("uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin")).toBeTruthy();
-    expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v1");
+    expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v2");
     expect(drawer.textContent).toContain("OPENSPRITE_PLUGIN_BUNDLE_DIR");
-    fireEvent.click(within(drawer).getByRole("tab", { name: "API v1 邊界" }));
+    fireEvent.click(within(drawer).getByRole("tab", { name: "API v2 邊界" }));
     expect(within(drawer).getByRole("alert").textContent).toContain("程序內 API 不是安全沙箱");
-    expect(within(drawer).getByText(/API v1 不提供修改 prompt/)).toBeTruthy();
+    expect(within(drawer).getByText(/API v2 不提供修改 prompt/)).toBeTruthy();
     expect(api.put).not.toHaveBeenCalled();
   });
 

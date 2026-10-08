@@ -22,24 +22,17 @@ import { outputBudgetAvailable, outputBudgetLimit, outputBudgetValues } from "..
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
-import type { ToolSettingsController } from "../tool-settings/useToolSettings";
-import type { McpConnectionsController } from "../mcp-settings/useMcpConnections";
 import { GeneralSettings } from "./GeneralSettings";
 import { ExecutionSettings } from "./ExecutionSettings";
 import { AboutSettings } from "./AboutSettings";
-import { ToolsSettings } from "./ToolsSettings";
 import { PrivacySettings } from "./PrivacySettings";
-import { SchedulePage } from "../schedules/SchedulePage";
 import { WorkspacesSettings } from "./WorkspacesSettings";
 import type { WorkspaceController } from "../workspaces/useWorkspaces";
 import { useAuthentication } from "../auth/AuthGate";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
 import "./settings.css";
-import { SkillsSettings } from "./SkillsSettings";
-import { AgentsSettings } from "./AgentsSettings";
 import { CustomProviderCreate } from "./CustomProviderCreate";
-import { NativeProviderTools } from "./NativeProviderTools";
 import { getCustomProvider, refreshCustomModels, CustomProviderApiError } from "../../api/customProviders";
 import { customProviderErrorText } from "../ai-settings/customProviderErrors";
 
@@ -64,29 +57,21 @@ type SettingsPageProps = {
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
   conversationSettings: ConversationSettingsController;
-  toolSettings: ToolSettingsController;
-  mcpConnections: McpConnectionsController;
   workspaces: WorkspaceController;
   onWorkspaceActivated: (workspaceId: string) => void;
   workspaceCreateRequest: number;
   onWorkspaceCreateRequestHandled: () => void;
   onWorkspaceOverlayChange?: (open: boolean) => void;
-  onOpenScheduleConversation: (conversationId: string) => void;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
-  onScheduleOverlayChange?: (open: boolean) => void;
 };
 
-const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
+const categories: Array<{ id: SettingsSection | "memory" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
   { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true },
   { id: "workspaces", labelKey: "settings.category.workspaces", icon: "folder", enabled: true },
   { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
   { id: "execution", labelKey: "settings.category.execution", icon: "rocket", enabled: true },
   { id: "memory", labelKey: "settings.category.memory", icon: "database" },
-  { id: "tools", labelKey: "settings.category.tools", icon: "connections", enabled: true },
-  { id: "skills", labelKey: "settings.category.skills", icon: "folder", enabled: true },
-  { id: "agents", labelKey: "settings.category.agents", icon: "robot", enabled: true },
-  { id: "schedules", labelKey: "settings.category.schedules", icon: "schedules", enabled: true },
   { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" },
   { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy", enabled: true },
   { id: "about", labelKey: "settings.category.about", icon: "info", enabled: true },
@@ -94,7 +79,7 @@ const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance
 
 const categoryGroups: Array<{ labelKey: MessageKey; ids: readonly string[] }> = [
   { labelKey: "settings.group.workspace", ids: ["general", "workspaces"] },
-  { labelKey: "settings.group.capabilities", ids: ["models", "execution", "tools", "skills", "agents", "schedules"] },
+  { labelKey: "settings.group.capabilities", ids: ["models", "execution"] },
   { labelKey: "settings.group.application", ids: ["privacy", "about", "memory", "appearance"] },
 ];
 
@@ -476,7 +461,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
                 <div className="settings-service-card" key={provider.id} aria-label={t("models.providerConnection", { provider: provider.name })} aria-busy={busy}>
                   <div className="settings-service-identity"><Icon name={provider.id === "openai" || provider.id === "anthropic" || provider.id === "openrouter" ? provider.id : "robot"} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{t(providerStatusKeys[provider.status])}</span></span></div>
                   <div className="settings-service-actions" role="group" aria-label={t("models.providerActions", { provider: provider.name })} aria-busy={busy}>
-                    <NativeProviderTools provider={provider.id as "openai" | "anthropic" | "openrouter"} name={provider.name} container={modalContainer} onOverlayChange={onProviderModalChange} />
+
                     <button type="button" className="settings-secondary-button" onClick={() => setModalProvider(provider)} disabled={busy}>{provider.connected ? t("models.manage") : t("models.connect")}</button>
                     {provider.connected ? <Dropdown trigger={["click"]} getPopupContainer={getSettingsPopupContainer} menu={{ items: [
                       { key: "test", label: t("models.testConnection"), onClick: () => void testConnection(provider) },
@@ -536,10 +521,10 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   );
 }
 
-export function SettingsPage({ section, active, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, mcpConnections, workspaces, onWorkspaceActivated, workspaceCreateRequest, onWorkspaceCreateRequestHandled, onWorkspaceOverlayChange, onOpenScheduleConversation, onClose, onProviderModalChange, onScheduleOverlayChange }: SettingsPageProps) {
+export function SettingsPage({ section, active, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, workspaces, onWorkspaceActivated, workspaceCreateRequest, onWorkspaceCreateRequestHandled, onWorkspaceOverlayChange, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const { mode: authMode } = useAuthentication();
-  const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving || toolSettings.saving;
+  const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
   const wasSavingRef = useRef(false);
   const [showSaveStatus, setShowSaveStatus] = useState(false);
   useEffect(() => {
@@ -579,13 +564,13 @@ export function SettingsPage({ section, active, onSectionChange, modelSelection,
           <header className="settings-navigation-header">
             <Button type="text" icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={onClose}>{t("settings.returnToChat")}</Button>
             <h1 id="settings-page-title"><span className="settings-desktop-title">{t("settings.title")}</span><span className="settings-mobile-title">{t(categories.find(category => category.id === section)!.labelKey)}</span></h1>
-            <Button className="settings-category-toggle" icon={<MenuOutlined />} aria-label={t("settings.categories")} aria-expanded={categoriesOpen} onClick={() => setCategoriesOpen(true)} />
+            <Button type="text" className="settings-category-toggle" icon={<MenuOutlined />} aria-label={t("settings.categories")} aria-expanded={categoriesOpen} onClick={() => setCategoriesOpen(true)} />
             {showSaveStatus ? <SaveStatus saved={!saving} /> : null}
           </header>
           <div className="settings-desktop-categories">{categoryNavigation}</div>
         </aside>
         <div className="settings-content">
-{section === "execution" ? <ExecutionSettings active={active} /> : section === "skills" ? <SkillsSettings workspaces={workspaces} container={modalContainer} onOverlayChange={onWorkspaceOverlayChange} /> : section === "agents" ? <AgentsSettings workspaces={workspaces} providerCatalog={providerCatalog} container={modalContainer} onOverlayChange={onWorkspaceOverlayChange} /> : section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "workspaces" ? <><WorkspacesSettings controller={workspaces} container={modalContainer} onActivated={onWorkspaceActivated} createRequest={workspaceCreateRequest} onCreateRequestHandled={onWorkspaceCreateRequestHandled} onOverlayChange={onWorkspaceOverlayChange} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <ToolsSettings controller={toolSettings} mcpConnections={mcpConnections} modalContainer={modalContainer} /> : section === "schedules" ? <><div className="settings-intro"><h2>{t("settings.category.schedules")}</h2><p>{t("settings.schedulesIntro")}</p></div><SchedulePage active={active && section === "schedules"} container={modalContainer} defaultTimeZone={generalSettings.settings.timeZone} modelSelection={modelSelection} modelChoices={providerCatalog.modelChoices} responseMode={responseMode} outputContinuation={outputContinuation} activeWorkspaceId={workspaces.catalog?.activeWorkspaceId} workspaces={workspaces.catalog?.workspaces ?? []} workspaceLoading={workspaces.loading} workspaceError={workspaces.error !== null} onWorkspaceRetry={() => void workspaces.reload()} onOpenConversation={onOpenScheduleConversation} onOverlayChange={onScheduleOverlayChange} /></> : section === "privacy" ? <><div className="settings-intro"><h2>{t("settings.category.privacy")}</h2><p>{t(authMode === "trusted_local" ? "auth.trustedLocalDescription" : "auth.changeDescription")}</p></div><PrivacySettings /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+{section === "execution" ? <ExecutionSettings active={active} /> : section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "workspaces" ? <><WorkspacesSettings controller={workspaces} container={modalContainer} onActivated={onWorkspaceActivated} createRequest={workspaceCreateRequest} onCreateRequestHandled={onWorkspaceCreateRequestHandled} onOverlayChange={onWorkspaceOverlayChange} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "privacy" ? <><div className="settings-intro"><h2>{t("settings.category.privacy")}</h2><p>{t(authMode === "trusted_local" ? "auth.trustedLocalDescription" : "auth.changeDescription")}</p></div><PrivacySettings /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
       <Drawer title={t("settings.categories")} placement="left" open={categoriesOpen} onClose={() => setCategoriesOpen(false)} getContainer={() => modalContainer ?? document.body} size={280} className="settings-category-drawer">

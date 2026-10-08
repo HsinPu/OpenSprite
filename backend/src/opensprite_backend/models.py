@@ -15,15 +15,6 @@ StartupView = Literal["new", "recent"]
 SendBehavior = Literal["enter", "modifier-enter"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
-ToolSourceValue = Literal["builtin", "mcp", "external"]
-ToolEffectValue = Literal[
-    "read_only",
-    "local_write",
-    "external_write",
-    "destructive",
-    "sensitive",
-]
-_TOOL_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _BEARER_TOKEN = re.compile(r"^[A-Za-z0-9\-._~+/]+=*$")
 
 
@@ -198,7 +189,6 @@ class ProviderListResponse(ContractModel):
 
 class OpenRouterModel(ContractModel):
     reasoning_efforts: tuple[str, ...] | None = Field(default=None, exclude=True)
-    supports_tools: bool | None = Field(default=None, exclude=True)
     id: str = Field(min_length=1, max_length=256)
     name: str = Field(min_length=1, max_length=256)
     context_window_tokens: int = Field(
@@ -252,8 +242,6 @@ class ModelSelection(ContractModel):
         return value
 
 
-
-
 class OutputContinuation(StrEnum):
     OFF = "off"
     ONE = "1"
@@ -271,26 +259,12 @@ class ResponseDelivery(StrEnum):
     COMPLETE = "complete"
 
 
-class ProviderToolPolicy(ContractModel):
-    toolsEnabled: StrictBool = True
-    transport: Literal["stream", "non_streaming"] = "stream"
-    disabledModels: list[str] = Field(default_factory=list, max_length=1000)
-
-    @field_validator("disabledModels")
-    @classmethod
-    def validate_disabled_models(cls, values: list[str]) -> list[str]:
-        if len(set(values)) != len(values) or any(not 1 <= len(value) <= 256 or value != value.strip() for value in values):
-            raise ValueError("invalid model opt-outs")
-        return values
-
-
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     outputContinuation: OutputContinuation = OutputContinuation.FIVE
     responseDelivery: ResponseDelivery = ResponseDelivery.STREAM
     logFullPrompts: StrictBool = False
-    providerToolPolicies: dict[Literal["openai", "anthropic", "openrouter"], ProviderToolPolicy] = Field(default_factory=dict)
 
 
 class PutAiSettingsRequest(ContractModel):
@@ -299,7 +273,6 @@ class PutAiSettingsRequest(ContractModel):
     outputContinuation: OutputContinuation
     responseDelivery: ResponseDelivery
     logFullPrompts: StrictBool
-    providerToolPolicies: dict[Literal["openai", "anthropic", "openrouter"], ProviderToolPolicy] | None = None
 
 
 class GeneralSettings(ContractModel):
@@ -324,56 +297,6 @@ class PutConversationSettingsRequest(ContractModel):
     sendBehavior: SendBehavior
     autoScroll: StrictBool
     executionPanelDefaultExpanded: StrictBool
-
-
-class ToolSummary(ContractModel):
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
-    source: ToolSourceValue
-    effect: ToolEffectValue
-    available: StrictBool
-
-
-class ToolListResponse(ContractModel):
-    items: list[ToolSummary] = Field(max_length=64)
-
-    @field_validator("items")
-    @classmethod
-    def require_sorted_unique_items(
-        cls,
-        value: list[ToolSummary],
-    ) -> list[ToolSummary]:
-        ids = [item.id for item in value]
-        if ids != sorted(set(ids)):
-            raise ValueError("tool catalog must be sorted and unique")
-        return value
-
-
-def _validate_enabled_tool_ids(value: list[str]) -> list[str]:
-    if len(set(value)) != len(value) or any(
-        _TOOL_ID.fullmatch(item) is None for item in value
-    ):
-        raise ValueError("enabledTools must contain unique tool ids")
-    return value
-
-
-class ToolSettings(ContractModel):
-    enabled: StrictBool
-    enabledTools: list[str] = Field(max_length=64)
-
-    @field_validator("enabledTools")
-    @classmethod
-    def validate_enabled_tools(cls, value: list[str]) -> list[str]:
-        return _validate_enabled_tool_ids(value)
-
-
-class PutToolSettingsRequest(ContractModel):
-    enabled: StrictBool
-    enabledTools: list[str] = Field(max_length=64)
-
-    @field_validator("enabledTools")
-    @classmethod
-    def validate_enabled_tools(cls, value: list[str]) -> list[str]:
-        return _validate_enabled_tool_ids(value)
 
 
 class ErrorCode(StrEnum):
@@ -446,283 +369,3 @@ class ConversationSettingsErrorDetail(ContractModel):
 
 class ConversationSettingsErrorEnvelope(ContractModel):
     error: ConversationSettingsErrorDetail
-
-
-class ToolSettingsErrorCode(StrEnum):
-    INVALID_REQUEST = "invalid_request"
-    TOOL_NOT_FOUND = "tool_not_found"
-    SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
-    INTERNAL_ERROR = "internal_error"
-
-
-class ToolSettingsErrorDetail(ContractModel):
-    code: ToolSettingsErrorCode
-    message: str
-    retryable: bool
-
-
-class ToolSettingsErrorEnvelope(ContractModel):
-    error: ToolSettingsErrorDetail
-
-
-class McpServerStatus(StrEnum):
-    DISABLED = "disabled"
-    STOPPED = "stopped"
-    STARTING = "starting"
-    CONNECTED = "connected"
-    ERROR = "error"
-    STOPPING = "stopping"
-
-
-class McpStdioTransport(ContractModel):
-    type: Literal["stdio"] = "stdio"
-    executable: str = Field(min_length=1, max_length=2048)
-    arguments: list[str] = Field(max_length=64)
-    workingDirectory: str | None = Field(default=None, max_length=2048)
-
-    @field_validator("executable", "workingDirectory")
-    @classmethod
-    def reject_invalid_path_text(cls, value: str | None) -> str | None:
-        if value is not None and any(character in value for character in ("\x00", "\r", "\n")):
-            raise ValueError("invalid path text")
-        return value
-
-    @field_validator("arguments")
-    @classmethod
-    def require_bounded_arguments(cls, value: list[str]) -> list[str]:
-        if any(not item or len(item) > 2048 or any(character in item for character in ("\x00", "\r", "\n")) for item in value):
-            raise ValueError("invalid stdio argument")
-        return value
-
-
-class McpStreamableHttpTransport(ContractModel):
-    type: Literal["streamable-http"] = "streamable-http"
-    url: str = Field(min_length=1, max_length=2048)
-
-    @field_validator("url")
-    @classmethod
-    def reject_invalid_url_text(cls, value: str) -> str:
-        if any(character in value for character in ("\x00", "\r", "\n")):
-            raise ValueError("invalid MCP URL text")
-        return value
-
-
-McpTransport = Annotated[
-    McpStdioTransport | McpStreamableHttpTransport,
-    Field(discriminator="type"),
-]
-
-
-class McpNoAuthentication(ContractModel):
-    type: Literal["none"] = "none"
-
-
-class McpBearerAuthenticationInput(ContractModel):
-    type: Literal["bearer-token"] = "bearer-token"
-    token: SecretStr | None = Field(default=None, min_length=1, max_length=8192)
-
-    @field_validator("token")
-    @classmethod
-    def reject_blank_token(cls, value: SecretStr | None) -> SecretStr | None:
-        if (
-            value is not None
-            and _BEARER_TOKEN.fullmatch(value.get_secret_value()) is None
-        ):
-            raise ValueError("Bearer token has invalid characters")
-        return value
-
-
-McpAuthenticationInput = Annotated[
-    McpNoAuthentication | McpBearerAuthenticationInput,
-    Field(discriminator="type"),
-]
-
-
-class McpBearerAuthenticationSummary(ContractModel):
-    type: Literal["bearer-token"] = "bearer-token"
-    configured: StrictBool
-
-
-McpAuthenticationSummary = Annotated[
-    McpNoAuthentication | McpBearerAuthenticationSummary,
-    Field(discriminator="type"),
-]
-
-
-class CreateMcpServerRequest(ContractModel):
-    name: str = Field(min_length=1, max_length=80)
-    transport: McpTransport
-    authentication: McpAuthenticationInput = Field(
-        default_factory=McpNoAuthentication
-    )
-    startOnLaunch: StrictBool = False
-
-    @field_validator("name")
-    @classmethod
-    def reject_blank_name(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("name must contain non-whitespace")
-        return value
-
-    @model_validator(mode="after")
-    def require_new_bearer_token(self) -> "CreateMcpServerRequest":
-        authentication = self.authentication
-        if (
-            isinstance(authentication, McpBearerAuthenticationInput)
-            and authentication.token is None
-        ):
-            raise ValueError("Bearer token is required when creating a server")
-        if (
-            isinstance(self.transport, McpStdioTransport)
-            and not isinstance(authentication, McpNoAuthentication)
-        ):
-            raise ValueError("stdio does not support HTTP authentication")
-        return self
-
-
-class PutMcpServerRequest(ContractModel):
-    name: str = Field(min_length=1, max_length=80)
-    transport: McpTransport
-    authentication: McpAuthenticationInput = Field(
-        default_factory=McpNoAuthentication
-    )
-    startOnLaunch: StrictBool = False
-
-    @field_validator("name")
-    @classmethod
-    def reject_blank_name(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("name must contain non-whitespace")
-        return value
-
-    @model_validator(mode="after")
-    def restrict_authentication_to_http(self) -> "PutMcpServerRequest":
-        if (
-            isinstance(self.transport, McpStdioTransport)
-            and not isinstance(self.authentication, McpNoAuthentication)
-        ):
-            raise ValueError("stdio does not support HTTP authentication")
-        return self
-
-
-class McpServerSummary(ContractModel):
-    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-    name: str
-    enabled: StrictBool
-    startOnLaunch: StrictBool
-    transport: McpTransport
-    authentication: McpAuthenticationSummary
-    status: McpServerStatus
-    protocolVersion: str | None
-    errorCode: str | None
-    toolCount: int = Field(ge=0, le=128)
-    unsupportedToolCount: int = Field(ge=0, le=128)
-
-
-class McpServerListResponse(ContractModel):
-    servers: list[McpServerSummary] = Field(max_length=32)
-
-
-class McpToolAnnotations(ContractModel):
-    readOnlyHint: StrictBool
-    destructiveHint: StrictBool
-    idempotentHint: StrictBool
-    openWorldHint: StrictBool
-
-
-class McpToolSummary(ContractModel):
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
-    serverId: str
-    originalName: str = Field(min_length=1, max_length=128)
-    title: str | None = Field(default=None, max_length=256)
-    description: str = Field(min_length=1, max_length=1024)
-    supported: StrictBool
-    unsupportedReason: Literal["unsupported_schema"] | None
-    annotations: McpToolAnnotations
-
-
-class McpToolListResponse(ContractModel):
-    tools: list[McpToolSummary] = Field(max_length=128)
-
-
-class McpErrorCode(StrEnum):
-    INVALID_REQUEST = "invalid_request"
-    NOT_FOUND = "not_found"
-    SERVER_DISABLED = "server_disabled"
-    SERVER_NOT_RUNNING = "server_not_running"
-    SERVER_START_FAILED = "server_start_failed"
-    SERVER_STOP_FAILED = "server_stop_failed"
-    SERVER_UNREACHABLE = "server_unreachable"
-    SERVER_TIMEOUT = "server_timeout"
-    TOOLS_NOT_SUPPORTED = "tools_not_supported"
-    TOOL_CATALOG_INVALID = "tool_catalog_invalid"
-    REMOTE_URL_BLOCKED = "remote_url_blocked"
-    AUTHENTICATION_REQUIRED = "authentication_required"
-    TLS_VERIFICATION_FAILED = "tls_verification_failed"
-    REDIRECT_NOT_ALLOWED = "redirect_not_allowed"
-    PROTOCOL_UNSUPPORTED = "protocol_unsupported"
-    MCP_STORE_UNAVAILABLE = "mcp_store_unavailable"
-    CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
-    INTERNAL_ERROR = "internal_error"
-
-
-class McpErrorDetail(ContractModel):
-    code: McpErrorCode
-    message: str
-    retryable: bool
-
-
-class McpErrorEnvelope(ContractModel):
-    error: McpErrorDetail
-
-
-class ToolApprovalDecision(StrEnum):
-    ALLOW_ONCE = "allow_once"
-    DENY = "deny"
-
-
-class ToolApprovalDetail(ContractModel):
-    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-    runId: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-    conversationId: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-    toolId: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
-    toolName: str
-    serverId: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-    arguments: dict[str, object]
-    argumentHash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    createdAt: datetime
-    expiresAt: datetime
-
-    @model_validator(mode="after")
-    def require_utc_expiry(self) -> "ToolApprovalDetail":
-        if self.createdAt.tzinfo is None or self.createdAt.utcoffset() != timedelta(0) or self.expiresAt.tzinfo is None or self.expiresAt.utcoffset() != timedelta(0) or self.expiresAt <= self.createdAt:
-            raise ValueError("approval timestamps must be ordered UTC values")
-        return self
-
-
-class PutToolApprovalDecisionRequest(ContractModel):
-    decision: ToolApprovalDecision
-
-
-class ToolApprovalDecisionResponse(ContractModel):
-    id: str
-    decision: ToolApprovalDecision
-
-
-class ToolApprovalErrorCode(StrEnum):
-    INVALID_REQUEST = "invalid_request"
-    NOT_FOUND = "not_found"
-    APPROVAL_EXPIRED = "approval_expired"
-    APPROVAL_ALREADY_DECIDED = "approval_already_decided"
-    DATABASE_UNAVAILABLE = "database_unavailable"
-    INTERNAL_ERROR = "internal_error"
-
-
-class ToolApprovalErrorDetail(ContractModel):
-    code: ToolApprovalErrorCode
-    message: str
-    retryable: bool
-
-
-class ToolApprovalErrorEnvelope(ContractModel):
-    error: ToolApprovalErrorDetail

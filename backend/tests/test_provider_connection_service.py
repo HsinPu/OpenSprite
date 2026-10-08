@@ -148,8 +148,7 @@ class FakeValidator:
             raise ProviderValidationError(self.failure)
         from opensprite_backend.inference.capabilities import ModelCapability
         return (ModelCapability(provider_id=provider_id, model_id="future", name="Future",
-                                context_window_tokens=8192, max_output_tokens=2048,
-                                supports_tools=False),)
+                                context_window_tokens=8192, max_output_tokens=2048),)
 
     async def list_openrouter_models(
         self,

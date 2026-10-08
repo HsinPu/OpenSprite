@@ -16,7 +16,6 @@ from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import CompletionReason, RunEventType, RunStatus
 from opensprite_backend.execution_settings import ExecutionSettingsService
 from opensprite_backend.inference.models import ModelCompleted, ModelFinishReason, ModelTextDelta
-from opensprite_backend.schedules.models import ExecutionProfile
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID
 
 
@@ -117,55 +116,6 @@ def test_unavailable_selected_plugin_fails_before_persisting_user_message(tmp_pa
             assert not paths.database_file.exists()
             assert point.loads == 1
             assert manager._tasks == {}
-        finally:
-            await chat.close()
-
-    asyncio.run(scenario())
-
-
-@pytest.mark.parametrize("policy,request_count,reason", [
-    ("standard", 2, CompletionReason.STOP),
-    ("no_recovery", 1, CompletionReason.OUTPUT_LIMIT),
-])
-def test_scheduled_acceptance_uses_selected_plugins_and_replays_without_settings(
-    tmp_path, policy, request_count, reason,
-):
-    chat, repository, manager, _ = service(tmp_path)
-    paths = build_app_paths(tmp_path / ".opensprite")
-    catalog = ExecutionPluginCatalog(())
-    settings = ExecutionSettingsService(paths, catalog)
-    chat._execution_settings = settings
-    chat._execution_plugins = catalog
-
-    class Gateway:
-        requests = 0
-
-        async def stream(self, request, *, attempt=None):
-            self.requests += 1
-            yield ModelTextDelta("scheduled partial" if self.requests == 1 else " continuation")
-            yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT if self.requests == 1 else ModelFinishReason.FINAL)
-
-    async def scenario():
-        gateway = Gateway()
-        manager._loop._gateway = gateway
-        occurrence_id = str(uuid4())
-        arguments = dict(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
-                         occurrence_id=occurrence_id, message="scheduled execution",
-                         profile=ExecutionProfile("openrouter", "openrouter/auto", "balanced", "auto", "auto", "5"))
-        try:
-            await settings.update("standard", policy)
-            accepted = await chat.start_scheduled_run(**arguments)
-            result = await asyncio.wait_for(manager.wait(accepted.run.id), 5)
-            assert result.status is RunStatus.COMPLETED
-            assert result.source == "schedule"
-            assert result.completion_reason is reason
-            assert selected_profile(repository, result.id)["policyId"] == policy
-            assert gateway.requests == request_count
-
-            paths.execution_settings_file.write_text("invalid current settings", encoding="utf-8")
-            replay = await chat.start_scheduled_run(**arguments)
-            assert replay.replayed and replay.run.id == accepted.run.id
-            assert gateway.requests == request_count
         finally:
             await chat.close()
 

@@ -18,7 +18,6 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import { useConversationRun } from "./useConversationRun";
 import { useRunInspection } from "./useRunInspection";
 import { useConversationAutoScroll } from "./useConversationAutoScroll";
-import { ToolApprovalCard, pendingToolApprovalId } from "./ToolApprovalCard";
 
 import "./ChatWorkspace.css";
 
@@ -165,7 +164,6 @@ export function ChatWorkspace({
     ? chat.activeRun.assistantMessageId
     : null;
   const isCompactingContext = displayedEvents.at(-1)?.type === "context.compaction.started";
-  const pendingApprovalId = pendingToolApprovalId(chat.events);
   const emptyConversation = !chat.loading && chat.messages.length === 0 && !showLiveAssistant;
   const displayedModelName = displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
@@ -282,7 +280,7 @@ export function ChatWorkspace({
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
           <div className="chat-workspace__conversation-rail">
-            {pendingApprovalId !== null && (historical || (compactLayout ? !mobileExecutionOpen : !executionPanelExpanded)) ? <ToolApprovalCard events={chat.events} /> : null}
+
             {chat.hasPendingSubmission ? <div role="status">{t("chat.confirmingSubmission")}</div> : null}
             {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error} {chat.canRecover ? <Button loading={chat.isRecovering || chat.isSending} onClick={() => void chat.recoverConnection()}>{t("common.retry")}</Button> : null}</div> : null}
             {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}

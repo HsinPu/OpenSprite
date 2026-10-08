@@ -26,8 +26,8 @@ print_uninstall_summary() {
   print_removal_status 'User service file' "$UNIT_FILE" "$UNIT_EXISTED"
   print_removal_status 'User data' "$USER_DATA_ROOT" "$DATA_EXISTED"
   printf '%s\n' \
-    '    Includes settings, encrypted credentials and key, conversations, schedules,' \
-    '    managed workspace files, skills, agents, archives, logs, state and cache.'
+    '    Includes settings, encrypted credentials and key, conversations, runs,' \
+    '    managed workspace files, retained historical data, logs, state and cache.'
   if [[ -e "$USER_DATA_ROOT" ]] && ((result == 0 || REMOVE_USER_DATA == 0)); then printf '  Retained user data can be reused after reinstalling OpenSprite.\n'; fi
   printf '  Not removed: Git, Node.js, uv, shared tool caches, source checkouts and external workspace folders.\n'
   return "$result"

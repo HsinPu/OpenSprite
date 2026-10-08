@@ -63,8 +63,7 @@ class ProviderModelCapabilityResolver:
             if model is None:
                 raise ModelCapabilityNotFound
             return ModelCapability(provider_id=provider.id, model_id=model.model_id, name=model.name,
-                context_window_tokens=model.context_limit, max_output_tokens=model.output_limit,
-                supports_tools=provider.allows_model_tools(model))
+                context_window_tokens=model.context_limit, max_output_tokens=model.output_limit)
         fixed = fixed_model_capability(provider_id, model_id)
         if fixed is not None:
             return fixed
@@ -106,7 +105,7 @@ class ProviderModelCapabilityResolver:
                 context_window_tokens=item.context_window_tokens,
                 max_output_tokens=item.max_output_tokens
                 or min(32_768, item.context_window_tokens),
-                supports_tools=item.supports_tools is not False,
+
                 reasoning_efforts=item.reasoning_efforts,
             )
             for item in catalog.models

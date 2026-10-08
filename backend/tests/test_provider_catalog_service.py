@@ -30,7 +30,7 @@ def test_catalog_lifecycle_and_stale_model_discovery(tmp_path):
 def test_discovery_preserves_manual_model_and_metadata(tmp_path):
     service = service_for(tmp_path)
     provider = service.save(provider_id=None, secret=None, name="Custom", base_url="https://example.com", auth_mode="none", allow_insecure_local=False, expected_revision=0)
-    manual = CustomModel(key=str(uuid4()), model_id="manual", name="Mine", context_limit=32000, output_limit=4000, tools=True)
+    manual = CustomModel(key=str(uuid4()), model_id="manual", name="Mine", context_limit=32000, output_limit=4000)
     service.save_model(provider.id, manual, expected_revision=1)
     refreshed = service.merge_discovered_models(provider.id, ["manual", "remote"], expected_revision=2)
     assert refreshed.models[0] == manual

@@ -90,9 +90,9 @@ def verify(package):
                 raise ValueError("unrecorded installed source")
             elif not path.is_dir():
                 raise ValueError("nonregular installed source")
-    groups = {"loop": "opensprite_backend.agent_loops.v1", "policy": "opensprite_backend.execution_policies.v1"}
+    groups = {"loop": "opensprite_backend.agent_loops.v2", "policy": "opensprite_backend.execution_policies.v2"}
     for plugin in package["plugins"]:
-        if plugin["apiVersion"] != 1 or not any(point.group == groups[plugin["kind"]]
+        if plugin["apiVersion"] != 2 or not any(point.group == groups[plugin["kind"]]
             and point.name == plugin["id"] and point.value == plugin["entryPoint"] for point in dist.entry_points):
             raise ValueError("installed entry point mismatch")
 

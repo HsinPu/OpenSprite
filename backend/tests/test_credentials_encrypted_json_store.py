@@ -102,21 +102,33 @@ def test_replacing_same_secret_uses_a_new_nonce_and_ciphertext(
     assert first["fingerprint"] == second["fingerprint"]
 
 
-def test_mcp_bearer_token_round_trips_without_plaintext_on_disk(
-    tmp_path: Path,
-) -> None:
+def test_retired_encrypted_entries_survive_provider_writes_without_runtime_access(tmp_path):
     store, credential_path, key_path = build_store(tmp_path)
+    store.set("openai", "provider-secret")
+    payload = load_payload(credential_path)
     credential_id = "mcp:11111111-1111-4111-8111-111111111111:bearer"
-    secret = "mcp-bearer-secret"
-
-    store.set(credential_id, secret)
-
-    assert store.get(credential_id) == secret
-    assert store.fingerprint(credential_id) == hashlib.sha256(
-        secret.encode("utf-8")
-    ).hexdigest()
-    assert secret.encode("utf-8") not in credential_path.read_bytes()
-    assert secret.encode("utf-8") not in key_path.read_bytes()
+    secret = b"retired-private-token"
+    nonce = os.urandom(12)
+    fingerprint = hashlib.sha256(secret).hexdigest()
+    key = base64.b64decode(key_path.read_bytes())
+    entry = {
+        "nonce": base64.b64encode(nonce).decode(),
+        "ciphertext": base64.b64encode(store_module.AESGCM(key).encrypt(
+            nonce, secret, store._associated_data(credential_id, fingerprint))).decode(),
+        "fingerprint": fingerprint,
+    }
+    payload["credentials"][credential_id] = entry
+    save_payload(credential_path, payload)
+    before = credential_path.read_bytes()
+    for operation in (lambda: store.get(credential_id), lambda: store.set(credential_id, "replacement"),
+                      lambda: store.fingerprint(credential_id), lambda: store.delete(credential_id)):
+        with pytest.raises(UnsupportedCredentialProviderError):
+            operation()
+        assert credential_path.read_bytes() == before
+    store.set("anthropic", "second-provider-secret")
+    assert store.get("openai") == "provider-secret"
+    assert load_payload(credential_path)["credentials"][credential_id] == entry
+    assert secret not in credential_path.read_bytes()
 
 
 def test_schema_v1_provider_credentials_remain_readable(tmp_path: Path) -> None:

@@ -33,7 +33,8 @@ _PROVIDER_IDS: Final = frozenset({"openai", "anthropic", "openrouter"})
 _CUSTOM_PROVIDER_CREDENTIAL_ID: Final = re.compile(
     r"^provider:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:bearer$"
 )
-_MCP_CREDENTIAL_ID: Final = re.compile(
+# Read-only disk validation preserves retired encrypted entries during provider writes.
+_RETIRED_CREDENTIAL_ID: Final = re.compile(
     r"^mcp:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:bearer$"
 )
 _AAD_PREFIX: Final = b"OpenSprite credential store v1\0"
@@ -50,7 +51,6 @@ def _validated_credential_id(credential_id: str) -> str:
         type(credential_id) is not str
         or (
             credential_id not in _PROVIDER_IDS
-            and _MCP_CREDENTIAL_ID.fullmatch(credential_id) is None
             and _CUSTOM_PROVIDER_CREDENTIAL_ID.fullmatch(credential_id) is None
         )
     ):
@@ -278,7 +278,7 @@ class EncryptedJsonCredentialStore:
                     and not (
                         version == _STORE_VERSION
                         and (
-                            _MCP_CREDENTIAL_ID.fullmatch(provider_id) is not None
+                            _RETIRED_CREDENTIAL_ID.fullmatch(provider_id) is not None
                             or _CUSTOM_PROVIDER_CREDENTIAL_ID.fullmatch(provider_id) is not None
                         )
                     )

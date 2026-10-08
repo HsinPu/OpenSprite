@@ -14,8 +14,7 @@ export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
 export type OutputBudget = "auto" | "8k" | "16k" | "32k" | "64k" | "max";
 export type OutputContinuation = "off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited";
 export type ResponseDelivery = "stream" | "complete";
-export type NativeProviderId = "openai" | "anthropic" | "openrouter";
-export type ProviderToolPolicy = { toolsEnabled: boolean; transport: "stream" | "non_streaming"; disabledModels: string[] };
+
 
 export type AiSettings = {
   model: PersistedModelSelection | null;
@@ -23,7 +22,6 @@ export type AiSettings = {
   outputContinuation: OutputContinuation;
   responseDelivery: ResponseDelivery;
   logFullPrompts: boolean;
-  providerToolPolicies?: Partial<Record<NativeProviderId, ProviderToolPolicy>>;
 };
 
 export type AiSettingsErrorCode = "invalid_request" | "not_connected" | "credential_store_unavailable" | "settings_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
@@ -54,11 +52,10 @@ function model(value: unknown): PersistedModelSelection | null {
 }
 
 function responseBody(value: unknown): AiSettings {
-  if (!record(value) || !exactKeys(value, ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts", ...("providerToolPolicies" in value ? ["providerToolPolicies"] : [])]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.outputContinuation !== "string" || !outputContinuations.includes(value.outputContinuation as OutputContinuation) || typeof value.responseDelivery !== "string" || !responseDeliveries.includes(value.responseDelivery as ResponseDelivery) || typeof value.logFullPrompts !== "boolean") {
+  if (!record(value) || !exactKeys(value, ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.outputContinuation !== "string" || !outputContinuations.includes(value.outputContinuation as OutputContinuation) || typeof value.responseDelivery !== "string" || !responseDeliveries.includes(value.responseDelivery as ResponseDelivery) || typeof value.logFullPrompts !== "boolean") {
     throw new AiSettingsApiError("malformed_response");
   }
-  if ("providerToolPolicies" in value && (!record(value.providerToolPolicies) || Object.entries(value.providerToolPolicies).some(([key, policy]) => !["openai", "anthropic", "openrouter"].includes(key) || !record(policy) || !exactKeys(policy, ["toolsEnabled", "transport", "disabledModels"]) || typeof policy.toolsEnabled !== "boolean" || !["stream", "non_streaming"].includes(String(policy.transport)) || !Array.isArray(policy.disabledModels) || policy.disabledModels.some(id => typeof id !== "string")))) throw new AiSettingsApiError("malformed_response");
-  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, outputContinuation: value.outputContinuation as OutputContinuation, responseDelivery: value.responseDelivery as ResponseDelivery, logFullPrompts: value.logFullPrompts, ...("providerToolPolicies" in value ? { providerToolPolicies: value.providerToolPolicies as AiSettings["providerToolPolicies"] } : {}) };
+  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, outputContinuation: value.outputContinuation as OutputContinuation, responseDelivery: value.responseDelivery as ResponseDelivery, logFullPrompts: value.logFullPrompts };
 }
 
 function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorCode {
@@ -99,15 +96,11 @@ export function getAiSettings(): Promise<AiSettings> {
 }
 
 export function putAiSettings(next: AiSettings): Promise<AiSettings> {
-  const { providerToolPolicies: _policies, ...preferences } = next;
+  const preferences = next;
   return request({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preferences) }, new Map([[400, ["invalid_request"]], [409, ["not_connected"]], [503, ["credential_store_unavailable", "settings_store_unavailable"]], [500, ["internal_error"]]]));
 }
 
-export async function putProviderToolPolicy(provider: NativeProviderId, policy: ProviderToolPolicy): Promise<AiSettings> {
-  return request({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(policy) },
-    new Map([[400, ["invalid_request"]], [503, ["settings_store_unavailable"]], [500, ["internal_error"]]]),
-    `/api/settings/ai/providers/${provider}/tools`);
-}
+
 
 export function aiSettingsErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof AiSettingsApiError ? error.code : "network_error";

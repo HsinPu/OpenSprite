@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite Custom Providers",
     "version": "0.21.0",
-    "description": "Custom OpenAI-compatible Chat Completions providers. Builtin provider IDs and connection operations remain defined by provider-connections.openapi.json. Mutations reject unknown and duplicate JSON fields. Endpoint/auth and model mutation are blocked during live use; deletion also checks saved settings, schedules and registered Agents. Credentials are write-only and encrypted at rest. Empty/omitted API keys on edit preserve the existing key; no-auth removes it. Discovery uses GET <baseUrl>/models without redirects and commits only after revision/reference checks."
+    "description": "Custom OpenAI-compatible Chat Completions providers. Builtin provider IDs and connection operations remain defined by provider-connections.openapi.json. Mutations reject unknown and duplicate JSON fields. Endpoint/auth and model mutation are blocked during live use; deletion also checks saved AI model settings. Credentials are write-only and encrypted at rest. Empty/omitted API keys on edit preserve the existing key; no-auth removes it. Discovery uses GET <baseUrl>/models without redirects and commits only after revision/reference checks."
   },
   "paths": {
     "/api/providers": {
@@ -133,8 +133,24 @@
         "operationId": "getProviderCatalog",
         "description": "Revision-bound cursor pagination. Unknown or duplicate query parameters are rejected. A catalog change between pages returns revision_conflict.",
         "parameters": [
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
-          {"name": "cursor", "in": "query", "schema": {"type": "string", "pattern": "^[0-9]{1,16}:[1-9][0-9]{0,15}$"}}
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,16}:[1-9][0-9]{0,15}$"
+            }
+          }
         ],
         "security": [
           {
@@ -626,8 +642,24 @@
         "operationId": "listProviderModels",
         "description": "Revision-bound model pages. Mutating model operations continue to return the complete resulting model list.",
         "parameters": [
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
-          {"name": "cursor", "in": "query", "schema": {"type": "string", "pattern": "^[0-9]{1,16}:[1-9][0-9]{0,15}$"}}
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,16}:[1-9][0-9]{0,15}$"
+            }
+          }
         ],
         "security": [
           {
@@ -1310,15 +1342,6 @@
           "allow_insecure_local": {
             "type": "boolean"
           },
-          "non_streaming_tools": {
-            "type": "boolean",
-            "default": false
-          },
-          "tools_enabled": {
-            "type": "boolean",
-            "default": true,
-            "description": "Provider-wide tool gate. Model tools=true inherits; false opts out."
-          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1344,7 +1367,6 @@
           "name",
           "context_limit",
           "output_limit",
-          "tools",
           "source"
         ],
         "properties": {
@@ -1369,9 +1391,6 @@
           "output_limit": {
             "type": "integer",
             "minimum": 1
-          },
-          "tools": {
-            "type": "boolean"
           },
           "source": {
             "enum": [
@@ -1413,14 +1432,6 @@
           "allowInsecureLocal": {
             "type": "boolean",
             "default": false
-          },
-          "nonStreamingTools": {
-            "type": "boolean",
-            "default": true
-          },
-          "toolsEnabled": {
-            "type": "boolean",
-            "default": true
           },
           "apiKey": {
             "type": [
@@ -1469,14 +1480,6 @@
             "type": "boolean",
             "default": false
           },
-          "nonStreamingTools": {
-            "type": "boolean",
-            "description": "Omission preserves the existing value."
-          },
-          "toolsEnabled": {
-            "type": "boolean",
-            "description": "Omission preserves the existing value."
-          },
           "apiKey": {
             "type": [
               "string",
@@ -1520,10 +1523,6 @@
             "type": "integer",
             "minimum": 1
           },
-          "tools": {
-            "type": "boolean",
-            "default": false
-          },
           "expectedRevision": {
             "type": "integer",
             "minimum": 1
@@ -1546,10 +1545,21 @@
       "ModelList": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["revision", "models"],
+        "required": [
+          "revision",
+          "models"
+        ],
         "properties": {
-          "revision": {"type": "integer", "minimum": 1},
-          "models": {"type": "array", "items": {"$ref": "#/components/schemas/Model"}}
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            }
+          }
         }
       },
       "ModelPage": {
@@ -1561,7 +1571,13 @@
           "nextCursor"
         ],
         "properties": {
-          "nextCursor": {"type": ["string", "null"], "description": "Opaque continuation cursor; null at the end."},
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque continuation cursor; null at the end."
+          },
           "revision": {
             "type": "integer",
             "minimum": 1
@@ -1583,7 +1599,13 @@
           "nextCursor"
         ],
         "properties": {
-          "nextCursor": {"type": ["string", "null"], "description": "Opaque continuation cursor; null at the end."},
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque continuation cursor; null at the end."
+          },
           "revision": {
             "type": "integer",
             "minimum": 0

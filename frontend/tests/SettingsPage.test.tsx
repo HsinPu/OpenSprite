@@ -11,8 +11,6 @@ import { modelLabel, type ModelSelection } from "../src/features/ai-settings/mod
 import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../src/features/general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
-import type { ToolSettingsController } from "../src/features/tool-settings/useToolSettings";
-import type { McpConnectionsController } from "../src/features/mcp-settings/useMcpConnections";
 import type { WorkspaceController } from "../src/features/workspaces/useWorkspaces";
 
 const generalSettings: GeneralSettingsController = {
@@ -41,30 +39,10 @@ const conversationSettings: ConversationSettingsController = {
   reload: async () => undefined,
 };
 
-const saveToolsEnabled = vi.fn(async () => null);
-const saveToolEnabled = vi.fn(async () => null);
-const toolSettings: ToolSettingsController = {
-  catalog: { items: [{ id: "calculator", source: "builtin", effect: "read_only", available: true }] },
-  settings: { enabled: true, enabledTools: ["calculator"] },
-  loaded: true,
-  saving: false,
-  error: null,
-  saveEnabled: saveToolsEnabled,
-  saveToolEnabled,
-  reload: async () => undefined,
-};
-
-const mcpConnections: McpConnectionsController = {
-  servers: [], tools: {}, loaded: true, error: null, busyServerId: null,
-  reload: async () => undefined, create: async () => null, update: async () => null,
-  remove: async () => null, test: async () => null, start: async () => null,
-  stop: async () => null, loadTools: async () => null,
-};
-
 const workspaceCatalog = {
   revision: 0,
   activeWorkspaceId: "00000000-0000-4000-8000-000000000000",
-  workspaces: [{ id: "00000000-0000-4000-8000-000000000000", kind: "default" as const, name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available" as const, unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } }],
+  workspaces: [{ id: "00000000-0000-4000-8000-000000000000", kind: "default" as const, name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available" as const, unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, activeRunCount: 0 } }],
 };
 const workspaceController: WorkspaceController = {
   catalog: workspaceCatalog,
@@ -88,8 +66,8 @@ const workspaceController: WorkspaceController = {
   removeMount: async (item) => item,
 };
 
-function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections" | "workspaces" | "onWorkspaceActivated" | "workspaceCreateRequest" | "onWorkspaceCreateRequestHandled" | "active" | "onOpenScheduleConversation">) {
-  return <ProductionSettingsPage {...props} active toolSettings={toolSettings} mcpConnections={mcpConnections} workspaces={workspaceController} onWorkspaceActivated={() => undefined} workspaceCreateRequest={0} onWorkspaceCreateRequestHandled={() => undefined} onOpenScheduleConversation={() => undefined} />;
+function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "workspaces" | "onWorkspaceActivated" | "workspaceCreateRequest" | "onWorkspaceCreateRequestHandled" | "active">) {
+  return <ProductionSettingsPage {...props} active workspaces={workspaceController} onWorkspaceActivated={() => undefined} workspaceCreateRequest={0} onWorkspaceCreateRequestHandled={() => undefined} />;
 }
 
 const disconnectedCatalog = {
@@ -270,8 +248,6 @@ describe("provider settings", () => {
     saveSendBehavior.mockClear();
     saveAutoScroll.mockClear();
     saveExecutionPanelDefaultExpanded.mockClear();
-    saveToolsEnabled.mockClear();
-    saveToolEnabled.mockClear();
   });
 
   it("presents a dropdown with default and all six response modes", async () => {
@@ -350,7 +326,7 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "工作區", "AI 模型", "執行方式", "工具", "Skills", "Agents", "排程", "隱私", "關於", "記憶與資料Demo", "外觀Demo"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "工作區", "AI 模型", "執行方式", "隱私", "關於", "記憶與資料Demo", "外觀Demo"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
     expect(screen.getAllByText("Demo")).toHaveLength(2);
@@ -396,70 +372,9 @@ describe("provider settings", () => {
     }
   });
 
-  it("renders only one Agents heading and description in the complete settings page", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
-    render(<GeneralSettingsPageHarness section="agents" />);
-    expect(screen.getAllByRole("heading", { name: "Agents" })).toHaveLength(1);
-    expect(screen.getAllByText("可由模型使用的文字型 Agent 定義；不會自動授予工具權限。")).toHaveLength(1);
-    expect(screen.getByRole("switch", { name: "允許使用 Agents" })).toBeTruthy();
-  });
 
-  it("renders schedules as an implemented settings section", async () => {
-    vi.stubGlobal("fetch", vi.fn((path: string) => {
-      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(disconnectedCatalog)));
-      if (path === "/api/schedules?limit=100") return Promise.resolve(new Response(JSON.stringify({ schedules: [], nextCursor: null })));
-      if (path === "/api/schedules/runtime-status") return Promise.resolve(new Response(JSON.stringify({ platform: "windows", continuity: "login_only" })));
-      throw new Error(`unexpected request ${path}`);
-    }));
 
-    render(<GeneralSettingsPageHarness section="schedules" />);
 
-    expect(screen.getByRole("heading", { level: 2, name: "排程" })).toBeTruthy();
-    expect(screen.getByText("設定 OpenSprite 自動執行工作的時間與模型。")).toBeTruthy();
-    expect(screen.queryByRole("heading", { level: 1, name: "排程" })).toBeNull();
-    expect(await screen.findByText("還沒有排程")).toBeTruthy();
-  });
-
-  it("shows the real tool controls and keeps external tools as future items", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
-    render(<GeneralSettingsPageHarness section="tools" />);
-
-    expect(screen.getByRole("heading", { name: "工具" })).toBeTruthy();
-    const globalSwitch = screen.getByRole("switch", { name: "允許 AI 使用工具" });
-    const calculatorSwitch = screen.getByRole("switch", { name: "啟用工具：計算器" });
-    expect(globalSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(calculatorSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("內建")).toBeTruthy();
-    expect(screen.getByText("唯讀")).toBeTruthy();
-    expect(screen.queryByText("可使用")).toBeNull();
-    expect(screen.queryByText("自訂工具")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "規劃中功能" }));
-    expect(screen.getAllByText("未來上線")).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "MCP 連線" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "新增連線" })).toBeTruthy();
-    expect(screen.getByText("自訂工具")).toBeTruthy();
-    expect(screen.getByText("第三方服務")).toBeTruthy();
-
-    fireEvent.click(globalSwitch);
-    fireEvent.click(calculatorSwitch);
-    expect(saveToolsEnabled).toHaveBeenCalledWith(false);
-    expect(saveToolEnabled).toHaveBeenCalledWith("calculator", false);
-  });
-
-  it("keeps the MCP transport dropdown inside the settings surface and accepts pointer selection", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
-    render(<GeneralSettingsPageHarness section="tools" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "新增連線" }));
-    const transport = await screen.findByRole("combobox", { name: "連線方式" });
-    fireEvent.mouseDown(transport);
-    const option = (await screen.findByText("網路位址")).closest(".ant-select-item-option")!;
-    expect(document.querySelector(".settings-page")?.contains(option)).toBe(true);
-    fireEvent.click(option);
-
-    expect(await screen.findByLabelText("MCP Endpoint URL")).toBeTruthy();
-    expect(screen.queryByLabelText("Executable 絕對路徑")).toBeNull();
-  });
 
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
@@ -705,7 +620,7 @@ describe("provider settings", () => {
 
   it.each([false, true])("refreshes LiteLLM without changing selection (failure=%s)", async (fails) => {
     const id = "00000000-0000-4000-8000-000000000001";
-    const model = { key: "00000000-0000-4000-8000-000000000002", model_id: "glm-5.3", name: "GLM", context_limit: 1_000_000, output_limit: 8192, tools: true, source: "manual" };
+    const model = { key: "00000000-0000-4000-8000-000000000002", model_id: "glm-5.3", name: "GLM", context_limit: 1_000_000, output_limit: 8192, source: "manual" };
     const provider = { id, name: "LiteLLM", revision: 9, protocol: "openai_chat_completions", base_url: "https://example.com/v1", auth_mode: "none", allow_insecure_local: false, created_at: "2026-09-10T00:00:00Z", updated_at: "2026-09-10T00:00:00Z", models: [model] };
     const pending = deferred<Response>();
     const fetchMock = vi.fn(async (path: string, options?: RequestInit) => {

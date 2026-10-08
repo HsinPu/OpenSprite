@@ -228,7 +228,7 @@ export function WorkspacesSettings({
     {controller.loading ? <p role="status">{t("workspaces.loading")}</p> : null}
     {controller.error ? <div className="settings-model-load-error" role="alert"><p>{workspaceErrorText(controller.error, t)}</p><Button onClick={() => void controller.reload()}>{t("common.retry")}</Button></div> : null}
     <div className="workspace-settings__list">{controller.catalog?.workspaces.map((item) => {
-      const empty = item.usage.conversationCount === 0 && item.usage.scheduleCount === 0 && item.usage.activeRunCount === 0;
+      const empty = item.usage.conversationCount === 0 && item.usage.activeRunCount === 0;
       const expanded = item.mounts.length > 0 && Boolean(expandedMounts[item.id]);
       const failures = item.mounts.filter(mount => mount.availability === "unavailable").length;
       const mountListId = `workspace-mounts-${item.id}`;
@@ -253,7 +253,7 @@ export function WorkspacesSettings({
             <Button id={`workspace-actions-${item.id}`} type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={t("workspaces.actions", { name: displayName(item) })} />
           </Dropdown> : null}
         </div>
-        <dl className="workspace-settings__stats"><div><dt>{t("workspaces.conversations")}</dt><dd>{item.usage.conversationCount}</dd></div><div><dt>{t("workspaces.schedules")}</dt><dd>{item.usage.scheduleCount}</dd></div><div><dt>{t("workspaces.activeRuns")}</dt><dd>{item.usage.activeRunCount}</dd></div></dl>
+        <dl className="workspace-settings__stats"><div><dt>{t("workspaces.conversations")}</dt><dd>{item.usage.conversationCount}</dd></div><div><dt>{t("workspaces.activeRuns")}</dt><dd>{item.usage.activeRunCount}</dd></div></dl>
         <section className="workspace-mounts" aria-label={`${t("workspaces.mounts")} ${displayName(item)}`}>
           <div className="workspace-mounts__header">
             <div className="workspace-mounts__title">{item.mounts.length > 0

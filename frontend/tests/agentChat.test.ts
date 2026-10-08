@@ -50,8 +50,7 @@ describe("Agent chat HTTP contract", () => {
             id: conversationId,
             workspaceId: DEFAULT_WORKSPACE_ID,
             revision: 1,
-            workspaceManagedBySchedule: false,
-            title: "整理今天的工作",
+                        title: "整理今天的工作",
             latestMessagePreview: "完成",
             createdAt: "2026-08-21T08:30:00Z",
             updatedAt: "2026-08-21T08:31:00Z",
@@ -205,8 +204,7 @@ describe("Agent chat HTTP contract", () => {
 
 
 describe("Agent chat SSE contract", () => {
-  it.each([1, 64, 65, 128])("subscribes to named events with %i tools and strictly emits safe data", (count) => {
-    const toolNames = Array.from({ length: count }, (_, index) => `tool_${String(index).padStart(3, "0")}`);
+  it("subscribes to core named events and strictly emits safe data", () => {
     class FakeEventSource {
       static instance: FakeEventSource;
       listeners = new Map<string, (event: MessageEvent<string>) => void>();
@@ -249,7 +247,7 @@ describe("Agent chat SSE contract", () => {
         runId,
         conversationId,
         createdAt: "2026-08-21T08:30:01Z",
-        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "medium", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames },
+        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "medium", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 },
       }),
     }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
@@ -296,7 +294,7 @@ describe("Agent chat SSE contract", () => {
     expect(source.url).toBe(`/api/runs/${runId}/events`);
     expect(events).toHaveLength(6);
     expect(events[0]).toMatchObject({ type: "run.started", data: { workspaceAvailability: "not_applicable" } });
-    expect(events[1]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608, toolNames } });
+    expect(events[1]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 } });
     expect(events[2]).toMatchObject({ type: "context.compaction.started", data: {} });
     expect(events[4]).toMatchObject({ type: "response.continuation.started", data: { attempt: 3, maxAttempts: 50 } });
     expect(events[5]).toMatchObject({

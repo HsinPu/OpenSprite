@@ -19,7 +19,7 @@ class Recorder:
 
 def request():
     return ModelRequest(provider_id="openai", model_id="test", response_mode="default",
-                        messages=(ModelMessage(role="user", content="private"),), tools=())
+                        messages=(ModelMessage(role="user", content="private"),))
 
 
 def test_attempt_metadata_rejects_secrets_and_invalid_identity():

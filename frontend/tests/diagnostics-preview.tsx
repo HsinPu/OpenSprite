@@ -2,7 +2,6 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { RunDiagnostics } from "../src/features/chat/RunDiagnostics";
-import { NativeProviderTools } from "../src/features/settings/NativeProviderTools";
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import "../src/features/chat/ChatWorkspace.css";
 import "../src/app/app.css";
@@ -24,12 +23,12 @@ window.fetch = async (input, init) => {
       schemaVersion: 1, requestId: runId, attemptId: conversationId, attemptNumber: 1,
       purpose: "main", retryOfAttemptId: null, retryCause: null, compactionId: null,
       parentRequestId: null, status: "started", context: {
-        schemaVersion: 1, requestHash: "a".repeat(64), estimateMethod: "utf8-conservative-v1",
+        schemaVersion: 2, requestHash: "a".repeat(64), estimateMethod: "utf8-conservative-v1",
         estimatedInputTokens: 3, components: { system: 0, summary: 0, history: 0, currentUser: 0,
-          toolResults: 0, assistant: 0, summaryInput: 0, unattributed: 0, toolDefinitions: 0, framing: 3 },
+          assistant: 0, summaryInput: 0, unattributed: 0, framing: 3 },
         contextLimitTokens: null, inputBudgetTokens: null, outputReserveTokens: 32,
-        messageCount: 1, toolCount: 0, systemHash: "b".repeat(64), toolsHash: "c".repeat(64),
-        historyMessageIds: [conversationId], summary: null, skills: [], workspace: null,
+        messageCount: 1, systemHash: "b".repeat(64),
+        historyMessageIds: [conversationId], summary: null, workspace: null,
       },
     } }];
   if (finished) events.push({ ...events[0], sequence: 2, createdAt: "2026-09-12T00:00:01Z", data: {
@@ -43,6 +42,6 @@ function Preview() {
   const [status, setStatus] = useState<RunSnapshot["status"]>("running");
   finish = () => setStatus("completed");
   const run: RunSnapshot = { id: runId, conversationId, workspaceId: runId, workspaceRevision: 1, workspaceName: "test", workspaceRootHash: null, workspaceMountManifestHash: "", userMessageId: runId, assistantMessageId: null, providerId: "openai", modelId: "test", responseMode: "medium", status, completionReason: null, error: null, partialText: "", createdAt: "2026-09-12T00:00:00Z", startedAt: null, finishedAt: null };
-  return <main><h1>合成資料診斷驗證</h1><details className="chat-workspace__record-details" style={{ maxWidth: 320 }}><summary><span>執行紀錄</span><RunDiagnostics runId={runId} conversationId={conversationId} run={run} /></summary><p>此為合成資料，不會呼叫模型或讀取使用者資料。開啟後 8 秒完成。</p></details><NativeProviderTools provider="openai" name="Test OpenAI" /></main>;
+  return <main><h1>合成資料診斷驗證</h1><details className="chat-workspace__record-details" style={{ maxWidth: 320 }}><summary><span>執行紀錄</span><RunDiagnostics runId={runId} conversationId={conversationId} run={run} /></summary><p>此為合成資料，不會呼叫模型或讀取使用者資料。開啟後 8 秒完成。</p></details></main>;
 }
 createRoot(document.getElementById("root")!).render(<Preview />);

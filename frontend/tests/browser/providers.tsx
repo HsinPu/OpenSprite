@@ -9,7 +9,7 @@ const fixture = {
   protocol: "openai_chat_completions", base_url: "http://127.0.0.1:11434/v1", auth_mode: "none",
   allow_insecure_local: true, created_at: "2026-09-10T00:00:00+00:00", updated_at: "2026-09-10T00:00:00+00:00",
   models: [{ key: "22222222-2222-4222-8222-222222222222", model_id: "local-model", name: "Local model",
-    context_limit: 8192, output_limit: 2048, tools: false, source: "manual" }],
+    context_limit: 8192, output_limit: 2048, source: "manual" }],
 };
 window.fetch = async (input, options) => {
   const path = String(input);

@@ -19,7 +19,7 @@ from .strategies import ExecutionStrategy, NoRecoveryExecutionStrategy, Standard
 
 PluginKind = Literal["loop", "policy"]
 PluginStatus = Literal["available", "incompatible", "unavailable"]
-API_VERSION = 1
+API_VERSION = 2
 _GROUP = re.compile(r"^opensprite_backend\.(agent_loops|execution_policies)\.v([1-9][0-9]*)$")
 _ID = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 
@@ -94,9 +94,9 @@ class ExecutionPluginCatalog:
         self._descriptors: dict[tuple[PluginKind, str], PluginDescriptor] = {}
         self._sources: dict[tuple[PluginKind, str], object] = {}
         for descriptor, factory in (
-            (PluginDescriptor("standard", "loop", "Standard Loop", "Model and tool execution through the core host.", "1.0.0", 1), StandardDriverFactory()),
-            (PluginDescriptor("standard", "policy", "Standard", "Bounded context retry and configured output continuation.", "1.0.0", 1), _StrategyFactory()),
-            (PluginDescriptor("no_recovery", "policy", "No automatic recovery", "Disable context retry and output continuation.", "1.0.0", 1), _StrategyFactory(True)),
+            (PluginDescriptor("standard", "loop", "Standard Loop", "Model turns through the core host.", "2.0.0", API_VERSION), StandardDriverFactory()),
+            (PluginDescriptor("standard", "policy", "Standard", "Bounded context retry and configured output continuation.", "2.0.0", API_VERSION), _StrategyFactory()),
+            (PluginDescriptor("no_recovery", "policy", "No automatic recovery", "Disable context retry and output continuation.", "2.0.0", API_VERSION), _StrategyFactory(True)),
         ):
             key = (descriptor.kind, descriptor.id)
             self._descriptors[key] = descriptor

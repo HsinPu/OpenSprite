@@ -27,11 +27,10 @@ def test_custom_provider_contract_matches_routes_and_secret_boundary():
 def test_consumer_contracts_accept_custom_provider_identity():
     contracts = Path(__file__).parents[2] / "contracts"
     custom_id = "12345678-1234-4234-8234-123456789abc"
-    for filename in ("agent-chat", "ai-settings", "provider-connections", "schedules"):
+    for filename in ("agent-chat", "ai-settings", "provider-connections"):
         document = json.loads((contracts / f"{filename}.openapi.json").read_text(encoding="utf-8"))
         schemas = document["components"]["schemas"]
-        identity = (schemas["ExecutionProfile"]["properties"]["providerId"]
-                    if filename == "schedules" else schemas["ProviderId"])
+        identity = schemas["ProviderId"]
         for accepted in ("openai", "anthropic", "openrouter", custom_id):
             assert re.fullmatch(identity["pattern"], accepted)
         for rejected in ("custom", "", custom_id.upper(), "12345678-1234-1234-8234-123456789abc"):

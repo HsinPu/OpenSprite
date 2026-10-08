@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from opensprite_backend.inference.models import InferenceFailure, ModelCompleted, ModelFinishReason, ModelMessage, ModelRequest, ModelTextDelta, ModelUsage
+
 import asyncio
 import json
 import logging
@@ -23,24 +25,11 @@ from opensprite_backend.conversations.sqlite_repository import (
 from opensprite_backend.credentials import CredentialStoreUnavailableError
 from opensprite_backend.inference.anthropic import ANTHROPIC_MESSAGES_URL
 from opensprite_backend.inference.gateway import ModelGatewayError
-from opensprite_backend.inference.models import (
-    InferenceFailure,
-    ModelCompleted,
-    ModelFinishReason,
-    ModelMessage,
-    ModelRequest,
-    ModelTextDelta,
-    ModelToolCall,
-    ModelToolDefinition,
-    ModelUsage,
-)
 from opensprite_backend.inference.native_gateway import NativeModelGateway
 from opensprite_backend.inference.openai import OPENAI_RESPONSES_URL
 from opensprite_backend.inference.openrouter import OPENROUTER_CHAT_URL
 from opensprite_backend.inference.sse import MAX_EVENT_BYTES
 from opensprite_backend.providers.operation_locks import ProviderOperationLocks
-from opensprite_backend.tools.policy import ReadOnlyToolPolicy
-from opensprite_backend.tools.registry import ToolRegistry
 
 
 def async_test(function):
@@ -107,7 +96,7 @@ def request(
     model_id: str | None = None,
     response_mode: str = "default",
     messages: tuple[ModelMessage, ...] | None = None,
-    tools: tuple[ModelToolDefinition, ...] = (),
+    tools: tuple[...] = (),
 ) -> ModelRequest:
     defaults = {
         "openai": "gpt-5.6",
@@ -123,7 +112,7 @@ def request(
             ModelMessage(role="system", content="system"),
             ModelMessage(role="user", content="hello"),
         ),
-        tools=tools,
+
     )
 
 
@@ -251,196 +240,6 @@ async def test_openrouter_rejects_conflicting_repeated_finish_reason() -> None:
 
 
 @async_test
-async def test_openrouter_reassembles_strict_tool_arguments() -> None:
-    captured: list[dict[str, object]] = []
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        captured.append(json.loads(outbound.content))
-        return response(
-            outbound,
-            {
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "tool_calls": [
-                                {
-                                    "index": 0,
-                                    "id": "call-1",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "lookup_note",
-                                        "arguments": "{\"query\":",
-                                    },
-                                }
-                            ]
-                        },
-                        "finish_reason": None,
-                    }
-                ]
-            },
-            {
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "tool_calls": [
-                                {
-                                    "index": 0,
-                                    "function": {"arguments": "\"today\"}"},
-                                }
-                            ]
-                        },
-                        "finish_reason": "tool_calls",
-                    }
-                ]
-            },
-            "[DONE]",
-        )
-
-    tool = ModelToolDefinition(
-        name="lookup_note",
-        description="Look up a note.",
-        input_schema={
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-    )
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        events = await collect(
-            gateway.stream(request("openrouter", tools=(tool,)))
-        )
-
-    assert events == [
-        ModelToolCall("call-1", "lookup_note", {"query": "today"}),
-        ModelCompleted(ModelFinishReason.TOOL_CALLS),
-    ]
-    assert captured[0]["tools"] == [
-        {
-            "type": "function",
-            "function": {
-                "name": "lookup_note",
-                "description": "Look up a note.",
-                "parameters": tool.input_schema,
-                "strict": True,
-            },
-        }
-    ]
-    assert captured[0]["tool_choice"] == "auto"
-    assert "provider" not in captured[0]
-
-
-@async_test
-async def test_openrouter_explicit_model_requires_tool_parameters() -> None:
-    captured: list[dict[str, object]] = []
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        captured.append(json.loads(outbound.content))
-        return response(
-            outbound,
-            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
-            "[DONE]",
-        )
-
-    tool = ModelToolDefinition(
-        name="lookup_note",
-        description="Look up a note.",
-        input_schema={
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-    )
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        events = await collect(
-            gateway.stream(
-                request(
-                    "openrouter",
-                    model_id="openai/gpt-5.6",
-                    tools=(tool,),
-                )
-            )
-        )
-
-    assert events == [ModelCompleted(ModelFinishReason.FINAL)]
-    assert captured[0]["provider"] == {"require_parameters": True}
-
-
-@async_test
-async def test_openai_responses_stream_text_tool_calls_usage_and_completion() -> None:
-    captured: list[dict[str, object]] = []
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        captured.append(json.loads(outbound.content))
-        return response(
-            outbound,
-            {"type": "response.output_text.delta", "delta": "Checking "},
-            {
-                "type": "response.reasoning_summary_text.delta",
-                "delta": "must stay hidden",
-            },
-            {
-                "type": "response.function_call_arguments.done",
-                "item_id": "fc-item-1",
-                "call_id": "call-1",
-                "name": "lookup_note",
-                "arguments": "{\"query\":\"today\"}",
-            },
-            {
-                "type": "response.completed",
-                "response": {
-                    "status": "completed",
-                    "output": [],
-                    "usage": {"input_tokens": 6, "output_tokens": 3},
-                },
-            },
-        )
-
-    tool = ModelToolDefinition(
-        name="lookup_note",
-        description="Look up a note.",
-        input_schema={
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-    )
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        events = await collect(
-            gateway.stream(request("openai", tools=(tool,)))
-        )
-
-    assert events == [
-        ModelTextDelta("Checking "),
-        ModelToolCall("call-1", "lookup_note", {"query": "today"}),
-        ModelUsage(input_tokens=6, output_tokens=3),
-        ModelCompleted(ModelFinishReason.TOOL_CALLS),
-    ]
-    body = captured[0]
-    assert body["model"] == "gpt-5.6"
-    assert body["stream"] is True
-    assert body["store"] is False
-    assert body["max_output_tokens"] == 8192
-    assert "reasoning" not in body
-    assert body["tools"] == [
-        {
-            "type": "function",
-            "name": "lookup_note",
-            "description": "Look up a note.",
-            "parameters": tool.input_schema,
-            "strict": True,
-        }
-    ]
-
-
-@async_test
 async def test_openai_normalizes_incomplete_max_output_as_output_limit() -> None:
     def handler(outbound: httpx.Request) -> httpx.Response:
         return response(
@@ -466,80 +265,6 @@ async def test_openai_normalizes_incomplete_max_output_as_output_limit() -> None
         ModelUsage(input_tokens=6, output_tokens=8192),
         ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
     ]
-
-
-@async_test
-async def test_anthropic_streams_text_tool_input_usage_and_tool_stop() -> None:
-    captured: list[httpx.Request] = []
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        captured.append(outbound)
-        return response(
-            outbound,
-            {
-                "type": "message_start",
-                "message": {"usage": {"input_tokens": 7}},
-            },
-            {
-                "type": "content_block_start",
-                "index": 0,
-                "content_block": {"type": "text", "text": "查詢中"},
-            },
-            {
-                "type": "content_block_start",
-                "index": 1,
-                "content_block": {
-                    "type": "tool_use",
-                    "id": "toolu-1",
-                    "name": "lookup_note",
-                    "input": {},
-                },
-            },
-            {
-                "type": "content_block_delta",
-                "index": 1,
-                "delta": {"type": "input_json_delta", "partial_json": "{\"query\":\"today\"}"},
-            },
-            {"type": "content_block_stop", "index": 1},
-            {
-                "type": "content_block_start",
-                "index": 2,
-                "content_block": {"type": "thinking", "thinking": ""},
-            },
-            {
-                "type": "content_block_delta",
-                "index": 2,
-                "delta": {"type": "thinking_delta", "thinking": "must stay hidden"},
-            },
-            {"type": "content_block_stop", "index": 2},
-            {
-                "type": "message_delta",
-                "delta": {"stop_reason": "tool_use"},
-                "usage": {"output_tokens": 4},
-            },
-            {"type": "message_stop"},
-        )
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        events = await collect(gateway.stream(request("anthropic")))
-
-    assert events == [
-        ModelTextDelta("查詢中"),
-        ModelToolCall("toolu-1", "lookup_note", {"query": "today"}),
-        ModelUsage(input_tokens=7, output_tokens=4),
-        ModelCompleted(ModelFinishReason.TOOL_CALLS),
-    ]
-    outbound = captured[0]
-    assert str(outbound.url) == ANTHROPIC_MESSAGES_URL
-    assert outbound.headers["x-api-key"] == "anthropic-secret"
-    assert outbound.headers["anthropic-version"] == "2023-06-01"
-    body = json.loads(outbound.content)
-    assert body["system"] == "system"
-    assert body["messages"] == [{"role": "user", "content": "hello"}]
-    assert body["max_tokens"] == 8192
-    assert "output_config" not in body
-    assert "thinking" not in body
 
 
 @pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
@@ -628,98 +353,6 @@ def test_response_modes_map_to_native_fields(
 
     asyncio.run(scenario())
     assert captured[0][field] == expected
-
-
-@async_test
-async def test_tool_transcript_serialization_is_native_for_each_provider() -> None:
-    call = ModelToolCall("call-1", "lookup_note", {"query": "today"})
-    messages = (
-        ModelMessage(role="system", content="system"),
-        ModelMessage(role="user", content="hello"),
-        ModelMessage(role="assistant", content="checking", tool_calls=(call,)),
-        ModelMessage(
-            role="tool",
-            content="three notes",
-            tool_call_id="call-1",
-            tool_name="lookup_note",
-        ),
-    )
-    captured: dict[str, dict[str, object]] = {}
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        if str(outbound.url) == OPENROUTER_CHAT_URL:
-            provider = "openrouter"
-            terminal = (
-                {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
-                "[DONE]",
-            )
-        elif str(outbound.url) == OPENAI_RESPONSES_URL:
-            provider = "openai"
-            terminal = (
-                {"type": "response.completed", "response": {"status": "completed", "output": [], "usage": None}},
-            )
-        else:
-            provider = "anthropic"
-            terminal = (
-                {"type": "message_start", "message": {"usage": {"input_tokens": 1}}},
-                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
-                {"type": "message_stop"},
-            )
-        captured[provider] = json.loads(outbound.content)
-        return response(outbound, *terminal)
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        for provider_id in ("openrouter", "openai", "anthropic"):
-            await collect(gateway.stream(request(provider_id, messages=messages)))
-
-    assert captured["openrouter"]["messages"][-2:] == [
-        {
-            "role": "assistant",
-            "content": "checking",
-            "tool_calls": [
-                {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                        "name": "lookup_note",
-                        "arguments": "{\"query\":\"today\"}",
-                    },
-                }
-            ],
-        },
-        {"role": "tool", "tool_call_id": "call-1", "content": "three notes"},
-    ]
-    assert captured["openai"]["input"][-3:] == [
-        {"role": "assistant", "content": "checking"},
-        {
-            "type": "function_call",
-            "call_id": "call-1",
-            "name": "lookup_note",
-            "arguments": "{\"query\":\"today\"}",
-        },
-        {"type": "function_call_output", "call_id": "call-1", "output": "three notes"},
-    ]
-    assert captured["anthropic"]["messages"][-2:] == [
-        {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "checking"},
-                {
-                    "type": "tool_use",
-                    "id": "call-1",
-                    "name": "lookup_note",
-                    "input": {"query": "today"},
-                },
-            ],
-        },
-        {
-            "role": "user",
-            "content": [
-                {"type": "tool_result", "tool_use_id": "call-1", "content": "three notes"}
-            ],
-        },
-    ]
 
 
 @pytest.mark.parametrize(
@@ -886,53 +519,6 @@ async def test_gateway_uses_shared_provider_lock_for_entire_stream() -> None:
 
 
 @async_test
-async def test_malformed_stream_and_duplicate_tool_json_fail_closed() -> None:
-    responses = [
-        httpx.Response(200, content=b"not sse"),
-        httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            content=sse(
-                {
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "tool_calls": [
-                                    {
-                                        "index": 0,
-                                        "id": "call-1",
-                                        "type": "function",
-                                        "function": {
-                                            "name": "lookup_note",
-                                            "arguments": "{\"query\":\"one\",\"query\":\"two\"}",
-                                        },
-                                    }
-                                ]
-                            },
-                            "finish_reason": "tool_calls",
-                        }
-                    ]
-                },
-                "[DONE]",
-            ),
-        ),
-    ]
-
-    def handler(outbound: httpx.Request) -> httpx.Response:
-        item = responses.pop(0)
-        item.request = outbound
-        return item
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        for _ in range(2):
-            with pytest.raises(ModelGatewayError) as captured:
-                await collect(gateway.stream(request("openrouter")))
-            assert captured.value.failure is InferenceFailure.INVALID_PROVIDER_RESPONSE
-
-
-@async_test
 async def test_transport_timeout_and_oversized_sse_event_are_bounded() -> None:
     responses: list[object] = [
         httpx.ReadTimeout("private timeout detail"),
@@ -1027,7 +613,7 @@ async def test_native_gateway_to_agent_persists_text_not_secret_or_reasoning(
                 client,
                 ProviderOperationLocks(),
             ),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
             capability_resolver=TestCapabilityResolver(),
         )
         result = await loop.execute(accepted.run.id, asyncio.Event())

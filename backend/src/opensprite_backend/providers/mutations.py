@@ -29,30 +29,27 @@ async def _owned_thread(function, *args, **kwargs):
 
 
 class ProviderMutations:
-    def __init__(self, service: CustomProviderService, gate, repository, run_manager, ai_settings, agents) -> None:
+    def __init__(self, service: CustomProviderService, gate, repository, run_manager, ai_settings) -> None:
         self.service = service
         self.gate = gate
         self.repository = repository
         self.run_manager = run_manager
         self.ai_settings = ai_settings
-        self.agents = agents
 
     async def _check(self, provider_id: str, *, deleting: bool, model_id: str | None = None) -> None:
-        # Snapshot references cover possible child execution even before it spawns.
+        # Accepted Runs retain their selected provider until execution settles.
         if self.run_manager.provider_in_use(provider_id):
             raise CatalogError("provider_busy")
         try:
-            active, schedules = await asyncio.to_thread(self.repository.provider_usage, provider_id, model_id)
+            active = await asyncio.to_thread(self.repository.provider_usage, provider_id, model_id)
             if active:
                 raise CatalogError("provider_busy")
             if not deleting:
                 return
             settings = await self.ai_settings.get()
             selected = settings.model
-            if schedules or (selected is not None and selected.provider_id == provider_id
+            if (selected is not None and selected.provider_id == provider_id
                     and (model_id is None or selected.model_id == model_id)):
-                raise CatalogError("provider_in_use")
-            if await asyncio.to_thread(self.agents.references_provider, provider_id, model_id):
                 raise CatalogError("provider_in_use")
         except CatalogError:
             raise
@@ -69,14 +66,12 @@ class ProviderMutations:
             await self._check(provider_id, deleting=True)
             await _owned_thread(self.service.delete, provider_id, expected_revision=expected_revision)
 
-    async def update_model(self, provider_id: str, model: CustomModel, *, expected_revision: int, preserve_tool_policy: bool = False):
+    async def update_model(self, provider_id: str, model: CustomModel, *, expected_revision: int):
         async with self.gate.hold():
             current = await asyncio.to_thread(self.service.get, provider_id)
             previous = next((item for item in current.models if item.key == model.key), None)
             if previous is None:
                 raise CatalogError("model_not_found")
-            if preserve_tool_policy:
-                model = model.model_copy(update={"tools": previous.tools})
             await self._check(provider_id, deleting=previous.model_id != model.model_id, model_id=previous.model_id)
             return await _owned_thread(self.service.save_model, provider_id, model, expected_revision=expected_revision)
 

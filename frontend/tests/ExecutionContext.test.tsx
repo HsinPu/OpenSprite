@@ -4,16 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import { ExecutionContext } from "../src/features/chat/ExecutionContext";
 
-vi.mock("../src/api/subagents", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../src/api/subagents")>(),
-  // Keep the context disclosure tests focused on layout; a never-resolving
-  // request avoids an asynchronous child update after each synchronous test.
-  listSubagents: vi.fn().mockImplementation(() => new Promise(() => undefined)),
-  getSubagentResult: vi.fn(),
-  cancelSubagent: vi.fn(),
-}));
-
-
 const run: RunSnapshot = {
   id: "11111111-1111-4111-8111-111111111111",
   conversationId: "22222222-2222-4222-8222-222222222222",
@@ -68,19 +58,7 @@ const modelEvent: RunEvent = {
 };
 
 describe("execution context disclosure", () => {
-  it("places Skills after tools with the shared empty card", () => {
-    render(<ExecutionContext modelName="Auto Router" run={run} events={[]} timeZone="system" defaultExpanded />);
-    const headings = screen.getAllByRole("heading", { level: 3 }).map(node => node.textContent);
-    expect(headings.slice(0, 5)).toEqual(["模型", "工具", "Skills", "Subagents", "執行資訊"]);
-    expect(screen.getByText("本次執行未使用 Skills。").className).toBe("chat-workspace__empty-tools");
-  });
 
-  it("uses shared cards for loaded Skills without exposing content", () => {
-    const loaded: RunEvent = { ...event, sequence: 2, type: "skill.loaded", data: { name: "review", source: "model" } };
-    render(<ExecutionContext modelName="Auto Router" run={run} events={[loaded]} timeZone="system" defaultExpanded />);
-    expect(screen.getByText("review").closest("li")?.className).toBe("chat-workspace__skill-card");
-    expect(screen.getByText("review").closest("ul")?.className).toBe("chat-workspace__capability-list");
-  });
 
   it("shows the snapshotted Workspace availability", () => {
     render(<ExecutionContext modelName="Auto Router" run={run} events={[event]} timeZone="system" defaultExpanded />);
@@ -220,82 +198,8 @@ describe("execution context disclosure", () => {
     expect(screen.getByText("對話摘要結果未知（缺少結束紀錄）").closest("li")?.classList.contains("chat-workspace__process-item--unknown")).toBe(true);
   });
 
-  it("shows the localized production calculator in tool events", () => {
-    const toolStarted: RunEvent = {
-      ...event,
-      sequence: 2,
-      type: "tool.started",
-      createdAt: "2026-08-29T08:00:02Z",
-      data: { callId: "calculator-call", toolName: "calculator" },
-    };
-    const toolCompleted: RunEvent = {
-      ...event,
-      sequence: 3,
-      type: "tool.completed",
-      createdAt: "2026-08-29T08:00:03Z",
-      data: {
-        callId: "calculator-call",
-        toolName: "calculator",
-        summary: "Calculator result: 42",
-      },
-    };
 
-    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, toolStarted, toolCompleted]} timeZone="system" defaultExpanded />);
 
-    expect(screen.getByText("執行工具 計算器")).toBeTruthy();
-    expect(screen.getByText("工具完成 計算器")).toBeTruthy();
-    expect(screen.getAllByText("計算器").length).toBeGreaterThan(0);
-  });
-
-  it("uses the approved MCP display name instead of exposing its canonical id", () => {
-    const canonicalName = "mcp_12345678_echo_abcdef12";
-    const approvalRequested: RunEvent = {
-      ...event,
-      sequence: 2,
-      type: "tool.approval_requested",
-      data: {
-        approvalId: "33333333-3333-4333-8333-333333333333",
-        toolName: canonicalName,
-        toolDisplayName: "Echo",
-        serverId: "44444444-4444-4444-8444-444444444444",
-        argumentHash: "a".repeat(64),
-        expiresAt: "2026-08-29T08:10:02Z",
-      },
-    };
-    const toolStarted: RunEvent = {
-      ...event,
-      sequence: 4,
-      type: "tool.started",
-      data: { callId: "mcp-call", toolName: canonicalName },
-    };
-    const toolCompleted: RunEvent = {
-      ...event,
-      sequence: 5,
-      type: "tool.completed",
-      data: { callId: "mcp-call", toolName: canonicalName, summary: "Echo completed" },
-    };
-
-    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, approvalRequested, toolStarted, toolCompleted]} timeZone="system" defaultExpanded />);
-
-    expect(screen.getByText("執行工具 Echo")).toBeTruthy();
-    expect(screen.getByText("工具完成 Echo")).toBeTruthy();
-    expect(screen.getAllByText("Echo").length).toBeGreaterThan(0);
-    expect(document.body.textContent).not.toContain(canonicalName);
-  });
-
-  it("uses a localized fallback for a Skill failure without metadata", () => {
-    const failure: RunEvent = {
-      ...event,
-      sequence: 2,
-      type: "skill.load_failed",
-      data: { skillId: null, scope: null, name: null, revision: null, contentHash: null, source: "model", errorCode: "invalid_request" },
-    };
-
-    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[failure]} timeZone="system" defaultExpanded />);
-
-    expect(document.body.textContent).not.toContain("null");
-    expect(screen.getByText(/未知 Skill/)).toBeTruthy();
-  });
 
   it("renders a Drawer mode without a second collapse control", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);

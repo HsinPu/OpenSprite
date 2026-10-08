@@ -19,7 +19,7 @@ MAX_PAGES = 100
 
 
 class DirectModelDiscovery:
-    """Never infer capacity or tool support from a newly discovered model ID."""
+    """Never infer capacity from a newly discovered model ID."""
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
@@ -85,7 +85,7 @@ class DirectModelDiscovery:
                 models[model_id] = fixed_model_capability(provider_id, model_id) or ModelCapability(
                     provider_id=provider_id, model_id=model_id, name=name.strip(),
                     context_window_tokens=8192, max_output_tokens=2048,
-                    supports_tools=False,
+
                 )
             if provider_id == "openai":
                 break

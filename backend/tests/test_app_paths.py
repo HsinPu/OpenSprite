@@ -25,8 +25,6 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.settings_file == home / "config" / "settings.json"
     assert paths.general_settings_file == home / "config" / "general.json"
     assert paths.conversation_settings_file == home / "config" / "conversation.json"
-    assert paths.tool_settings_file == home / "config" / "tools.json"
-    assert paths.mcp_settings_file == home / "config" / "mcp.json"
     assert paths.data_dir == home / "data"
     assert paths.database_file == home / "data" / "opensprite.db"
     assert paths.state_dir == home / "state"
@@ -38,15 +36,8 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.logs_dir == home / "logs"
     assert paths.system_prompt_logs_dir == home / "logs" / "system-prompts"
     assert paths.backend_logs_dir == home / "logs" / "backend"
-    assert paths.tool_receipts_dir == home / "logs" / "tool-receipts"
-    assert paths.tool_receipt_key_file == home / "config" / "tool-receipt.key"
     assert paths.cache_dir == home / "cache"
     assert paths.execution_plugin_packages_dir == home / "cache" / "execution-plugin-packages"
-    assert paths.agents_dir == home / "agents"
-    assert paths.agents_settings_file == home / "config" / "agents.json"
-    assert paths.agents_transaction_file == home / "config" / "agents-transaction.json"
-    assert paths.agents_archive_dir == home / "archive" / "agents"
-    assert paths.workspace_agents_dir(home / "workspace" / "test") == home / "workspace" / "test" / "agents"
     assert not home.exists()
 
 

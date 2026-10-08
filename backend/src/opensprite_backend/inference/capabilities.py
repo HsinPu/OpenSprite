@@ -15,7 +15,6 @@ class ModelCapability:
     name: str
     context_window_tokens: int
     max_output_tokens: int
-    supports_tools: bool = True
     reasoning_efforts: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:

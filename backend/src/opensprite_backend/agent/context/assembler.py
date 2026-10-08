@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from opensprite_backend.conversations.models import ConversationCompaction, Message
-from opensprite_backend.inference.models import ModelMessage, ModelToolDefinition
+from opensprite_backend.inference.models import ModelMessage
 
 from .budget import ContextBudgetPlan
 from .counter import ConservativeTokenCounter
@@ -53,7 +53,6 @@ class ContextAssembler:
         *,
         system_prompt: str,
         history: Sequence[Message],
-        tools: tuple[ModelToolDefinition, ...],
         budget: ContextBudgetPlan,
         summary: ConversationCompaction | None = None,
         has_older_history: bool = False,
@@ -101,7 +100,7 @@ class ContextAssembler:
         floor_start = max(0, len(converted) - self._recent_message_floor)
         required = converted[floor_start:]
         required_messages = (*prefix, *required)
-        required_tokens = self._counter.request(required_messages, tools)
+        required_tokens = self._counter.request(required_messages)
         if (
             required_tokens > budget.input_budget_tokens
             or len(required_messages) > self._max_model_messages

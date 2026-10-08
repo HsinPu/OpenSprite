@@ -25,6 +25,7 @@ function errorText(error: unknown, t: Translator) {
   return t(errorKeys[error instanceof ExecutionPackageApiError ? error.code : "internal_error"]);
 }
 const sizeText = (size: number) => `${(size / 1024).toFixed(1)} KiB`;
+const compatibleApi = (item: ExecutionPackage) => item.plugins.every(plugin => plugin.apiVersion === 2);
 type Pending = { kind: "import" | "remove" | "download"; id?: string };
 
 export function ExecutionPackageManager({ active, catalogBusy, onRefreshCatalog, onGuide }: { active: boolean; catalogBusy: boolean; onRefreshCatalog: () => Promise<void>; onGuide: () => void }) {
@@ -109,7 +110,7 @@ export function ExecutionPackageManager({ active, catalogBusy, onRefreshCatalog,
     }
   };
   const download = async (item: ExecutionPackage) => {
-    if (busy || operation.current || downloadBlocked) return;
+    if (busy || operation.current || downloadBlocked || !compatibleApi(item)) return;
     const request = ++generation.current;
     operation.current = true; setPending({ kind: "download", id: item.id }); setError(null); setNotice(null);
     try {
@@ -135,8 +136,11 @@ export function ExecutionPackageManager({ active, catalogBusy, onRefreshCatalog,
     if (busy || catalogBusy || operation.current) return;
     void Promise.allSettled([reload(), onRefreshCatalog()]);
   };
-  const status = (item: ExecutionPackage) => <Tag color={item.runtimeStatus === "mismatch" ? "warning" : undefined}>{t(statusKeys[item.runtimeStatus])}</Tag>;
-  const downloadButton = (item: ExecutionPackage) => <Tooltip title={downloadBlocked ? t(downloadBlocked) : undefined}><Button size="small" icon={<DownloadOutlined aria-hidden />} disabled={busy || downloadBlocked !== null} loading={pending?.kind === "download" && pending.id === item.id} aria-label={t("execution.packages.downloadFor", { name: item.distributionName })} onClick={() => void download(item)}>{t("execution.packages.download")}</Button></Tooltip>;
+  const status = (item: ExecutionPackage) => <Tag color={!compatibleApi(item) || item.runtimeStatus === "mismatch" ? "warning" : undefined}>{t(compatibleApi(item) ? statusKeys[item.runtimeStatus] : "execution.packages.retiredApi")}</Tag>;
+  const downloadButton = (item: ExecutionPackage) => {
+    const reason = compatibleApi(item) ? downloadBlocked : "execution.packages.retiredApi";
+    return <Tooltip title={reason ? t(reason) : undefined}><Button size="small" icon={<DownloadOutlined aria-hidden />} disabled={busy || reason !== null} loading={pending?.kind === "download" && pending.id === item.id} aria-label={t("execution.packages.downloadFor", { name: item.distributionName })} onClick={() => void download(item)}>{t("execution.packages.download")}</Button></Tooltip>;
+  };
   const columns: TableColumnsType<ExecutionPackage> = [
     { key: "name", title: t("execution.packages.distribution"), width: 260, render: (_, item) => <div className="execution-settings__identity"><strong>{item.distributionName}</strong><code>{item.fileName}</code></div> },
     { key: "version", title: t("execution.column.version"), width: 90, dataIndex: "version" },

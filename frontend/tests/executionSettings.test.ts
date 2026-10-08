@@ -6,9 +6,9 @@ import { createTranslator } from "../src/i18n/catalog";
 const settings: ExecutionSettings = {
   selection: { loopId: "standard", policyId: "standard" },
   plugins: [
-    { id: "standard", kind: "loop", name: "Standard Loop", description: "Default loop", version: "1.0.0", apiVersion: 1, status: "available" },
-    { id: "standard", kind: "policy", name: "Standard", description: "Default recovery", version: "1.0.0", apiVersion: 1, status: "available" },
-    { id: "no_recovery", kind: "policy", name: "No recovery", description: "No automatic recovery", version: "1.0.0", apiVersion: 1, status: "available" },
+    { id: "standard", kind: "loop", name: "Standard Loop", description: "Default loop", version: "2.0.0", apiVersion: 1, status: "available" },
+    { id: "standard", kind: "policy", name: "Standard", description: "Default recovery", version: "2.0.0", apiVersion: 1, status: "available" },
+    { id: "no_recovery", kind: "policy", name: "No recovery", description: "No automatic recovery", version: "2.0.0", apiVersion: 1, status: "available" },
   ],
 };
 const body = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });

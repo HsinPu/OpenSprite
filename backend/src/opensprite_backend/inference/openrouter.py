@@ -17,22 +17,13 @@ from .models import (
     ModelRequest,
     ModelStreamEvent,
     ModelTextDelta,
-    ModelToolCall,
-    ModelToolDefinition,
     ModelUsage,
 )
 from .reasoning import request_effort, invalid_response
-from .sse import load_json_arguments, load_json_object
+from .sse import load_json_object
 
 
 OPENROUTER_CHAT_URL: Final = "https://openrouter.ai/api/v1/chat/completions"
-
-
-@dataclass(slots=True)
-class _ToolFragments:
-    call_id: str = ""
-    name: str = ""
-    arguments: str = ""
 
 
 class ChatCompletionsInferenceAdapter:
@@ -55,26 +46,10 @@ class ChatCompletionsInferenceAdapter:
             "stream_options": {"include_usage": True},
             "max_completion_tokens": request.max_output_tokens,
         }
-        if request.tools:
-            body["tools"] = _tools(request.tools)
-            body["tool_choice"] = "auto"
-            if self._openrouter_extensions and request.model_id != "openrouter/auto":
-                body["provider"] = {"require_parameters": True}
         selected_effort = request_effort(request)
         if self._openrouter_extensions and selected_effort is not None:
             body["reasoning"] = {"effort": selected_effort, "exclude": True}
-        if request.tools and request.provider_endpoint is not None and request.provider_endpoint.non_streaming_tools:
-            body["stream"] = False
-            body.pop("stream_options", None)
-            async for raw in self._http.payloads(
-                headers={**({"Authorization": f"Bearer {api_key}"} if self._bearer_auth else {}),
-                         "Accept": "application/json", "Content-Type": "application/json"}, body=body,
-            ):
-                for event in _complete_response(load_json_object(raw)):
-                    yield event
-            return
 
-        fragments: dict[int, _ToolFragments] = {}
         finish_reason: str | None = None
         done = False
         async for raw in self._http.payloads(
@@ -111,12 +86,8 @@ class ChatCompletionsInferenceAdapter:
                     raise invalid_response()
                 if content:
                     yield ModelTextDelta(content)
-            tool_deltas = delta.get("tool_calls")
-            if tool_deltas is not None:
-                if type(tool_deltas) is not list:
-                    raise invalid_response()
-                for item in tool_deltas:
-                    _merge_tool_delta(fragments, item)
+            if delta.get("tool_calls") or delta.get("function_call"):
+                raise invalid_response()
             current_finish = choice.get("finish_reason")
             if current_finish is not None:
                 if type(current_finish) is not str or (
@@ -129,24 +100,6 @@ class ChatCompletionsInferenceAdapter:
 
         if not done or finish_reason is None:
             raise invalid_response()
-        if fragments:
-            if finish_reason != "tool_calls":
-                raise invalid_response()
-            expected_indexes = list(range(len(fragments)))
-            if sorted(fragments) != expected_indexes:
-                raise invalid_response()
-            for index in expected_indexes:
-                item = fragments[index]
-                try:
-                    yield ModelToolCall(
-                        item.call_id,
-                        item.name,
-                        load_json_arguments(item.arguments),
-                    )
-                except ValueError as error:
-                    raise invalid_response() from error
-            yield ModelCompleted(ModelFinishReason.TOOL_CALLS)
-            return
         if finish_reason == "length":
             yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)
             return
@@ -161,133 +114,7 @@ class OpenRouterInferenceAdapter(ChatCompletionsInferenceAdapter):
 
 
 def _messages(messages: tuple[ModelMessage, ...]) -> list[dict[str, object]]:
-    result: list[dict[str, object]] = []
-    for message in messages:
-        if message.role == "tool":
-            result.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": message.tool_call_id,
-                    "content": message.content,
-                }
-            )
-            continue
-        item: dict[str, object] = {
-            "role": message.role,
-            "content": message.content,
-        }
-        if message.role == "assistant" and message.tool_calls:
-            item["tool_calls"] = [
-                {
-                    "id": call.call_id,
-                    "type": "function",
-                    "function": {
-                        "name": call.name,
-                        "arguments": _arguments_json(call.arguments),
-                    },
-                }
-                for call in message.tool_calls
-            ]
-        result.append(item)
-    return result
-
-
-def _tools(tools: tuple[ModelToolDefinition, ...]) -> list[dict[str, object]]:
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.input_schema,
-                "strict": True,
-            },
-        }
-        for tool in tools
-    ]
-
-
-def _merge_tool_delta(
-    fragments: dict[int, _ToolFragments],
-    item: object,
-) -> None:
-    if type(item) is not dict:
-        raise invalid_response()
-    index = item.get("index")
-    if type(index) is not int or index < 0:
-        raise invalid_response()
-    fragment = fragments.setdefault(index, _ToolFragments())
-    call_type = item.get("type")
-    if call_type is not None and call_type != "function":
-        raise invalid_response()
-    call_id = item.get("id")
-    if call_id is not None:
-        if type(call_id) is not str or (
-            fragment.call_id and fragment.call_id != call_id
-        ):
-            raise invalid_response()
-        fragment.call_id = call_id
-    function = item.get("function")
-    if function is not None:
-        if type(function) is not dict:
-            raise invalid_response()
-        name = function.get("name")
-        if name is not None:
-            if type(name) is not str or (fragment.name and fragment.name != name):
-                raise invalid_response()
-            fragment.name = name
-        arguments = function.get("arguments")
-        if arguments is not None:
-            if type(arguments) is not str:
-                raise invalid_response()
-            fragment.arguments += arguments
-            if len(fragment.arguments.encode("utf-8")) > 65536:
-                raise invalid_response()
-
-
-def _complete_response(payload: dict[str, object]) -> list[ModelStreamEvent]:
-    """Validate the entire response before exposing text or executable calls."""
-    choices = payload.get("choices")
-    if type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict:
-        raise invalid_response()
-    choice = choices[0]
-    message = choice.get("message")
-    if choice.get("index") != 0 or type(message) is not dict or message.get("role") != "assistant":
-        raise invalid_response()
-    content = message.get("content")
-    if content is not None and (type(content) is not str or len(content) > 1048576):
-        raise invalid_response()
-    calls = message.get("tool_calls")
-    events: list[ModelStreamEvent] = []
-    reason = choice.get("finish_reason")
-    if calls is not None and type(calls) is not list:
-        raise invalid_response()
-    if calls:
-        if reason != "tool_calls" or len(calls) > 128:
-            raise invalid_response()
-        ids: set[str] = set()
-        for call in calls:
-            if type(call) is not dict or call.get("type") != "function" or type(call.get("function")) is not dict:
-                raise invalid_response()
-            function = call["function"]
-            if type(function.get("arguments")) is not str:
-                raise invalid_response()
-            try:
-                parsed = ModelToolCall(call.get("id"), function.get("name"), load_json_arguments(function.get("arguments")))
-            except (ValueError, TypeError) as error:
-                raise invalid_response() from error
-            if parsed.call_id in ids:
-                raise invalid_response()
-            ids.add(parsed.call_id)
-            events.append(parsed)
-        finish = ModelFinishReason.TOOL_CALLS
-    elif reason in {"stop", "length"}:
-        finish = ModelFinishReason.FINAL if reason == "stop" else ModelFinishReason.OUTPUT_LIMIT
-    else:
-        raise invalid_response()
-    text_events = [ModelTextDelta(content[i:i + 16384]) for i in range(0, len(content or ""), 16384)]
-    usage = _usage(payload.get("usage"))
-    return [*text_events, *events, *([usage] if usage is not None else []), ModelCompleted(finish)]
+    return [{"role": message.role, "content": message.content} for message in messages]
 
 
 def _usage(value: object) -> ModelUsage | None:
@@ -311,16 +138,3 @@ def _token(value: object) -> int | None:
     if type(value) is not int or value < 0:
         raise invalid_response()
     return value
-
-
-def _arguments_json(arguments: dict[str, object]) -> str:
-    try:
-        return json.dumps(
-            arguments,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    except (TypeError, ValueError) as error:
-        raise invalid_response() from error

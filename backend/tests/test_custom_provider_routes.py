@@ -27,9 +27,8 @@ def client_for(tmp_path):
         tmp_path / "transaction.json",
     ))
     app.state.provider_mutations = ProviderMutations(app.state.custom_providers,
-        WorkspaceMutationGate(), SimpleNamespace(provider_usage=lambda *_: (0, 0)),
-        SimpleNamespace(provider_in_use=lambda _: False), SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(model=None))),
-        SimpleNamespace(references_provider=lambda *_: False))
+        WorkspaceMutationGate(), SimpleNamespace(provider_usage=lambda *_: 0),
+        SimpleNamespace(provider_in_use=lambda _: False), SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(model=None))))
     return TestClient(app)
 
 
@@ -53,17 +52,18 @@ def test_duplicate_json_rejected_without_writing(tmp_path):
         assert not (tmp_path / "providers.json").exists()
 
 
-def test_tool_policy_defaults_and_partial_update_preservation(tmp_path):
+def test_retired_tool_settings_are_rejected_without_changing_provider(tmp_path):
     with client_for(tmp_path) as client:
-        fields = dict(name="Tools", baseUrl="https://example.com/v1", protocol="openai_chat_completions", authMode="none")
+        fields = dict(name="Text provider", baseUrl="https://example.com/v1", protocol="openai_chat_completions", authMode="none")
         created = client.post("/api/providers", json={**fields, "expectedRevision": 0}).json()
-        assert created["tools_enabled"] and created["non_streaming_tools"]
+        assert "tools_enabled" not in created and "non_streaming_tools" not in created
         url = f"/api/providers/{created['id']}"
         response = client.put(url, json={**fields, "expectedRevision": 1, "toolsEnabled": False, "nonStreamingTools": False})
+        assert response.status_code == 400
+        assert client.get(url).json() == created
+        response = client.put(url, json={**fields, "expectedRevision": 1})
         assert response.status_code == 200
-        response = client.put(url, json={**fields, "expectedRevision": 2})
-        assert response.status_code == 200
-        assert not response.json()["tools_enabled"] and not response.json()["non_streaming_tools"]
+        assert "tools_enabled" not in response.json()
 
 
 def test_mutation_stream_stops_at_size_limit():
@@ -112,12 +112,12 @@ def test_manual_model_without_discovery(tmp_path):
         result = client.post("/api/providers", json=dict(name="Local", baseUrl="https://example.com/v1", protocol="openai_chat_completions", authMode="none", expectedRevision=0))
         url = f"/api/providers/{result.json()['id']}/models"
         payload = dict(modelId="local-model", name="Local model", contextLimit=16384,
-            outputLimit=4096, tools=True, expectedRevision=1)
+            outputLimit=4096, expectedRevision=1)
         created = client.post(url, json=payload)
         assert created.status_code == 201
         model = created.json()["models"][0]
         assert model["source"] == "manual"
-        assert model["tools"] is True
+        assert "tools" not in model
         assert client.post(url, json=payload).status_code == 409
         payload["expectedRevision"] = 2
         assert client.post(url, json=payload).json()["error"]["code"] == "duplicate_model"
@@ -132,7 +132,7 @@ def test_model_pages_reject_stale_or_invalid_queries(tmp_path):
         url = f"/api/providers/{identifier}/models"
         for revision in range(1, 4):
             assert client.post(url, json=dict(modelId=f"model-{revision}", name="Model", contextLimit=4096,
-                outputLimit=1024, tools=False, expectedRevision=revision)).status_code == 201
+                outputLimit=1024, expectedRevision=revision)).status_code == 201
         first = client.get(url + "?limit=2").json()
         assert first["nextCursor"] == "4:2"
         last = client.get(url + "?cursor=4:2").json()
@@ -155,9 +155,9 @@ def test_guarded_update_and_delete(tmp_path):
         assert client.put(url, json={**fields, "expectedRevision": 2}).json()["error"]["code"] == "provider_busy"
         assert client.delete(url, params={"expectedRevision": 2}).status_code == 409
         guard.run_manager.provider_in_use = lambda _: False
-        guard.repository.provider_usage = lambda *_: (0, 1)
+        guard.ai_settings.get = AsyncMock(return_value=SimpleNamespace(model=SimpleNamespace(provider_id=created['id'])))
         assert client.delete(url, params={"expectedRevision": 2}).json()["error"]["code"] == "provider_in_use"
-        guard.repository.provider_usage = lambda *_: (0, 0)
+        guard.ai_settings.get = AsyncMock(return_value=SimpleNamespace(model=None))
         for query in ("", "?expectedRevision=0", "?expectedRevision=2&extra=1", "?expectedRevision=2&expectedRevision=2"):
             assert client.delete(url + query).status_code == 400
         assert client.delete(url, params={"expectedRevision": 2}).json() == {"deleted": True}
@@ -170,7 +170,7 @@ def test_model_mutations_reject_selected_model_removal(tmp_path):
             protocol="openai_chat_completions", authMode="none", expectedRevision=0)).json()
         provider_id = created["id"]
         url = f"/api/providers/{provider_id}/models"
-        fields = dict(modelId="local", name="Local", contextLimit=8192, outputLimit=2048, tools=False, expectedRevision=1)
+        fields = dict(modelId="local", name="Local", contextLimit=8192, outputLimit=2048, expectedRevision=1)
         model = client.post(url, json=fields).json()["models"][0]
         model_url = f"{url}/{model['key']}"
         guard = client.app.state.provider_mutations

@@ -4,11 +4,11 @@ import { validAttemptPayload } from "../src/api/attemptEvents";
 
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const receipt = {
-  schemaVersion: 1, requestHash: "a".repeat(64), estimateMethod: "utf8-conservative-v1",
-  estimatedInputTokens: 3, components: { system: 0, summary: 0, history: 0, currentUser: 0, toolResults: 0, assistant: 0, summaryInput: 0, unattributed: 0, toolDefinitions: 0, framing: 3 },
+  schemaVersion: 2, requestHash: "a".repeat(64), estimateMethod: "utf8-conservative-v1",
+  estimatedInputTokens: 3, components: { system: 0, summary: 0, history: 0, currentUser: 0, assistant: 0, summaryInput: 0, unattributed: 0, framing: 3 },
   contextLimitTokens: null, inputBudgetTokens: null, outputReserveTokens: 32,
-  messageCount: 1, toolCount: 0, systemHash: "b".repeat(64), toolsHash: "c".repeat(64),
-  historyMessageIds: [id], summary: null, skills: [], workspace: null,
+  messageCount: 1, systemHash: "b".repeat(64),
+  historyMessageIds: [id], summary: null, workspace: null,
 };
 it("accepts bounded receipts through the attempt parser", () => {
   expect(validContextReceipt(receipt)).toBe(true);

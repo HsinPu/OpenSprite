@@ -9,7 +9,6 @@ export type WorkspaceUnavailableReason = "missing" | "not_directory" | "access_d
 export type WorkspaceMountAccess = "read_only" | "read_write";
 export type WorkspaceUsage = {
   conversationCount: number;
-  scheduleCount: number;
   activeRunCount: number;
 };
 export type WorkspaceMount = {
@@ -87,7 +86,7 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const exact = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
 
 function usage(value: unknown): WorkspaceUsage {
-  if (!record(value) || !exact(value, ["conversationCount", "scheduleCount", "activeRunCount"]) || Object.values(value).some((item) => !Number.isInteger(item) || (item as number) < 0)) throw new WorkspaceApiError("malformed_response");
+  if (!record(value) || !exact(value, ["conversationCount", "activeRunCount"]) || Object.values(value).some((item) => !Number.isInteger(item) || (item as number) < 0)) throw new WorkspaceApiError("malformed_response");
   return value as WorkspaceUsage;
 }
 

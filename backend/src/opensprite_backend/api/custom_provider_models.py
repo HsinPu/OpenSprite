@@ -14,8 +14,6 @@ class ProviderCreateRequest(BaseModel):
     protocol: Literal["openai_chat_completions"]
     authMode: Literal["none", "bearer"]
     allowInsecureLocal: bool = False
-    nonStreamingTools: bool = True
-    toolsEnabled: bool = True
     apiKey: SecretStr | None = Field(default=None, repr=False, exclude=True)
     expectedRevision: int = Field(ge=0)
 
@@ -55,7 +53,6 @@ class ProviderModelRequest(ProviderRevisionRequest):
     name: str = Field(min_length=1, max_length=256)
     contextLimit: int = Field(ge=1024)
     outputLimit: int = Field(ge=1)
-    tools: bool = True
 
     @model_validator(mode="after")
     def limits_policy(self) -> "ProviderModelRequest":

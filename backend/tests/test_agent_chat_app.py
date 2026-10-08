@@ -273,8 +273,7 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
                 "id": CONVERSATION_ID,
                 "workspaceId": DEFAULT_WORKSPACE_ID,
                 "revision": 1,
-                "workspaceManagedBySchedule": False,
-                "title": "整理今天的工作",
+                                "title": "整理今天的工作",
                 "latestMessagePreview": "done",
                 "createdAt": "2026-08-21T08:30:00Z",
                 "updatedAt": "2026-08-21T08:30:00Z",
@@ -419,8 +418,7 @@ def test_generated_chat_schema_keeps_strict_request_and_sse_content_type() -> No
         "workspaceId",
         "clientRequestId",
         "message",
-        "skillIds",
-    }
+            }
     stream = schema["paths"]["/api/runs/{run_id}/events"]["get"]
     assert "text/event-stream" in stream["responses"]["200"]["content"]
     assert set(stream["responses"]) >= {"200", "400", "404", "500", "503"}

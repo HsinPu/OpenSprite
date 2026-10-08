@@ -1,106 +1,28 @@
 # Contracts
 
-`provider-connections.openapi.json` is the authoritative consumer-visible HTTP
-contract for the local provider-connection boundary. The frontend and backend
-must derive their request, response, and error expectations from this file; they
-must not maintain incompatible copies.
+These OpenAPI 3.1 documents are authoritative for frontend/backend HTTP and SSE behavior.
+Requests and responses reject unknown fields; revisions, bounded pagination, same-origin protections and sanitized errors remain part of each boundary.
 
-`custom-providers.openapi.json` defines the authenticated UUID-based custom
-OpenAI-compatible Chat Completions catalog, write-only credentials, manual and
-discovered models, optimistic revisions, and reference-guarded mutations.
-Builtin connection operations remain in the preceding contract.
+| Document | Boundary |
+| --- | --- |
+| provider-connections | Built-in Provider connections and text model discovery |
+| custom-providers | UUID-based Chat Completions providers, model catalog and encrypted write-only credentials |
+| ai-settings | Model selection, Context/output budgets, response mode, continuation, delivery and prompt logging |
+| agent-chat | Durable conversations, idempotent text Runs, cancellation, history and SSE |
+| execution-settings | Installed Loop/policy metadata and selection for future Runs; Host API v2 |
+| execution-plugin-packages | Static wheel import, cache inventory/removal, provenance and Docker deployment bundles |
+| workspaces | Managed scopes, active selection, mounts and non-destructive catalog removal |
+| general-settings | Interface locale and time zone |
+| conversation-settings | Startup, send behavior, scroll and execution panel |
+| local-authentication | Trusted-local/password modes, bootstrap and process-memory sessions |
+| local-paths | User-initiated native path selection |
+| app-info | Product/build identity |
 
-`ai-settings.openapi.json` is the authoritative consumer-visible HTTP contract
-for the atomic model selection, Context/output budgets, response mode, output
-continuation, response delivery and Prompt logging settings. It is separate from
-provider credential lifecycle because it never returns or persists a raw API
-key, dynamic model list, display label, or inference result.
+The clean core has no Tools, approvals, Skills, custom Agent/Subagent, MCP or schedule contracts.
+Their retired endpoints return 404. Chat accepts no action definitions and publishes only core text/model/compaction/execution events.
+Provider wire actions fail as invalid responses instead of becoming an execution path.
 
-`agent-chat.openapi.json` is the authoritative consumer-visible HTTP and SSE
-contract for durable conversations, one-message agent runs, safe semantic Run
-events, and cancellation. It deliberately excludes raw Provider payloads,
-credentials, internal prompts, hidden reasoning, and unapproved tool surfaces.
-
-`general-settings.openapi.json` is the authoritative HTTP contract for the
-persisted interface locale and time-zone choice. It remains separate from AI
-model configuration.
-
-`conversation-settings.openapi.json` is the authoritative HTTP contract for
-startup destination, message sending, chat auto-scroll and execution-panel
-behavior. It remains separate from General Settings so the existing
-locale/time-zone schema does not change.
-
-`tool-settings.openapi.json` is the authoritative HTTP contract for the current
-production tool catalog and persisted tool availability. It does not expose
-tool arguments, tool results, credentials, or speculative external tools.
-
-`mcp-connections.openapi.json` defines configured local stdio and Streamable HTTP
-MCP Servers with either no authentication or a write-only manual Bearer token,
-`local-paths.openapi.json` defines user-initiated native executable and directory
-selection without filesystem enumeration or persistence,
-`local-authentication.openapi.json` defines mandatory single-owner password,
-bootstrap and process-memory Session behavior,
-explicit process lifecycle operations and discovered Tool summaries.
-`tool-approvals.openapi.json` defines short-lived, single-use MCP Tool approval;
-full arguments are available only while the approval is pending.
-
-`schedules.openapi.json` defines durable once, daily, and weekly Agent schedules,
-optimistic revisions, manual runs, occurrence history, and host continuity status.
-
-`workspaces.openapi.json` defines the authenticated managed Workspace catalog,
-global active selection, existing-directory import, permission-aware external
-mounts, optimistic revisions, availability and non-destructive removal rules.
-
-`app-info.openapi.json` is the authoritative read-only contract for the running
-product version and installed build identity. The backend package version is
-the single product-version source; the frontend does not maintain another app
-version.
-
-The contract currently covers:
-
-- backend liveness at `GET /healthz`;
-- product/build identity at `GET /api/app-info`;
-- the fixed `openai`, `anthropic`, and `openrouter` provider catalog;
-- validate-then-save connection replacement;
-- testing and deleting a stored provider connection;
-- on-demand discovery of connected OpenRouter text models;
-- stable public summaries and a secret-safe error envelope.
-
-The AI settings contract covers:
-
-- reading the confirmed model selection, response mode and output logging preferences;
-- reading the confirmed Context/output budgets, output-continuation policy and
-  stream/complete response-delivery preference;
-- atomically saving those values for a connected Provider;
-- clearing the model while preserving a selected response mode.
-
-The general settings contract covers:
-
-- reading the confirmed interface locale and time-zone choice;
-- atomically replacing both values from fixed supported catalogs.
-
-The conversation settings contract covers:
-
-- choosing a new or most-recent conversation at application startup;
-- choosing Enter or Ctrl/Cmd+Enter message sending behavior;
-- enabling or disabling automatic following of new chat output;
-- atomically replacing startup, send, auto-scroll and execution-panel values.
-
-The tool settings contract covers:
-
-- listing the tools explicitly composed into the production registry;
-- enabling or disabling all tools and individual registered tools;
-- atomically saving the confirmed availability used by newly started Runs.
-
-The agent chat contract covers:
-
-- listing conversations and their visible persisted messages;
-- atomically accepting one user message and one idempotent Run;
-- reading a Run snapshot and replaying/following semantic events over SSE;
-- cancelling one active Run without fabricating a successful answer.
-
-Provider connections and AI settings have no event, webhook, or WebSocket
-surface. Agent chat has bounded cursor pagination and one server-to-browser SSE
-surface, but no webhook or WebSocket contract. Any future contract must be added
-explicitly and follow the evolution rules recorded in
-`docs/architecture/overview.md`.
+Execution plugin metadata can report incompatible installed versions, but only API v2 can be selected or newly imported.
+Retired cached packages remain inspectable; their deployment is rejected. Import does not install or run Python code.
+Provider payloads, credentials, internal prompts and hidden reasoning are excluded from public events.
+Agent chat uses HTTP/SSE; no WebSocket, webhook, runtime installer or application CLI is provided.

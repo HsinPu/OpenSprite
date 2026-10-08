@@ -27,7 +27,7 @@ async def test_openai_filters_non_text_models_and_preserves_known_capacity():
     assert by_id["gpt-5.6"].context_window_tokens == 1_050_000
     assert by_id["gpt-future"].context_window_tokens == 8192
     assert by_id["gpt-future"].max_output_tokens == 2048
-    assert by_id["gpt-future"].supports_tools is False
+    assert not hasattr(by_id["gpt-future"], "supports_tools")
 
 
 @pytest.mark.anyio

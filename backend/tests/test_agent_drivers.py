@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from opensprite_backend.inference.models import InferenceFailure, ModelCompleted, ModelFinishReason, ModelTextDelta
+
 import asyncio
 import threading
 from collections.abc import Awaitable, Callable
@@ -12,7 +14,7 @@ from uuid import uuid4
 import pytest
 
 from context_test_support import TestCapabilityResolver
-from test_agent_loop import (LookupTool, ScriptedGateway, accepted_run, async_test,
+from test_agent_loop import (ScriptedGateway, accepted_run, async_test,
                              seed_completed_turns, store)
 from opensprite_backend.agent.driver import DriverResult, ExecutionHost, ModelTurn
 from opensprite_backend.agent.context import ContextLimitExceeded, ModelCapabilityProviderError
@@ -28,10 +30,6 @@ from opensprite_backend.conversations.models import (CompletionReason, PublicRun
     RunEventType, RunStatus, StoreFailure)
 from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.inference.gateway import ModelGatewayError
-from opensprite_backend.inference.models import (InferenceFailure, ModelCompleted,
-    ModelFinishReason, ModelTextDelta, ModelToolCall)
-from opensprite_backend.tools.policy import ReadOnlyToolPolicy
-from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, DefaultWorkspaceResolver
 
 
@@ -50,7 +48,7 @@ class FunctionDriver:
 
 @dataclass
 class FunctionFactory:
-    api_version = 1
+    api_version = 2
 
     function: DriverFunction
     created: list[FunctionDriver] = field(default_factory=list)
@@ -64,17 +62,8 @@ class FunctionFactory:
 async def without_checkpoints(host: ExecutionHost) -> DriverResult:
     # A different driver intentionally omits optional explicit checkpoints;
     # each core host operation must still enforce its own limits/cancellation.
-    while True:
-        turn = await host.next_turn()
-        if turn.finish_reason is ModelFinishReason.TOOL_CALLS:
-            await host.execute_tools(turn)
-        else:
-            return await host.finish(turn)
-
-
-def tool_turn(call_id: str = "call-1"):
-    return [ModelToolCall(call_id, "lookup_note", {"query": "today"}),
-            ModelCompleted(ModelFinishReason.TOOL_CALLS)]
+    turn = await host.next_turn()
+    return await host.finish(turn)
 
 
 def completed(text: str = "answer"):
@@ -82,36 +71,12 @@ def completed(text: str = "answer"):
 
 
 def loop_for(repository, gateway, function=without_checkpoints, **kwargs):
-    tool = LookupTool()
     factory = FunctionFactory(function)
     loop = AgentLoop(repository=repository, gateway=gateway,
-                     tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+
                      capability_resolver=TestCapabilityResolver(),
                      driver_factory=factory, **kwargs)
-    return loop, tool, factory
-
-
-@async_test
-async def test_selected_driver_replaces_standard_and_is_created_per_run(tmp_path: Path, monkeypatch):
-    async def forbidden_standard(self, host):
-        raise AssertionError("custom driver must not call the standard driver")
-
-    monkeypatch.setattr(StandardDriver, "execute", forbidden_standard)
-    repository = store(tmp_path)
-    runs = [accepted_run(repository) for _ in range(2)]
-    gateway = ScriptedGateway([tool_turn(), completed("first"), completed("second")])
-    loop, tool, factory = loop_for(repository, gateway)
-
-    results = [await loop.execute(run.id, asyncio.Event()) for run in runs]
-
-    assert [result.status for result in results] == [RunStatus.COMPLETED] * 2
-    assert [result.partial_text for result in results] == ["first", "second"]
-    assert len(factory.created) == 2
-    assert factory.created[0] is not factory.created[1]
-    assert [driver.calls for driver in factory.created] == [1, 1]
-    assert tool.calls == [{"query": "today"}]
-    assert gateway.requests[1].messages[-1].role == "tool"
-    assert gateway.requests[1].messages[-1].tool_call_id == "call-1"
+    return loop, factory
 
 
 @pytest.mark.parametrize("mode", ["premature", "copy", "mutate_text", "mutate_reason"])
@@ -132,7 +97,7 @@ async def test_core_rejects_forged_or_modified_driver_result(tmp_path: Path, mod
     repository = store(tmp_path)
     run = accepted_run(repository)
     gateway = ScriptedGateway([completed()])
-    loop, _, _ = loop_for(repository, gateway, forge)
+    loop, _ = loop_for(repository, gateway, forge)
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -140,75 +105,6 @@ async def test_core_rejects_forged_or_modified_driver_result(tmp_path: Path, mod
     assert result.error.code == "internal_error"
     assert result.partial_text == ("" if mode == "premature" else "answer")
     assert RunEventType.RUN_COMPLETED not in [event.type for event in
-        repository.list_run_events(run.id, after_sequence=0, limit=100)]
-
-
-@pytest.mark.parametrize("mode", ["finish", "skip", "copy", "mutate_arguments", "replay"])
-@async_test
-async def test_core_rejects_unsettled_forged_or_replayed_tool_turn(tmp_path: Path, mode: str):
-    async def misuse(host):
-        turn = await host.next_turn()
-        if mode == "finish":
-            return await host.finish(turn)
-        if mode == "skip":
-            return await host.finish(await host.next_turn())
-        if mode == "copy":
-            await host.execute_tools(ModelTurn(turn.text, turn.finish_reason, turn.tool_calls))
-        elif mode == "mutate_arguments":
-            turn.tool_calls[0].arguments["query"] = "changed"
-            await host.execute_tools(turn)
-        elif mode == "replay":
-            await host.execute_tools(turn)
-            await host.execute_tools(turn)
-        return DriverResult("forged", CompletionReason.STOP)
-
-    repository = store(tmp_path)
-    run = accepted_run(repository)
-    loop, tool, _ = loop_for(repository, ScriptedGateway([tool_turn(), completed()]), misuse)
-
-    result = await loop.execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.FAILED
-    assert result.error.code == "internal_error"
-    assert len(tool.calls) == (1 if mode == "replay" else 0)
-
-
-@pytest.mark.parametrize("bounds,scripts,expected_tools", [
-    ({"max_model_rounds": 1}, [tool_turn(), completed()], 1),
-    ({"max_tool_calls": 0}, [tool_turn(), completed()], 0),
-    ({"max_assistant_chars": 2}, [completed("too long")], 0),
-])
-@async_test
-async def test_driver_cannot_bypass_core_limits_by_omitting_checkpoints(
-    tmp_path: Path, bounds: dict, scripts: list, expected_tools: int):
-    repository = store(tmp_path)
-    run = accepted_run(repository)
-    loop, tool, _ = loop_for(repository, ScriptedGateway(scripts), **bounds)
-
-    result = await loop.execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.FAILED
-    assert result.error.code == "agent_limit_reached"
-    assert len(tool.calls) == expected_tools
-
-
-@async_test
-async def test_no_recovery_preserves_tool_loop_but_disables_output_continuation(tmp_path: Path):
-    repository = store(tmp_path)
-    run = accepted_run(repository, output_continuation="unlimited")
-    gateway = ScriptedGateway([tool_turn(), [ModelTextDelta("partial"),
-        ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]])
-    loop, tool, _ = loop_for(repository, gateway,
-                            execution_strategy=NoRecoveryExecutionStrategy())
-
-    result = await loop.execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.COMPLETED
-    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
-    assert result.partial_text == "partial"
-    assert len(tool.calls) == 1
-    assert len(gateway.requests) == 2
-    assert RunEventType.RESPONSE_CONTINUATION_STARTED not in [event.type for event in
         repository.list_run_events(run.id, after_sequence=0, limit=100)]
 
 
@@ -220,7 +116,7 @@ async def test_no_recovery_disables_first_provider_context_retry(tmp_path: Path)
         message="current", provider_id="openrouter", model_id="openrouter/auto",
         response_mode="default").run
     gateway = ScriptedGateway([[ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]])
-    loop, _, _ = loop_for(repository, gateway, execution_strategy=NoRecoveryExecutionStrategy())
+    loop, _ = loop_for(repository, gateway, execution_strategy=NoRecoveryExecutionStrategy())
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -245,7 +141,7 @@ async def test_policy_can_disable_continuation_retry_without_losing_partial_text
         [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
         [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
     ])
-    loop, _, _ = loop_for(repository, gateway, execution_strategy=ContinueWithoutRetry())
+    loop, _ = loop_for(repository, gateway, execution_strategy=ContinueWithoutRetry())
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -253,45 +149,7 @@ async def test_policy_can_disable_continuation_retry_without_losing_partial_text
     assert result.completion_reason is CompletionReason.CONTEXT_LIMIT
     assert result.partial_text == "partial"
     assert len(gateway.requests) == 2
-    assert gateway.requests[1].tools == ()
-
-
-@async_test
-async def test_in_flight_tool_task_is_cancelled_before_failure_is_persisted(tmp_path: Path):
-    started = asyncio.Event()
-    drained = asyncio.Event()
-
-    class BlockingTool(LookupTool):
-        async def invoke(self, arguments, context):
-            started.set()
-            try:
-                await asyncio.Event().wait()
-            finally:
-                drained.set()
-
-    background: list[asyncio.Task] = []
-
-    async def abandon(host):
-        turn = await host.next_turn()
-        background.append(asyncio.create_task(host.execute_tools(turn)))
-        await started.wait()
-        return DriverResult("unfinished tools", CompletionReason.STOP)
-
-    repository = store(tmp_path)
-    run = accepted_run(repository)
-    tool = BlockingTool()
-    loop = AgentLoop(repository=repository, gateway=ScriptedGateway([tool_turn()]),
-        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
-        capability_resolver=TestCapabilityResolver(), driver_factory=FunctionFactory(abandon))
-
-    result = await loop.execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.FAILED
-    assert result.error.code == "internal_error"
-    assert drained.is_set()
-    assert background[0].done()
-    assert RunEventType.RUN_COMPLETED not in [event.type for event in
-        repository.list_run_events(run.id, after_sequence=0, limit=100)]
+    assert not hasattr(gateway.requests[1], "tools")
 
 
 @async_test
@@ -317,7 +175,7 @@ async def test_cancellation_wins_when_driver_swallows_cancelled_error(tmp_path: 
 
     repository = store(tmp_path)
     run = accepted_run(repository)
-    loop, _, _ = loop_for(repository, BlockingGateway(), swallow)
+    loop, _ = loop_for(repository, BlockingGateway(), swallow)
     task = asyncio.create_task(loop.execute(run.id, cancellation))
     await ready.wait()
     repository.request_cancel(run.id)
@@ -354,7 +212,7 @@ async def test_plugin_exceptions_fail_without_logging_exception_secrets(tmp_path
     script = ([ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]
               if failure_at == "context_strategy" else
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
-    loop, _, _ = loop_for(repository, ScriptedGateway([script]),
+    loop, _ = loop_for(repository, ScriptedGateway([script]),
         broken_driver if failure_at == "driver" else without_checkpoints,
         execution_strategy=BrokenStrategy() if "strategy" in failure_at else None)
     if failure_at == "factory":
@@ -404,7 +262,7 @@ async def test_driver_cannot_forge_core_error_or_cancel(tmp_path: Path, caplog, 
     repository = store(tmp_path)
     run = accepted_run(repository)
     gateway = ScriptedGateway([])
-    loop, _, _ = loop_for(repository, gateway, forged_error)
+    loop, _ = loop_for(repository, gateway, forged_error)
 
     result = await loop.execute(run.id, asyncio.Event())
 
@@ -437,7 +295,7 @@ async def test_strategy_domain_errors_are_sanitized_before_host_owns_them(
     script = ([ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]
               if phase == "context" else
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
-    loop, _, _ = loop_for(repository, ScriptedGateway([script]),
+    loop, _ = loop_for(repository, ScriptedGateway([script]),
                           execution_strategy=ForgedStrategy())
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -466,7 +324,7 @@ async def test_actual_cancel_wins_over_exception_raised_by_driver_cleanup(
 
     repository = store(tmp_path)
     run = accepted_run(repository)
-    loop, _, _ = loop_for(repository, ScriptedGateway([completed("partial")]), failed_cleanup)
+    loop, _ = loop_for(repository, ScriptedGateway([completed("partial")]), failed_cleanup)
     task = asyncio.create_task(loop.execute(run.id, cancellation))
     await ready.wait()
     repository.request_cancel(run.id)
@@ -495,7 +353,7 @@ async def test_genuine_host_gateway_error_retains_core_mapping_even_if_driver_sw
     run = accepted_run(repository)
     gateway = ScriptedGateway([[ModelTextDelta("partial"),
         ModelGatewayError(InferenceFailure.PROVIDER_RATE_LIMITED)]])
-    loop, _, _ = loop_for(repository, gateway,
+    loop, _ = loop_for(repository, gateway,
                           suppress_failure if swallow else without_checkpoints)
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -518,7 +376,7 @@ async def test_genuine_host_store_error_propagates_original_object(tmp_path: Pat
         return append(run_id, event_type, data)
 
     monkeypatch.setattr(repository, "append_run_event", fail_model_start)
-    loop, _, _ = loop_for(repository, ScriptedGateway([]))
+    loop, _ = loop_for(repository, ScriptedGateway([]))
 
     with pytest.raises(ConversationStoreError) as caught:
         await loop.execute(run.id, asyncio.Event())
@@ -539,7 +397,7 @@ async def test_driver_cannot_modify_an_exception_previously_raised_by_host(tmp_p
 
     repository = store(tmp_path)
     run = accepted_run(repository)
-    loop, _, _ = loop_for(repository,
+    loop, _ = loop_for(repository,
         ScriptedGateway([[ModelGatewayError(InferenceFailure.PROVIDER_RATE_LIMITED)]]), mutate)
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -575,7 +433,7 @@ async def test_plugin_cancelled_error_is_terminal_failure_without_cancelling_own
     script = ([ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]
               if stage == "context_strategy" else
               [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)])
-    loop, _, _ = loop_for(repository, ScriptedGateway([script]),
+    loop, _ = loop_for(repository, ScriptedGateway([script]),
         abort if stage == "driver" else without_checkpoints,
         execution_strategy=CancelStrategy() if stage.endswith("_strategy") else None)
     if stage == "driver_factory":
@@ -613,7 +471,7 @@ async def test_owner_task_cancellation_keeps_run_manager_shutdown_semantics(tmp_
 
     repository = store(tmp_path)
     run = accepted_run(repository)
-    loop, _, _ = loop_for(repository, ScriptedGateway([]), wait_for_shutdown)
+    loop, _ = loop_for(repository, ScriptedGateway([]), wait_for_shutdown)
     manager = RunManager(repository, loop)
     await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID))
     task = manager._tasks[run.id]
@@ -640,7 +498,7 @@ async def test_owner_task_timeout_keeps_cancelled_error_propagation(tmp_path: Pa
 
     repository = store(tmp_path)
     run = accepted_run(repository)
-    loop, _, _ = loop_for(repository, ScriptedGateway([]), wait_for_timeout)
+    loop, _ = loop_for(repository, ScriptedGateway([]), wait_for_timeout)
 
     with pytest.raises(TimeoutError):
         async with asyncio.timeout(None) as timeout_scope:
@@ -668,7 +526,7 @@ async def test_stop_wins_when_request_cancel_precedes_completion_transaction(tmp
             return repository.complete_run(*args, **kwargs)
 
     gated = GatedRepository()
-    loop, _, _ = loop_for(gated, ScriptedGateway([completed("partial")]))
+    loop, _ = loop_for(gated, ScriptedGateway([completed("partial")]))
     manager = RunManager(gated, loop)
     await manager.start(run.id, DefaultWorkspaceResolver().execution_context(DEFAULT_WORKSPACE_ID))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -701,7 +559,7 @@ async def test_completion_invalid_state_without_persisted_cancel_still_propagate
         raise error
 
     monkeypatch.setattr(repository, "complete_run", fail_completion)
-    loop, _, _ = loop_for(repository, ScriptedGateway([completed()]))
+    loop, _ = loop_for(repository, ScriptedGateway([completed()]))
 
     with pytest.raises(ConversationStoreError) as caught:
         await loop.execute(run.id, asyncio.Event())

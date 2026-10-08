@@ -19,22 +19,81 @@
         "summary": "Read bounded persisted event history in ascending sequence order",
         "description": "Same-origin local API. Returns at most limit events; nextAfterSequence is the last returned sequence only when more persisted events exist. A null cursor describes the current snapshot, not a guarantee that an active run has ended.",
         "parameters": [
-          {"name": "run_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
-          {"name": "afterSequence", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "default": 0}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 100}}
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "afterSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Bounded history snapshot", "content": {"application/json": {"schema": {
-            "type": "object", "additionalProperties": false, "required": ["events", "nextAfterSequence"],
-            "properties": {
-              "events": {"type": "array", "maxItems": 100, "items": {"$ref": "#/components/schemas/RunEvent"}},
-              "nextAfterSequence": {"type": ["integer", "null"], "minimum": 1, "maximum": 9007199254740991}
+          "200": {
+            "description": "Bounded history snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "events",
+                    "nextAfterSequence"
+                  ],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "$ref": "#/components/schemas/RunEvent"
+                      }
+                    },
+                    "nextAfterSequence": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                }
+              }
             }
-          }}}},
-          "400": {"description": "Invalid cursor or limit"},
-          "404": {"description": "Run not found"},
-          "500": {"description": "Safe internal error"},
-          "503": {"description": "Database unavailable"}
+          },
+          "400": {
+            "description": "Invalid cursor or limit"
+          },
+          "404": {
+            "description": "Run not found"
+          },
+          "500": {
+            "description": "Safe internal error"
+          },
+          "503": {
+            "description": "Database unavailable"
+          }
         }
       }
     },
@@ -47,7 +106,9 @@
             "name": "workspaceId",
             "in": "query",
             "required": true,
-            "schema": {"$ref": "#/components/schemas/Identifier"}
+            "schema": {
+              "$ref": "#/components/schemas/Identifier"
+            }
           },
           {
             "name": "limit",
@@ -98,27 +159,78 @@
     "/api/conversations/{conversation_id}": {
       "get": {
         "operationId": "getConversation",
-        "parameters": [{"$ref": "#/components/parameters/ConversationId"}],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Conversation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSummary"}}}},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "503": {"$ref": "#/components/responses/LocalStoreUnavailable"},
-          "500": {"$ref": "#/components/responses/InternalError"}
+          "200": {
+            "description": "Conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
     "/api/conversations/{conversation_id}/workspace": {
       "put": {
         "operationId": "moveConversationToWorkspace",
-        "parameters": [{"$ref": "#/components/parameters/ConversationId"}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MoveConversationRequest"}}}},
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveConversationRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {"description": "Moved conversation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSummary"}}}},
-          "400": {"$ref": "#/components/responses/InvalidRequest"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/RunStartConflict"},
-          "503": {"$ref": "#/components/responses/LocalStoreUnavailable"},
-          "500": {"$ref": "#/components/responses/InternalError"}
+          "200": {
+            "description": "Moved conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/RunStartConflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -462,7 +574,6 @@
           "id",
           "workspaceId",
           "revision",
-          "workspaceManagedBySchedule",
           "title",
           "latestMessagePreview",
           "createdAt",
@@ -478,9 +589,6 @@
           "revision": {
             "type": "integer",
             "minimum": 1
-          },
-          "workspaceManagedBySchedule": {
-            "type": "boolean"
           },
           "title": {
             "type": "string",
@@ -642,15 +750,12 @@
           "agent_limit_reached",
           "context_limit_exceeded",
           "context_preparation_failed",
-          "tool_failure",
-          "scheduled_tool_approval_required",
           "invalid_provider_response",
           "internal_error",
           "workspace_not_found",
           "workspace_mismatch",
           "workspace_store_unavailable",
-          "revision_conflict",
-          "workspace_managed_by_schedule"
+          "revision_conflict"
         ]
       },
       "ErrorDetail": {
@@ -842,7 +947,6 @@
           "message"
         ],
         "properties": {
-          "skillIds": {"type": "array", "items": {"$ref": "#/components/schemas/Identifier"}, "maxItems": 5, "uniqueItems": true, "default": []},
           "conversationId": {
             "oneOf": [
               {
@@ -894,10 +998,18 @@
       "MoveConversationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["workspaceId", "expectedRevision"],
+        "required": [
+          "workspaceId",
+          "expectedRevision"
+        ],
         "properties": {
-          "workspaceId": {"$ref": "#/components/schemas/Identifier"},
-          "expectedRevision": {"type": "integer", "minimum": 1}
+          "workspaceId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1
+          }
         }
       },
       "CancelRunResponse": {
@@ -933,32 +1045,177 @@
           "model.attempt",
           "response.continuation.started",
           "assistant.delta",
-          "tool.approval_requested",
-          "tool.approval_decided",
-          "tool.started",
-          "tool.completed",
-          "tool.failed",
-          "skill.loaded",
-          "skill.load_failed",
           "run.completed",
           "run.failed",
           "run.cancelled",
           "run.interrupted"
         ]
       },
-      "CompactionStartedEventData": {"type":"object","additionalProperties":false,"required":["schemaVersion","compactionId","reason","fromSequence","throughSequence","estimatedBeforeTokens","inputBudgetTokens"],"properties":{"schemaVersion":{"type":"integer","const":1},"compactionId":{"$ref":"#/components/schemas/Identifier"},"reason":{"type":"string","enum":["local_budget","provider_context_limit"]},"fromSequence":{"type":"integer","minimum":1,"maximum":9007199254740991},"throughSequence":{"type":"integer","minimum":1,"maximum":9007199254740991},"estimatedBeforeTokens":{"type":"integer","minimum":0,"maximum":9007199254740991},"inputBudgetTokens":{"type":"integer","minimum":1,"maximum":9007199254740991}}},
-      "CompactionCompletedEventData": {"type":"object","additionalProperties":false,"required":["schemaVersion","compactionId","throughSequence","inputTokens","outputTokens"],"properties":{"schemaVersion":{"type":"integer","const":1},"compactionId":{"$ref":"#/components/schemas/Identifier"},"throughSequence":{"type":"integer","minimum":1,"maximum":9007199254740991},"inputTokens":{"type":"integer","minimum":0,"maximum":9007199254740991},"outputTokens":{"type":"integer","minimum":0,"maximum":9007199254740991}}},
-      "CompactionFailedEventData": {"type":"object","additionalProperties":false,"required":["schemaVersion","compactionId","errorCode"],"properties":{"schemaVersion":{"type":"integer","const":1},"compactionId":{"$ref":"#/components/schemas/Identifier"},"errorCode":{"type":"string","enum":["context_limit","preparation_failed","provider_failed"]}}},
-      "CompactionCancelledEventData": {"type":"object","additionalProperties":false,"required":["schemaVersion","compactionId","reason"],"properties":{"schemaVersion":{"type":"integer","const":1},"compactionId":{"$ref":"#/components/schemas/Identifier"},"reason":{"type":"string","const":"cancelled"}}},
-      "ExecutionSelectedEventData": {
-        "type": "object", "additionalProperties": false,
-        "required": ["loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"],
+      "CompactionStartedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "compactionId",
+          "reason",
+          "fromSequence",
+          "throughSequence",
+          "estimatedBeforeTokens",
+          "inputBudgetTokens"
+        ],
         "properties": {
-          "loopId": {"type":"string","pattern":"^[a-z][a-z0-9_.-]{0,63}$"},
-          "policyId": {"type":"string","pattern":"^[a-z][a-z0-9_.-]{0,63}$"},
-          "loopVersion": {"type":"string","minLength":1,"maxLength":64},
-          "policyVersion": {"type":"string","minLength":1,"maxLength":64},
-          "apiVersion": {"type":"integer","const":1}
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "compactionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "local_budget",
+              "provider_context_limit"
+            ]
+          },
+          "fromSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "throughSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "estimatedBeforeTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputBudgetTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "CompactionCompletedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "compactionId",
+          "throughSequence",
+          "inputTokens",
+          "outputTokens"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "compactionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "throughSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "CompactionFailedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "compactionId",
+          "errorCode"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "compactionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "errorCode": {
+            "type": "string",
+            "enum": [
+              "context_limit",
+              "preparation_failed",
+              "provider_failed"
+            ]
+          }
+        }
+      },
+      "CompactionCancelledEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "compactionId",
+          "reason"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "compactionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "reason": {
+            "type": "string",
+            "const": "cancelled"
+          }
+        }
+      },
+      "ExecutionSelectedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "loopId",
+          "loopVersion",
+          "policyId",
+          "policyVersion",
+          "apiVersion"
+        ],
+        "properties": {
+          "loopId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "policyId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "loopVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "policyVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "apiVersion": {
+            "type": "integer",
+            "const": 2
+          }
         }
       },
       "EmptyEventData": {
@@ -970,41 +1227,646 @@
       "WorkspaceMountEventData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "alias", "rootHash", "accessMode", "enabled", "availability"],
+        "required": [
+          "id",
+          "alias",
+          "rootHash",
+          "accessMode",
+          "enabled",
+          "availability"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "alias": {"type": "string", "minLength": 1, "maxLength": 40},
-          "rootHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "accessMode": {"type": "string", "enum": ["read_only", "read_write"]},
-          "enabled": {"type": "boolean"},
-          "availability": {"type": "string", "enum": ["available", "unavailable", "not_applicable"]}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "alias": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "rootHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "read_only",
+              "read_write"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "not_applicable"
+            ]
+          }
         }
       },
       "RunStartedEventData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability", "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"],
+        "required": [
+          "workspaceId",
+          "workspaceRevision",
+          "workspaceName",
+          "workspaceRootHash",
+          "workspaceAvailability",
+          "workspaceMountManifestHash",
+          "workspaceMountCount",
+          "workspaceMounts"
+        ],
         "properties": {
-          "workspaceId": {"$ref": "#/components/schemas/Identifier"},
-          "workspaceRevision": {"type": "integer", "minimum": 1},
-          "workspaceName": {"type": "string", "minLength": 1, "maxLength": 80},
+          "workspaceId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "workspaceRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "workspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
           "workspaceRootHash": {
             "oneOf": [
-              {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-              {"type": "null"}
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "workspaceAvailability": {
             "type": "string",
-            "enum": ["available", "unavailable", "not_applicable"]
+            "enum": [
+              "available",
+              "unavailable",
+              "not_applicable"
+            ]
           },
-          "workspaceMountManifestHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "workspaceMountCount": {"type": "integer", "minimum": 0, "maximum": 20},
-          "workspaceMounts": {"type": "array", "maxItems": 20, "items": {"$ref": "#/components/schemas/WorkspaceMountEventData"}}
+          "workspaceMountManifestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "workspaceMountCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "workspaceMounts": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMountEventData"
+            }
+          }
         }
       },
-      "ContextReceipt": {"type":"object","additionalProperties":false,"required":["schemaVersion","requestHash","estimateMethod","estimatedInputTokens","components","contextLimitTokens","inputBudgetTokens","outputReserveTokens","messageCount","toolCount","systemHash","toolsHash","historyMessageIds","summary","skills","workspace"],"properties":{"schemaVersion":{"const":1},"requestHash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"estimateMethod":{"const":"utf8-conservative-v1"},"estimatedInputTokens":{"type":"integer","minimum":0,"maximum":9007199254740991},"components":{"type":"object","additionalProperties":false,"required":["system","summary","history","currentUser","toolResults","assistant","summaryInput","unattributed","toolDefinitions","framing"],"properties":{"system":{"type":"integer","minimum":0,"maximum":9007199254740991},"summary":{"type":"integer","minimum":0,"maximum":9007199254740991},"history":{"type":"integer","minimum":0,"maximum":9007199254740991},"currentUser":{"type":"integer","minimum":0,"maximum":9007199254740991},"toolResults":{"type":"integer","minimum":0,"maximum":9007199254740991},"assistant":{"type":"integer","minimum":0,"maximum":9007199254740991},"summaryInput":{"type":"integer","minimum":0,"maximum":9007199254740991},"unattributed":{"type":"integer","minimum":0,"maximum":9007199254740991},"toolDefinitions":{"type":"integer","minimum":0,"maximum":9007199254740991},"framing":{"type":"integer","minimum":0,"maximum":9007199254740991}}},"contextLimitTokens":{"oneOf":[{"type":"integer","minimum":1,"maximum":9007199254740991},{"type":"null"}]},"inputBudgetTokens":{"oneOf":[{"type":"integer","minimum":1,"maximum":9007199254740991},{"type":"null"}]},"outputReserveTokens":{"type":"integer","minimum":1,"maximum":131072},"messageCount":{"type":"integer","minimum":1,"maximum":256},"toolCount":{"type":"integer","minimum":0,"maximum":9007199254740991},"systemHash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"toolsHash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"historyMessageIds":{"type":"array","maxItems":256,"uniqueItems":true,"items":{"$ref":"#/components/schemas/Identifier"}},"summary":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","version","sourceHash","throughSequence"],"properties":{"id":{"$ref":"#/components/schemas/Identifier"},"version":{"type":"integer","minimum":1,"maximum":9007199254740991},"sourceHash":{"type":"string","pattern":"^[0-9a-f]{64}$"},"throughSequence":{"type":"integer","minimum":1,"maximum":9007199254740991}}},{"type":"null"}]},"skills":{"type":"array","maxItems":5,"items":{"type":"object","additionalProperties":false,"required":["id","revision","contentHash"],"properties":{"id":{"$ref":"#/components/schemas/Identifier"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"contentHash":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}},"workspace":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","revision","mountManifestHash"],"properties":{"id":{"$ref":"#/components/schemas/Identifier"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"mountManifestHash":{"type":"string","pattern":"^[0-9a-f]{64}$"}}},{"type":"null"}]},"toolExecution":{"type":"object","additionalProperties":false,"required":["policy","transport"],"properties":{"policy":{"enum":["builtin","inherit","provider_disabled","model_disabled"]},"transport":{"enum":["streaming","non_streaming"]}}}}},
-      "ModelAttemptEventData": {"description":"One actual gateway attempt. Completed describes stream completion, not run success. No content or credentials. Provider-internal HTTP retries are not represented.","oneOf":[{"type":"object","additionalProperties":false,"required":["schemaVersion","requestId","attemptId","attemptNumber","purpose","retryOfAttemptId","retryCause","compactionId","parentRequestId","status"],"properties":{"schemaVersion":{"type":"integer","const":1},"requestId":{"$ref":"#/components/schemas/Identifier"},"attemptId":{"$ref":"#/components/schemas/Identifier"},"attemptNumber":{"type":"integer","minimum":1,"maximum":64},"purpose":{"type":"string","enum":["main","continuation","compaction"]},"retryOfAttemptId":{"type":["string","null"],"format":"uuid"},"retryCause":{"enum":[null,"provider_context_limit"]},"compactionId":{"type":["string","null"],"format":"uuid"},"parentRequestId":{"type":["string","null"],"format":"uuid"},"status":{"const":"started"},"context":{"$ref":"#/components/schemas/ContextReceipt"}}},{"type":"object","additionalProperties":false,"required":["schemaVersion","requestId","attemptId","attemptNumber","purpose","retryOfAttemptId","retryCause","compactionId","parentRequestId","status","finishReason","inputTokens","outputTokens"],"properties":{"schemaVersion":{"type":"integer","const":1},"requestId":{"$ref":"#/components/schemas/Identifier"},"attemptId":{"$ref":"#/components/schemas/Identifier"},"attemptNumber":{"type":"integer","minimum":1,"maximum":64},"purpose":{"type":"string","enum":["main","continuation","compaction"]},"retryOfAttemptId":{"type":["string","null"],"format":"uuid"},"retryCause":{"enum":[null,"provider_context_limit"]},"compactionId":{"type":["string","null"],"format":"uuid"},"parentRequestId":{"type":["string","null"],"format":"uuid"},"status":{"const":"completed"},"finishReason":{"enum":["final","tool_calls","output_limit"]},"inputTokens":{"type":["integer","null"],"minimum":0,"maximum":9007199254740991},"outputTokens":{"type":["integer","null"],"minimum":0,"maximum":9007199254740991}}},{"type":"object","additionalProperties":false,"required":["schemaVersion","requestId","attemptId","attemptNumber","purpose","retryOfAttemptId","retryCause","compactionId","parentRequestId","status","errorCode"],"properties":{"schemaVersion":{"type":"integer","const":1},"requestId":{"$ref":"#/components/schemas/Identifier"},"attemptId":{"$ref":"#/components/schemas/Identifier"},"attemptNumber":{"type":"integer","minimum":1,"maximum":64},"purpose":{"type":"string","enum":["main","continuation","compaction"]},"retryOfAttemptId":{"type":["string","null"],"format":"uuid"},"retryCause":{"enum":[null,"provider_context_limit"]},"compactionId":{"type":["string","null"],"format":"uuid"},"parentRequestId":{"type":["string","null"],"format":"uuid"},"status":{"const":"failed"},"errorCode":{"enum":["provider_not_connected","invalid_credentials","provider_rate_limited","provider_timeout","provider_unreachable","context_limit_exceeded","credential_store_unavailable","invalid_provider_response","internal_error"]}}},{"type":"object","additionalProperties":false,"required":["schemaVersion","requestId","attemptId","attemptNumber","purpose","retryOfAttemptId","retryCause","compactionId","parentRequestId","status"],"properties":{"schemaVersion":{"type":"integer","const":1},"requestId":{"$ref":"#/components/schemas/Identifier"},"attemptId":{"$ref":"#/components/schemas/Identifier"},"attemptNumber":{"type":"integer","minimum":1,"maximum":64},"purpose":{"type":"string","enum":["main","continuation","compaction"]},"retryOfAttemptId":{"type":["string","null"],"format":"uuid"},"retryCause":{"enum":[null,"provider_context_limit"]},"compactionId":{"type":["string","null"],"format":"uuid"},"parentRequestId":{"type":["string","null"],"format":"uuid"},"status":{"const":"cancelled"}}}]},
+      "ContextReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "requestHash",
+          "estimateMethod",
+          "estimatedInputTokens",
+          "components",
+          "contextLimitTokens",
+          "inputBudgetTokens",
+          "outputReserveTokens",
+          "messageCount",
+          "systemHash",
+          "historyMessageIds",
+          "summary",
+          "workspace"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "estimateMethod": {
+            "const": "utf8-conservative-v1"
+          },
+          "estimatedInputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "system",
+              "summary",
+              "history",
+              "currentUser",
+              "assistant",
+              "summaryInput",
+              "unattributed",
+              "framing"
+            ],
+            "properties": {
+              "system": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summary": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "history": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "currentUser": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "assistant": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summaryInput": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unattributed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "framing": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "contextLimitTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputBudgetTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputReserveTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 131072
+          },
+          "messageCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "systemHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "historyMessageIds": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "version",
+                  "sourceHash",
+                  "throughSequence"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "sourceHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "throughSequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "revision",
+                  "mountManifestHash"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "mountManifestHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ModelAttemptEventData": {
+        "description": "One actual gateway attempt. Completed describes stream completion, not run success. No content or credentials. Provider-internal HTTP retries are not represented.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "attemptId",
+              "attemptNumber",
+              "purpose",
+              "retryOfAttemptId",
+              "retryCause",
+              "compactionId",
+              "parentRequestId",
+              "status"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptNumber": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "continuation",
+                  "compaction"
+                ]
+              },
+              "retryOfAttemptId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "retryCause": {
+                "enum": [
+                  null,
+                  "provider_context_limit"
+                ]
+              },
+              "compactionId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "parentRequestId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "status": {
+                "const": "started"
+              },
+              "context": {
+                "$ref": "#/components/schemas/ContextReceipt"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "attemptId",
+              "attemptNumber",
+              "purpose",
+              "retryOfAttemptId",
+              "retryCause",
+              "compactionId",
+              "parentRequestId",
+              "status",
+              "finishReason",
+              "inputTokens",
+              "outputTokens"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptNumber": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "continuation",
+                  "compaction"
+                ]
+              },
+              "retryOfAttemptId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "retryCause": {
+                "enum": [
+                  null,
+                  "provider_context_limit"
+                ]
+              },
+              "compactionId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "parentRequestId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "status": {
+                "const": "completed"
+              },
+              "finishReason": {
+                "enum": [
+                  "final",
+                  "output_limit"
+                ]
+              },
+              "inputTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "outputTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "attemptId",
+              "attemptNumber",
+              "purpose",
+              "retryOfAttemptId",
+              "retryCause",
+              "compactionId",
+              "parentRequestId",
+              "status",
+              "errorCode"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptNumber": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "continuation",
+                  "compaction"
+                ]
+              },
+              "retryOfAttemptId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "retryCause": {
+                "enum": [
+                  null,
+                  "provider_context_limit"
+                ]
+              },
+              "compactionId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "parentRequestId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "status": {
+                "const": "failed"
+              },
+              "errorCode": {
+                "enum": [
+                  "provider_not_connected",
+                  "invalid_credentials",
+                  "provider_rate_limited",
+                  "provider_timeout",
+                  "provider_unreachable",
+                  "context_limit_exceeded",
+                  "credential_store_unavailable",
+                  "invalid_provider_response",
+                  "internal_error"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "attemptId",
+              "attemptNumber",
+              "purpose",
+              "retryOfAttemptId",
+              "retryCause",
+              "compactionId",
+              "parentRequestId",
+              "status"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptId": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "attemptNumber": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "continuation",
+                  "compaction"
+                ]
+              },
+              "retryOfAttemptId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "retryCause": {
+                "enum": [
+                  null,
+                  "provider_context_limit"
+                ]
+              },
+              "compactionId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "parentRequestId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "status": {
+                "const": "cancelled"
+              }
+            }
+          }
+        ]
+      },
       "ModelStartedEventData": {
         "type": "object",
         "additionalProperties": false,
@@ -1048,28 +1910,39 @@
             "minimum": 1,
             "maximum": 4000000,
             "description": "Optional safe input budget after output and safety reserves. Omitted on legacy events."
-          },
-          "toolNames": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9_]{0,63}$"
-            },
-            "description": "Sorted tool ids advertised for this model request. Omitted on legacy events."
           }
         }
       },
       "ContinuationStartedEventData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["attempt", "maxAttempts"],
+        "required": [
+          "attempt",
+          "maxAttempts"
+        ],
         "properties": {
-          "attempt": {"type": "integer", "minimum": 1, "maximum": 64},
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
           "maxAttempts": {
             "anyOf": [
-              {"type": "integer", "enum": [1, 2, 3, 5, 10, 20, 50]},
-              {"type": "null"}
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  5,
+                  10,
+                  20,
+                  50
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "description": "Configured continuation limit, or null for unlimited mode subject to backend safety bounds."
           }
@@ -1086,95 +1959,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 16384
-          }
-        }
-      },
-      "ToolStartedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "callId",
-          "toolName"
-        ],
-        "properties": {
-          "callId": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "toolName": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          }
-        }
-      },
-      "ToolApprovalRequestedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["approvalId", "toolName", "toolDisplayName", "serverId", "argumentHash", "expiresAt"],
-        "properties": {
-          "approvalId": {"$ref": "#/components/schemas/Identifier"},
-          "toolName": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
-          "toolDisplayName": {"type": "string", "minLength": 1, "maxLength": 256},
-          "serverId": {"$ref": "#/components/schemas/Identifier"},
-          "argumentHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "expiresAt": {"$ref": "#/components/schemas/UtcTimestamp"}
-        }
-      },
-      "ToolApprovalDecidedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["approvalId", "decision"],
-        "properties": {
-          "approvalId": {"$ref": "#/components/schemas/Identifier"},
-          "decision": {"type": "string", "enum": ["allow_once", "deny", "expired"]}
-        }
-      },
-      "ToolCompletedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "callId",
-          "toolName",
-          "summary"
-        ],
-        "properties": {
-          "callId": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "toolName": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          },
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096
-          }
-        }
-      },
-      "ToolFailedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "callId",
-          "toolName",
-          "error"
-        ],
-        "properties": {
-          "callId": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "toolName": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          },
-          "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
           }
         }
       },
@@ -1206,144 +1990,6 @@
           }
         }
       },
-      "SkillLoadedEventData": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "skillId",
-          "scope",
-          "name",
-          "revision",
-          "contentHash",
-          "source"
-        ],
-        "properties": {
-          "skillId": {
-            "$ref": "#/components/schemas/Identifier"
-          },
-          "scope": {
-            "type": "string",
-            "enum": [
-              "global",
-              "workspace"
-            ]
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 80
-          },
-          "revision": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "contentHash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "manual",
-              "model"
-            ]
-          }
-        }
-      },
-      "SkillLoadFailedEventData": {
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "skillId",
-              "scope",
-              "name",
-              "revision",
-              "contentHash",
-              "source",
-              "errorCode"
-            ],
-            "properties": {
-              "skillId": {
-                "$ref": "#/components/schemas/Identifier"
-              },
-              "scope": {
-                "type": "string",
-                "enum": [
-                  "global",
-                  "workspace"
-                ]
-              },
-              "name": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 80
-              },
-              "revision": {
-                "type": "integer",
-                "minimum": 1
-              },
-              "contentHash": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{64}$"
-              },
-              "source": {
-                "const": "model"
-              },
-              "errorCode": {
-                "type": "string",
-                "enum": [
-                  "invalid_request",
-                  "skill_unavailable",
-                  "limit_reached",
-                  "context_limit"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "skillId",
-              "scope",
-              "name",
-              "revision",
-              "contentHash",
-              "source",
-              "errorCode"
-            ],
-            "properties": {
-              "skillId": {
-                "type": "null"
-              },
-              "scope": {
-                "type": "null"
-              },
-              "name": {
-                "type": "null"
-              },
-              "revision": {
-                "type": "null"
-              },
-              "contentHash": {
-                "type": "null"
-              },
-              "source": {
-                "const": "model"
-              },
-              "errorCode": {
-                "type": "string",
-                "enum": [
-                  "invalid_request",
-                  "skill_unavailable"
-                ]
-              }
-            }
-          }
-        ]
-      },
       "RunEvent": {
         "type": "object",
         "additionalProperties": false,
@@ -1374,12 +2020,24 @@
           },
           "data": {
             "oneOf": [
-              { "$ref": "#/components/schemas/CompactionStartedEventData" },
-              { "$ref": "#/components/schemas/ExecutionSelectedEventData" },
-              { "$ref": "#/components/schemas/ModelAttemptEventData" },
-              { "$ref": "#/components/schemas/CompactionCompletedEventData" },
-              { "$ref": "#/components/schemas/CompactionFailedEventData" },
-              { "$ref": "#/components/schemas/CompactionCancelledEventData" },
+              {
+                "$ref": "#/components/schemas/CompactionStartedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionSelectedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ModelAttemptEventData"
+              },
+              {
+                "$ref": "#/components/schemas/CompactionCompletedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/CompactionFailedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/CompactionCancelledEventData"
+              },
               {
                 "$ref": "#/components/schemas/EmptyEventData"
               },
@@ -1394,27 +2052,6 @@
               },
               {
                 "$ref": "#/components/schemas/AssistantDeltaEventData"
-              },
-              {
-                "$ref": "#/components/schemas/ToolApprovalRequestedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/ToolApprovalDecidedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/ToolStartedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/ToolCompletedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/ToolFailedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/SkillLoadedEventData"
-              },
-              {
-                "$ref": "#/components/schemas/SkillLoadFailedEventData"
               },
               {
                 "$ref": "#/components/schemas/RunCompletedEventData"

@@ -72,11 +72,6 @@ INTERNAL_ERROR = PublicRunError(
     retryable=True,
 )
 
-SCHEDULED_TOOL_APPROVAL_REQUIRED = PublicRunError(
-    code="scheduled_tool_approval_required",
-    message="排程執行需要人工核准的工具，因此已安全停止。",
-    retryable=False,
-)
 
 WORKSPACE_CONTEXT_ERROR = PublicRunError(
     code="workspace_store_unavailable",

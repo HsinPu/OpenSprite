@@ -25,7 +25,6 @@ from .models import (
     ProviderId,
     PublicRunError,
     ResponseMode,
-    RunSource,
     RunEvent,
     RunEventType,
     RunSnapshot,
@@ -86,8 +85,7 @@ class ConversationRepository(Protocol):
 
     def find_run_request(
         self, *, conversation_id: str | None, workspace_id: str,
-        client_request_id: str, message: str, source: RunSource,
-        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+        client_request_id: str, message: str,
     ) -> StartRunResult | None: ...
 
     def start_run(
@@ -103,14 +101,11 @@ class ConversationRepository(Protocol):
         output_budget: OutputBudget = "auto",
         output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
-        source: RunSource = "user",
-        occurrence_id: str | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
         workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
         workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
-        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult: ...
 
     def get_latest_compaction(

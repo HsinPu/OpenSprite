@@ -77,7 +77,8 @@ class ExecutionPackageStore:
             raise ValueError("unknown cached file")
         with wheel.open("rb") as stream:
             wheel_data = stream.read(MAX_WHEEL_BYTES + 1)
-        inspected = inspect_wheel(wheel_data, wheel.name, validate_environment=False, owners={})
+        inspected = inspect_wheel(wheel_data, wheel.name, validate_environment=False,
+                                 owners={}, allow_retired_api=True)
         if inspected != stored.inspection:
             raise ValueError("cached wheel changed")
         return stored, wheel_data

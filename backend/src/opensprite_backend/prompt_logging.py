@@ -13,7 +13,7 @@ from typing import Protocol
 from uuid import UUID
 
 from .app_paths import AppPaths
-from .inference.models import ModelMessage, ModelToolDefinition
+from .inference.models import ModelMessage
 
 _MAX_PROMPT_LOG_BYTES = 8 * 1024 * 1024
 
@@ -32,7 +32,7 @@ class PromptLogWriter(Protocol):
         reasoning_effort: str | None = None,
         max_output_tokens: int,
         messages: tuple[ModelMessage, ...],
-        tools: tuple[ModelToolDefinition, ...],
+
     ) -> None: ...
 
 
@@ -60,7 +60,7 @@ class FilePromptLogWriter:
         reasoning_effort: str | None = None,
         max_output_tokens: int,
         messages: tuple[ModelMessage, ...],
-        tools: tuple[ModelToolDefinition, ...],
+
     ) -> None:
         try:
             parsed_run_id = UUID(run_id)
@@ -82,7 +82,7 @@ class FilePromptLogWriter:
             reasoning_effort=reasoning_effort,
             max_output_tokens=max_output_tokens,
             messages=messages,
-            tools=tools,
+
         )
         if len(payload) > _MAX_PROMPT_LOG_BYTES:
             raise PromptLogError
@@ -138,14 +138,14 @@ class FilePromptLogWriter:
         reasoning_effort: str | None = None,
         max_output_tokens: int,
         messages: tuple[ModelMessage, ...],
-        tools: tuple[ModelToolDefinition, ...],
+
     ) -> bytes:
         normalized = {
             "providerId": provider_id, "modelId": model_id,
             "responseMode": response_mode, "maxOutputTokens": max_output_tokens,
             "reasoningEffort": reasoning_effort,
             "messages": [asdict(message) for message in messages],
-            "tools": [asdict(tool) for tool in tools],
+
         }
         request_hash = hashlib.sha256(json.dumps(
             normalized, sort_keys=True, ensure_ascii=False, allow_nan=False,
@@ -177,18 +177,4 @@ class FilePromptLogWriter:
                     "",
                 ]
             )
-            if message.tool_calls:
-                parts.extend(["Tool calls:", ""])
-                for call in message.tool_calls:
-                    parts.extend([f"- {call.name} ({call.call_id}): {call.arguments}"])
-                parts.append("")
-            if message.tool_call_id is not None:
-                parts.extend([f"Tool call ID: {message.tool_call_id}", f"Tool name: {message.tool_name}", ""])
-        parts.extend(["## Tool definitions", ""])
-        if not tools:
-            parts.append("(none)")
-        else:
-            for tool in tools:
-                parts.extend([f"- {tool.name}: {tool.description}", "",
-                              json.dumps(asdict(tool), ensure_ascii=False, sort_keys=True), ""])
         return "\n".join(parts).encode("utf-8")

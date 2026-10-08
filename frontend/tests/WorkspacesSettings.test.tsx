@@ -5,9 +5,9 @@ import { WorkspacesSettings } from "../src/features/settings/WorkspacesSettings"
 import type { Workspace, WorkspaceCatalog } from "../src/api/workspaces";
 import type { WorkspaceController } from "../src/features/workspaces/useWorkspaces";
 
-const defaultWorkspace: Workspace = { id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 3, scheduleCount: 0, activeRunCount: 0 } };
-const alpha: Workspace = { ...defaultWorkspace, id: "11111111-1111-4111-8111-111111111111", kind: "managed", name: "Alpha", directoryName: "Alpha", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Alpha", usage: { conversationCount: 1, scheduleCount: 0, activeRunCount: 0 } };
-const empty: Workspace = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Empty", directoryName: "Empty", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Empty", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
+const defaultWorkspace: Workspace = { id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 3, activeRunCount: 0 } };
+const alpha: Workspace = { ...defaultWorkspace, id: "11111111-1111-4111-8111-111111111111", kind: "managed", name: "Alpha", directoryName: "Alpha", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Alpha", usage: { conversationCount: 1, activeRunCount: 0 } };
+const empty: Workspace = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Empty", directoryName: "Empty", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Empty", usage: { conversationCount: 0, activeRunCount: 0 } };
 const catalog: WorkspaceCatalog = { revision: 2, activeWorkspaceId: alpha.id, workspaces: [defaultWorkspace, alpha, empty] };
 const create = vi.fn(async () => ({ ...catalog, revision: 3, activeWorkspaceId: empty.id }));
 const update = vi.fn(async (item: Workspace) => item);

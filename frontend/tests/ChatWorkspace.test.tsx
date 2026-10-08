@@ -114,6 +114,10 @@ describe("live chat workspace", () => {
     render(<ChatWorkspace conversationId={null} modelName="Model" modelSelection={selection("openrouter", run.modelId)} modelChoices={[]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
     const input = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole("button", { name: "解讀程式碼" }));
+    expect(input.value).toContain("我貼上的程式碼");
+    expect(input.value).not.toContain("探索目前工作區");
+    fireEvent.change(input, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "規劃任務" }));
     expect(input.value).toContain("目標：");
     expect(input.value).toContain("背景與限制：");
@@ -567,7 +571,7 @@ describe("live chat workspace", () => {
 
     expect(screen.getByText("正在整理")).toBeTruthy();
     expect(screen.getByText("openrouter · openai/gpt-5.6 · 廠商預設")).toBeTruthy();
-    expect(screen.getByText("本次執行沒有使用額外工具。")).toBeTruthy();
+    expect(screen.queryByText("工具")).toBeNull();
     const recordSummary = screen.getByText("執行紀錄").closest("summary");
     expect(recordSummary?.querySelector(".anticon-down")).toBeTruthy();
     expect(recordSummary?.textContent).not.toContain("⌄");

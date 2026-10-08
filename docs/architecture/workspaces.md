@@ -77,18 +77,16 @@ reload retries under the mutation gate. Catalog mutations stay blocked until
 relocation succeeds. Unregistered old directories and external mounts are not
 moved. Failed staging copies are retained. Successful migration advances the
 catalog and Workspace revisions once; older applications cannot read v3.
-Run recovery precedes relocation, and the scheduler starts after relocation.
+Run recovery precedes relocation; no scheduler is composed in the clean core.
 
 Each accepted Run holds one `WorkspaceExecutionContext` with the managed root,
 mount tuple, permissions, availability and hashes. Retry, Context compaction,
-output continuation and Tool rounds reuse that object. Schedules resolve their
-stored Workspace ID when an occurrence begins.
+and output continuation reuse that object.
 
 SQLite schema v13 stores Workspace ID, revision, display-name snapshot, managed
 root hash and mount-manifest hash; it never stores absolute roots. `run.started`
-and version-4 Tool receipts include mount aliases, access modes, availability
-and root hashes without absolute paths. Existing receipt versions 1–3 remain
-verifiable. Full System Prompt logs intentionally contain the complete paths
+includes mount aliases, access modes, availability
+and root hashes without absolute paths. Full System Prompt logs intentionally contain the complete paths
 and remain sensitive; ordinary runtime logs do not.
 
 ## Frontend

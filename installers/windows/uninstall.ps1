@@ -96,8 +96,8 @@ try {
     Write-Host "  Application: $(Get-RemovalStatus $appExisted $appRemains) -- $installRootPath"
     Write-Host "  Startup entry: $(Get-RemovalStatus $startupExisted $startupRemains) -- HKCU:\Software\Microsoft\Windows\CurrentVersion\Run [$StartupName]"
     Write-Host "  User data: $(Get-RemovalStatus $dataExisted $dataRemains) -- $dataRootPath"
-    Write-Host '    Includes settings, encrypted credentials and key, conversations, schedules,'
-    Write-Host '    managed workspace files, skills, agents, archives, logs, state and cache.'
+    Write-Host '    Includes settings, encrypted credentials and key, conversations, runs,'
+    Write-Host '    managed workspace files, retained historical data, logs, state and cache.'
     if ($dataRemains -and ($uninstallCompleted -or -not $RemoveUserData)) { Write-Host '  Retained user data can be reused after reinstalling OpenSprite.' }
     Write-Host '  Not removed: Git, Node.js, uv, shared tool caches, source checkouts and external workspace folders.'
     if (($appRemains -or $startupRemains) -and -not $WhatIfPreference) {

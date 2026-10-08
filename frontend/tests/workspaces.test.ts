@@ -28,7 +28,7 @@ const defaultWorkspace: Workspace = {
   revision: 1,
   createdAt: "1970-01-01T00:00:00Z",
   updatedAt: "1970-01-01T00:00:00Z",
-  usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 },
+  usage: { conversationCount: 0, activeRunCount: 0 },
 };
 const alpha: Workspace = {
   ...defaultWorkspace,
@@ -37,7 +37,7 @@ const alpha: Workspace = {
   name: "Alpha",
   directoryName: "Alpha",
   rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\Alpha",
-  usage: { conversationCount: 2, scheduleCount: 1, activeRunCount: 0 },
+  usage: { conversationCount: 2, activeRunCount: 0 },
 };
 const mounted: Workspace = {
   ...alpha,

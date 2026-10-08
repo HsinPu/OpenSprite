@@ -20,7 +20,7 @@ def test_valid_pure_python_wheel_is_inspected_without_importing_code():
     assert result.distributionName == "opensprite-stage2-fixture"
     assert result.version == "0.1.0"
     assert result.plugins[0].model_dump() == {
-        "id": "fixture_loop", "kind": "loop", "apiVersion": 1, "entryPoint": MODULE + ":factory",
+        "id": "fixture_loop", "kind": "loop", "apiVersion": 2, "entryPoint": MODULE + ":factory",
     }
     assert MODULE not in sys.modules
 
@@ -44,7 +44,7 @@ def test_entry_points_are_strict_and_cannot_register_cli_or_builtin(content):
 
 
 def test_unsupported_execution_api_is_rejected_without_importing():
-    data = wheel(changes={INFO + "/entry_points.txt": f"[opensprite_backend.agent_loops.v2]\nfixture_loop = {MODULE}:factory\n".encode()})
+    data = wheel(changes={INFO + "/entry_points.txt": f"[opensprite_backend.agent_loops.v1]\nfixture_loop = {MODULE}:factory\n".encode()})
     with pytest.raises(ExecutionPackageError, match="incompatible_package"):
         inspect_wheel(data, FILE_NAME)
     assert MODULE not in sys.modules

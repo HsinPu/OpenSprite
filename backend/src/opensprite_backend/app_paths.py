@@ -56,53 +56,11 @@ class AppPaths:
     def execution_settings_file(self) -> Path:
         return self.config_dir / "execution.json"
 
-    @property
-    def tool_settings_file(self) -> Path:
-        return self.config_dir / "tools.json"
-
-    @property
-    def mcp_settings_file(self) -> Path:
-        return self.config_dir / "mcp.json"
 
     @property
     def workspace_settings_file(self) -> Path:
         return self.config_dir / "workspaces.json"
 
-    @property
-    def skills_dir(self) -> Path:
-        return self.home / "skills"
-
-    @property
-    def skills_settings_file(self) -> Path:
-        return self.config_dir / "skills.json"
-
-    @property
-    def skills_transaction_file(self) -> Path:
-        return self.config_dir / "skills-transaction.json"
-
-    @property
-    def skills_archive_dir(self) -> Path:
-        return self.home / "archive" / "skills"
-
-    @property
-    def agents_dir(self) -> Path:
-        return self.home / "agents"
-
-    @property
-    def agents_settings_file(self) -> Path:
-        return self.config_dir / "agents.json"
-
-    @property
-    def agents_transaction_file(self) -> Path:
-        return self.config_dir / "agents-transaction.json"
-
-    @property
-    def agents_archive_dir(self) -> Path:
-        return self.home / "archive" / "agents"
-
-    def workspace_agents_dir(self, managed_root: Path) -> Path:
-        """Map a root already validated by Workspace service; create nothing."""
-        return managed_root / "agents"
 
     @property
     def managed_workspaces_dir(self) -> Path:
@@ -166,13 +124,6 @@ class AppPaths:
     def prompt_logs_dir(self) -> Path:
         return self.logs_dir / "prompts"
 
-    @property
-    def tool_receipts_dir(self) -> Path:
-        return self.logs_dir / "tool-receipts"
-
-    @property
-    def tool_receipt_key_file(self) -> Path:
-        return self.config_dir / "tool-receipt.key"
 
     @property
     def cache_dir(self) -> Path:

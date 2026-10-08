@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import patch
 from collections.abc import AsyncIterator
 from functools import wraps
 from pathlib import Path
@@ -14,7 +15,6 @@ from context_test_support import TestCapabilityResolver
 
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
-from opensprite_backend.custom_agents.models import AgentExecutionSnapshot
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunEventType, RunStatus, StoreFailure
@@ -29,8 +29,6 @@ from opensprite_backend.inference.models import (
     ModelStreamEvent,
     ModelTextDelta,
 )
-from opensprite_backend.tools.policy import ReadOnlyToolPolicy
-from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.workspaces import (
     DEFAULT_WORKSPACE_ID,
     DefaultWorkspaceResolver,
@@ -88,7 +86,7 @@ async def test_manager_owns_one_task_per_run_and_waits_for_completion(
         AgentLoop(
             repository=repository,
             gateway=FinalGateway(),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
             capability_resolver=TestCapabilityResolver(),
         ),
     )
@@ -124,7 +122,7 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
         AgentLoop(
             repository=repository,
             gateway=BlockingGateway(),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
             capability_resolver=TestCapabilityResolver(),
         ),
     )
@@ -152,9 +150,10 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
             request: ModelRequest,
         ) -> AsyncIterator[ModelStreamEvent]:
             del request
+            yield ModelTextDelta("visible ")
             yield ModelTextDelta("partial response")
-            # Reaching the next iteration proves the loop consumed the small
-            # delta, which remains below its persistence batching threshold.
+            # The first chunk is visible; the second fast chunk is still
+            # buffered and must be preserved when cancellation flushes it.
             buffered.set()
             await asyncio.Event().wait()
 
@@ -163,16 +162,17 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
         AgentLoop(
             repository=repository,
             gateway=PartialGateway(),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
             capability_resolver=TestCapabilityResolver(),
         ),
     )
     try:
-        assert await manager.start(run.id, DEFAULT_WORKSPACE) is True
-        await asyncio.wait_for(buffered.wait(), timeout=1)
+        with patch("opensprite_backend.agent.loop.monotonic", return_value=0.0):
+            assert await manager.start(run.id, DEFAULT_WORKSPACE) is True
+            await asyncio.wait_for(buffered.wait(), timeout=1)
         before_cancel = repository.get_run(run.id)
         assert before_cancel is not None
-        assert before_cancel.partial_text == ""
+        assert before_cancel.partial_text == "visible "
 
         cancelling = await manager.cancel(run.id)
         result = await asyncio.wait_for(manager.wait(run.id), timeout=1)
@@ -181,7 +181,7 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
         assert result is not None
         assert result.status is RunStatus.CANCELLED
         assert result.error is None
-        assert result.partial_text == "partial response"
+        assert result.partial_text == "visible partial response"
         assert result.assistant_message_id is None
         events = repository.list_run_events(run.id, after_sequence=0, limit=100)
         assert [event.type for event in events][-2:] == [
@@ -192,53 +192,6 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
         assert all(event.type is not RunEventType.RUN_FAILED for event in events)
     finally:
         await manager.close()
-
-
-@async_test
-async def test_close_marks_abandoned_running_work_interrupted(
-    tmp_path: Path,
-) -> None:
-    repository = store(tmp_path)
-    run = start(repository)
-    entered = asyncio.Event()
-
-    class BlockingGateway:
-        async def stream(
-            self,
-            request: ModelRequest,
-        ) -> AsyncIterator[ModelStreamEvent]:
-            del request
-            entered.set()
-            await asyncio.Event().wait()
-            if False:
-                yield ModelCompleted(ModelFinishReason.FINAL)
-
-    manager = RunManager(
-        repository,
-        AgentLoop(
-            repository=repository,
-            gateway=BlockingGateway(),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
-            capability_resolver=TestCapabilityResolver(),
-        ),
-    )
-    child_provider_id = str(uuid4())
-    agents = AgentExecutionSnapshot(provider_endpoints=(ProviderEndpointSnapshot(
-        child_provider_id, 1, "openai_chat_completions", "https://example.com/v1", "none",
-    ),))
-    assert await manager.start(run.id, DEFAULT_WORKSPACE, agents=agents) is True
-    assert manager.provider_in_use("openrouter")
-    assert manager.provider_in_use(child_provider_id)
-    assert not manager.provider_in_use("openai")
-    await asyncio.wait_for(entered.wait(), timeout=1)
-
-    await manager.close()
-
-    persisted = repository.get_run(run.id)
-    assert persisted is not None
-    assert persisted.status is RunStatus.INTERRUPTED
-    assert not manager.provider_in_use("openrouter")
-    assert not manager.provider_in_use(child_provider_id)
 
 
 @async_test
@@ -278,7 +231,7 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
         AgentLoop(
             repository=failing_repository,  # type: ignore[arg-type]
             gateway=FinalGateway(),
-            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
             capability_resolver=TestCapabilityResolver(),
         ),
     )

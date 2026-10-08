@@ -30,7 +30,7 @@
     "members": 512,
     "packages": 64
   },
-  "x-supported-wheel": "Purelib, none/any wheel; API v1 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
+  "x-supported-wheel": "Purelib, none/any wheel; API v2 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
   "paths": {
     "/api/execution-plugin-packages": {
       "get": {
@@ -38,7 +38,13 @@
         "responses": {
           "413": {
             "description": "Bounded imported cache entry count exceeded, including inactive transactions.",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           },
           "200": {
             "description": "Imported package inventory with deployment identity; import never installs code.",
@@ -353,7 +359,8 @@
           },
           "apiVersion": {
             "type": "integer",
-            "const": 1
+            "minimum": 1,
+            "description": "Metadata API version. New imports and deployment bundles require API 2; older cached metadata remains inspectable."
           },
           "entryPoint": {
             "type": "string",

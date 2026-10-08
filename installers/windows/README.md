@@ -152,13 +152,13 @@ updates never silently reduce authentication.
 The installed UI is available at `http://localhost:8765/`. The backend and
 frontend share one loopback origin and one Uvicorn process.
 
-Scheduled Agent runs depend on the current-user startup entry. They execute only
-after that Windows user has signed in and OpenSprite is running; they do not run
-while the computer is powered off, asleep, or before user sign-in.
+The backend starts through the current-user startup entry after that Windows
+user has signed in. It is unavailable while the computer is powered off,
+asleep, or before user sign-in.
 
 Existing upgrades preserve `~/.opensprite/config/access.json`. To replace a
 forgotten local password without deleting conversations, provider credentials,
-MCP settings, or logs, run:
+settings, or logs, run:
 
 ```powershell
 ./installers/windows/install.ps1 -ResetLocalAccess

@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../src/api/workspaces";
 import { useWorkspaces } from "../src/features/workspaces/useWorkspaces";
 
-const unassigned: Workspace = { id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
+const unassigned: Workspace = { id: "00000000-0000-4000-8000-000000000000", kind: "default", name: "Default workspace", directoryName: "default", rootPath: "C:\\Users\\Test\\OpenSprite\\workspace\\default", mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "1970-01-01T00:00:00Z", updatedAt: "1970-01-01T00:00:00Z", usage: { conversationCount: 0, activeRunCount: 0 } };
 const alphaRoot = "C:\\Projects\\Alpha";
-const alpha: Workspace = { id: "11111111-1111-4111-8111-111111111111", kind: "managed", name: "Alpha", directoryName: "Alpha", rootPath: alphaRoot, mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", usage: { conversationCount: 0, scheduleCount: 0, activeRunCount: 0 } };
+const alpha: Workspace = { id: "11111111-1111-4111-8111-111111111111", kind: "managed", name: "Alpha", directoryName: "Alpha", rootPath: alphaRoot, mounts: [], availability: "available", unavailableReason: null, revision: 1, createdAt: "2026-09-04T01:00:00Z", updatedAt: "2026-09-04T01:00:00Z", usage: { conversationCount: 0, activeRunCount: 0 } };
 const beta = { ...alpha, id: "22222222-2222-4222-8222-222222222222", name: "Beta", directoryName: "Beta", rootPath: "C:\\Projects\\Beta" };
 const initial = { revision: 1, activeWorkspaceId: unassigned.id, workspaces: [unassigned, alpha] };
 const activated = { ...initial, revision: 2, activeWorkspaceId: alpha.id };

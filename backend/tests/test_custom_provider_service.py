@@ -30,14 +30,14 @@ def test_model_refresh_preserves_manual_metadata_and_credentials(tmp_path):
     provider = service.save(provider_id=None, name="Custom", base_url="https://example.com/v1",
         auth_mode="bearer", allow_insecure_local=False, expected_revision=0, secret="private")
     model = CustomModel(key=str(uuid4()), model_id="custom-model", name="My model",
-        context_limit=32000, output_limit=4096, tools=True, source="manual")
+        context_limit=32000, output_limit=4096,  source="manual")
     provider = service.save_model(provider.id, model, expected_revision=1)
     snapshot = service.execution_endpoint(provider.id)
     refreshed = service.merge_discovered_models(provider.id, ["custom-model", "remote", "remote"], expected_revision=2)
     assert refreshed.models[0] == model
     assert len(refreshed.models) == 2
     remote = refreshed.models[1]
-    assert remote.tools is True
+    assert not hasattr(remote, "tools")
     again = service.merge_discovered_models(provider.id, ["remote"], expected_revision=3)
     assert again.models == (model, remote)
     assert credentials.get(f"provider:{provider.id}:bearer") == "private"
@@ -47,16 +47,18 @@ def test_model_refresh_preserves_manual_metadata_and_credentials(tmp_path):
     assert len(snapshot.models) == 1
     assert snapshot.models[0].model_id == "custom-model"
     assert snapshot.models[0].context_window_tokens == 32000
-    assert snapshot.models[0].supports_tools is True
+    assert not hasattr(snapshot.models[0], "supports_tools")
 
 
-def test_model_request_defaults_tools_on_but_preserves_explicit_off():
+def test_model_request_rejects_retired_tool_field():
     from opensprite_backend.api.custom_provider_models import ProviderModelRequest
 
     fields = dict(modelId="test", name="Test", contextLimit=8192,
                   outputLimit=2048, expectedRevision=1)
-    assert ProviderModelRequest(**fields).tools is True
-    assert ProviderModelRequest(**fields, tools=False).tools is False
+    from pydantic import ValidationError
+    assert "tools" not in ProviderModelRequest(**fields).model_dump()
+    with pytest.raises(ValidationError):
+        ProviderModelRequest(**fields, tools=False)
 
 
 def test_endpoint_snapshot_is_not_changed_by_later_configuration(tmp_path):

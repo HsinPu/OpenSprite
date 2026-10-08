@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { PanelResizeHandle, usePanelSizing } from "./panelSizing";
-import { ApiOutlined, RobotOutlined, AppstoreOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined, SettingOutlined, MessageOutlined } from "@ant-design/icons";
+import { ApiOutlined, PlusOutlined, FolderOutlined, LeftOutlined, MoreOutlined, RightOutlined, SettingOutlined, MessageOutlined } from "@ant-design/icons";
 import { Button, Dropdown, Tooltip, type MenuProps } from "antd";
 import { BrandLogo } from "../ui/BrandLogo";
 
@@ -14,8 +14,6 @@ import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
 import { isTodayInTimeZone } from "../features/general-settings/dateTime";
 import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
 import { useConversationSettings } from "../features/conversation-settings/useConversationSettings";
-import { useToolSettings } from "../features/tool-settings/useToolSettings";
-import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
 import { DeferredSettingsPage } from "../features/settings/DeferredSettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
@@ -48,17 +46,15 @@ function ConversationButton({
 }) {
   const { t } = useI18n();
   const targets = workspaces.filter((item) => item.id !== conversation.workspaceId);
-  const items: MenuProps["items"] = conversation.workspaceManagedBySchedule
-    ? [{ key: "managed", disabled: true, label: t("workspaces.moveManaged") }]
-    : targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.default")) }));
+  const items: MenuProps["items"] = targets.map((item) => ({ key: item.id, label: workspaceName(item.kind, item.name, t("workspaces.default")) }));
   return (
     <div className={`conversation-item${active ? " is-active" : ""}`}>
       <button className="conversation-link" type="button" onClick={onClick} aria-label={conversation.title}>
         <MessageOutlined aria-hidden="true" />
         <span className="conversation-item__copy"><span>{conversation.title}</span>{conversation.latestMessagePreview ? <small>{conversation.latestMessagePreview}</small> : null}</span>
       </button>
-      <Dropdown menu={{ items, onClick: ({ key }) => { if (key !== "managed") onMove(key); } }} trigger={["click"]} disabled={targets.length === 0 && !conversation.workspaceManagedBySchedule}>
-        <button className="conversation-item__more" type="button" aria-label={t("workspaces.moveConversationLabel", { title: conversation.title })} title={conversation.workspaceManagedBySchedule ? t("workspaces.moveManaged") : t("workspaces.moveConversation")}><MoreOutlined /></button>
+      <Dropdown menu={{ items, onClick: ({ key }) => { onMove(key); } }} trigger={["click"]} disabled={targets.length === 0}>
+        <button className="conversation-item__more" type="button" aria-label={t("workspaces.moveConversationLabel", { title: conversation.title })} title={t("workspaces.moveConversation")}><MoreOutlined /></button>
       </Dropdown>
     </div>
   );
@@ -100,8 +96,6 @@ export function App() {
   const panels = usePanelSizing(!sidebarCollapsed, executionExpanded);
   const generalSettings = useGeneralSettings();
   const conversationSettings = useConversationSettings();
-  const toolSettings = useToolSettings();
-  const mcpConnections = useMcpConnections();
   const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
@@ -122,7 +116,6 @@ export function App() {
   const { modelChoices } = providerCatalog;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
-  const [scheduleOverlayOpen, setScheduleOverlayOpen] = useState(false);
   const [workspaceOverlayOpen, setWorkspaceOverlayOpen] = useState(false);
   const [workspaceCreateRequest, setWorkspaceCreateRequest] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
@@ -134,7 +127,6 @@ export function App() {
   const settingsWasOpen = useRef(false);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const appContentRef = useRef<HTMLElement>(null);
-  const scheduleConversationTargetRef = useRef<string | null>(null);
   const deepLinkResolutionRef = useRef<string | null>(null);
   const menuWasOpen = useRef(false);
   const startupResolvedRef = useRef(false);
@@ -236,21 +228,12 @@ export function App() {
     if (settingsOpen) {
       settingsSurfaceRef.current?.focus();
     } else if (settingsWasOpen.current) {
-      const target = scheduleConversationTargetRef.current;
-      scheduleConversationTargetRef.current = null;
-      if (target !== null) {
-        setConversationId(target);
-        window.location.hash = `chat=${target}`;
-        setMenuOpen(false);
-        window.requestAnimationFrame(() => appContentRef.current?.focus());
-      } else {
         const opener = settingsOpenerRef.current;
         if (mobileNavigation && opener?.closest(".main-sidebar")) setMenuOpen(true);
         window.requestAnimationFrame(() => {
           if (opener?.isConnected) opener.focus();
           else appContentRef.current?.focus();
         });
-      }
     }
     settingsWasOpen.current = settingsOpen;
   }, [settingsOpen, mobileNavigation]);
@@ -381,14 +364,9 @@ export function App() {
 
   const hasProviderModal = () => document.querySelector(".provider-connection-modal") !== null;
   const closeSettings = () => {
-    if (!providerModalOpen && !scheduleOverlayOpen && !workspaceOverlayOpen && !hasProviderModal()) {
+    if (!providerModalOpen && !workspaceOverlayOpen && !hasProviderModal()) {
       setSettingsOpen(false);
     }
-  };
-
-  const openScheduleConversation = (id: string) => {
-    scheduleConversationTargetRef.current = id;
-    setSettingsOpen(false);
   };
 
   return (
@@ -444,7 +422,7 @@ export function App() {
       >
         <nav className="resource-rail" aria-label={t("app.features")}>
           <div className="resource-rail__logo"><OpenSpriteMark /></div>
-          {([ ["models", "settings.category.models", <ApiOutlined />], ["agents", "settings.category.agents", <RobotOutlined />], ["skills", "settings.category.skills", <AppstoreOutlined />] ] as const).map(([section, label, icon]) => (
+          {([ ["models", "settings.category.models", <ApiOutlined />] ] as const).map(([section, label, icon]) => (
             <Tooltip key={section} title={t(label)} placement="right"><Button type="text" icon={icon} aria-label={t(label)} onClick={() => openSettings(section)} /></Tooltip>
           ))}
           <Tooltip title={t("settings.title")} placement="right"><Button ref={settingsButtonRef} className="resource-rail__settings" type="text" icon={<SettingOutlined />} aria-label={t("settings.title")} onClick={() => openSettings("general")} /></Tooltip>
@@ -602,17 +580,13 @@ export function App() {
           providerCatalog={providerCatalog}
           generalSettings={generalSettings}
           conversationSettings={conversationSettings}
-          toolSettings={toolSettings}
-          mcpConnections={mcpConnections}
           workspaces={workspaceController}
           onWorkspaceActivated={workspaceActivated}
           workspaceCreateRequest={workspaceCreateRequest}
           onWorkspaceCreateRequestHandled={() => setWorkspaceCreateRequest(0)}
           onWorkspaceOverlayChange={setWorkspaceOverlayOpen}
-          onOpenScheduleConversation={openScheduleConversation}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
-          onScheduleOverlayChange={setScheduleOverlayOpen}
         />
       </div></>
   );

@@ -12,7 +12,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 FILE_NAME = "opensprite_stage2_fixture-0.1.0-py3-none-any.whl"
 INFO = "opensprite_stage2_fixture-0.1.0.dist-info"
 MODULE = "stage2_fixture_plugin"
-GROUP = "opensprite_backend.agent_loops.v1"
+GROUP = "opensprite_backend.agent_loops.v2"
 
 
 def wheel(*, changes=None, removed=(), requirements=(), requires_python=">=3.12,<3.14", metadata_name="opensprite-stage2-fixture"):

@@ -9,14 +9,14 @@ from typing import Final, Protocol
 from .app_paths import AppPaths
 from .response_modes import ReasoningResolution, ResponseModeValue, migrate_response_mode, resolve_response_mode
 from .atomic_file import atomic_write
-from .models import AiSettings, ErrorCode, ProviderToolPolicy
+from .models import AiSettings, ErrorCode
 from .provider_connections import ProviderConnectionError, ProviderConnections
 from .providers.catalog_models import BUILTIN_PROVIDER_IDS
 from .providers.catalog_store import CatalogError
 from .providers.custom_service import CustomProviderService
 from .workspaces import WorkspaceMutationGate
 
-_SCHEMA_VERSION: Final = 10
+_SCHEMA_VERSION: Final = 11
 _PREVIOUS_CANONICAL_SCHEMA_VERSION: Final = 7
 _BOOLEAN_CONTINUATION_SCHEMA_VERSION: Final = 6
 _PREVIOUS_SCHEMA_VERSION: Final = 5
@@ -44,8 +44,6 @@ class AiSettingsOperations(Protocol):
     async def get(self) -> AiSettings: ...
 
     async def put(self, payload: AiSettings) -> AiSettings: ...
-
-    async def put_tool_policy(self, provider_id: str, policy: ProviderToolPolicy) -> AiSettings: ...
 
 
 def default_ai_settings() -> AiSettings:
@@ -176,7 +174,7 @@ class JsonAiSettingsStore:
             output_continuation = raw["outputContinuation"]
             response_delivery = "stream"
             log_full_prompts = raw["logFullPrompts"]
-        elif raw["version"] in {8, 9, _SCHEMA_VERSION}:
+        elif raw["version"] in {8, 9, 10, _SCHEMA_VERSION}:
             expected = {
                 "version",
                 "model",
@@ -185,7 +183,7 @@ class JsonAiSettingsStore:
                 "responseDelivery",
                 "logFullPrompts",
             }
-            if raw["version"] >= 9:
+            if raw["version"] in {9, 10}:
                 expected.add("providerToolPolicies")
             if set(raw) != expected:
                 raise SettingsStoreError
@@ -204,7 +202,6 @@ class JsonAiSettingsStore:
                     "outputContinuation": output_continuation,
                     "responseDelivery": response_delivery,
                     "logFullPrompts": log_full_prompts,
-                    "providerToolPolicies": raw.get("providerToolPolicies", {}),
                 }
             )
         except Exception:
@@ -270,18 +267,8 @@ class AiSettingsService:
 
     async def put(self, payload: AiSettings) -> AiSettings:
         async with self._mutation_gate.hold():
-            if "providerToolPolicies" not in payload.model_fields_set:
-                payload = payload.model_copy(update={"providerToolPolicies": self._store.get().providerToolPolicies})
             return await self._put(payload)
 
-    async def put_tool_policy(self, provider_id: str, policy: ProviderToolPolicy) -> AiSettings:
-        if provider_id not in BUILTIN_PROVIDER_IDS:
-            raise ProviderConnectionError(ErrorCode.INVALID_REQUEST)
-        async with self._mutation_gate.hold():
-            current = self._store.get()
-            updated = current.model_copy(update={"providerToolPolicies": {**current.providerToolPolicies, provider_id: policy}})
-            self._store.set(updated)
-            return updated
 
     async def _put(self, payload: AiSettings) -> AiSettings:
         if payload.model is not None and payload.model.provider_id not in BUILTIN_PROVIDER_IDS:

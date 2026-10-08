@@ -20,9 +20,9 @@ from opensprite_backend.execution_settings import ExecutionSettingsError, Execut
 class Catalog:
     def __init__(self) -> None:
         self.items = (
-            PluginDescriptor("standard", "loop", "Standard Loop", "Default loop.", "1.0.0", 1),
-            PluginDescriptor("standard", "policy", "Standard", "Default recovery.", "1.0.0", 1),
-            PluginDescriptor("no_recovery", "policy", "No recovery", "No automatic recovery.", "1.0.0", 1),
+            PluginDescriptor("standard", "loop", "Standard Loop", "Default loop.", "2.0.0", 1),
+            PluginDescriptor("standard", "policy", "Standard", "Default recovery.", "2.0.0", 1),
+            PluginDescriptor("no_recovery", "policy", "No recovery", "No automatic recovery.", "2.0.0", 1),
         )
         self.validated: list[tuple[str, str]] = []
 
@@ -219,7 +219,7 @@ def test_http_round_trip_and_sanitized_errors(tmp_path: Path) -> None:
 @pytest.mark.parametrize("payload", [
     {}, {"loopId": "standard"}, {"loopId": True, "policyId": "standard"},
     {"loop_id": "standard", "policy_id": "standard"},
-    {"loopId": "standard", "policyId": "standard", "version": "1.0.0"},
+    {"loopId": "standard", "policyId": "standard", "version": "2.0.0"},
 ])
 def test_http_rejects_noncanonical_request_fields(tmp_path: Path, payload: object) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")

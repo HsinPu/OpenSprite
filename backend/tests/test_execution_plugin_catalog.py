@@ -18,8 +18,8 @@ from opensprite_backend.agent.standard_driver import StandardDriverFactory
 from opensprite_backend.agent.strategies import StandardExecutionStrategy
 
 
-LOOPS = "opensprite_backend.agent_loops.v1"
-POLICIES = "opensprite_backend.execution_policies.v1"
+LOOPS = "opensprite_backend.agent_loops.v2"
+POLICIES = "opensprite_backend.execution_policies.v2"
 
 
 @dataclass
@@ -65,7 +65,7 @@ def test_real_distribution_discovery_reads_metadata_without_importing(tmp_path, 
         item = descriptor(catalog, "loop", "probe")
         assert item.version == "4.2.1"
         assert item.description == "Installed alternate execution driver."
-        assert item.api_version == 1 and item.status == "available"
+        assert item.api_version == 2 and item.status == "available"
         assert not import_marker.exists()
         assert "opensprite_installed_probe" not in sys.modules
 
@@ -78,11 +78,11 @@ def test_real_distribution_discovery_reads_metadata_without_importing(tmp_path, 
 
 
 def test_unsupported_api_is_reported_and_never_imported():
-    point = InstalledPoint("future", "opensprite_backend.agent_loops.v2",
+    point = InstalledPoint("future", "opensprite_backend.agent_loops.v3",
                            RuntimeError("unsupported code must not execute"))
     catalog = ExecutionPluginCatalog((point,))
     item = descriptor(catalog, "loop", "future")
-    assert item.api_version == 2 and item.status == "incompatible"
+    assert item.api_version == 3 and item.status == "incompatible"
     with pytest.raises(ExecutionPluginError) as failure:
         catalog.resolve("future", "standard")
     assert failure.value.code == "plugin_unavailable"
@@ -128,7 +128,7 @@ def test_selected_load_failure_is_masked_and_marks_plugin_unavailable(provider, 
     assert point.loads == 1
 
 
-@pytest.mark.parametrize("api_version", [True, 2, "1", None])
+@pytest.mark.parametrize("api_version", [True, 1, "2", None])
 def test_selected_factory_must_advertise_exact_api_version(api_version):
     class Factory:
         def create(self):
@@ -173,8 +173,8 @@ def test_selection_preserves_version_and_creates_fresh_policy():
     assert standard.make_strategy() is not standard.make_strategy()
     assert no_recovery.make_strategy() is not no_recovery.make_strategy()
     assert standard.profile() == {
-        "loopId": "standard", "loopVersion": "1.0.0",
-        "policyId": "standard", "policyVersion": "1.0.0", "apiVersion": 1,
+        "loopId": "standard", "loopVersion": "2.0.0",
+        "policyId": "standard", "policyVersion": "2.0.0", "apiVersion": 2,
     }
     assert no_recovery.profile()["policyId"] == "no_recovery"
 
@@ -198,7 +198,7 @@ def test_resolved_binding_keeps_factory_and_discovered_version_after_source_chan
 
 def test_cached_factory_with_its_own_load_method_is_not_reloaded():
     class Factory:
-        api_version = 1
+        api_version = 2
 
         def create(self):
             return StandardDriverFactory().create()
@@ -272,7 +272,7 @@ def test_bad_real_distribution_metadata_is_isolated_from_builtin_selection(tmp_p
 def test_policy_creation_failure_does_not_expose_plugin_exception():
     @dataclass
     class Factory:
-        api_version: int = 1
+        api_version: int = 2
         instances: list[object] = field(default_factory=list)
 
         def create(self):
@@ -291,7 +291,7 @@ def test_policy_creation_rejects_an_object_without_both_decisions():
             return True
 
     class Factory:
-        api_version = 1
+        api_version = 2
 
         def create(self):
             return IncompleteStrategy()
@@ -304,7 +304,7 @@ def test_policy_creation_rejects_an_object_without_both_decisions():
 
 def test_installed_policy_is_selected_without_loading_other_installed_loop():
     class Factory:
-        api_version = 1
+        api_version = 2
 
         def create(self):
             return StandardExecutionStrategy()

@@ -29,14 +29,14 @@ replacement. Session state is never written to browser storage or disk.
 This protects against unauthenticated access through the local HTTP surface. It
 does not protect against malware running as the same operating-system account,
 Administrator/root access, or direct reads of the existing SQLite database,
-logs, and provider/MCP credential files.
+logs, and encrypted credential files.
 
 ## Request boundary
 
 The existing loopback Host and same-origin mutation checks wrap authentication.
 Static frontend files, `/healthz`, `/api/app-info`, `/api/auth/status`,
 `/api/auth/setup`, and `/api/auth/login` are public. Every other `/api` route is
-default-deny, including run SSE and tool approvals. Missing or expired sessions
+default-deny, including run SSE. Missing or expired sessions
 receive `401 authentication_required`; throttled logins receive `429
 rate_limited` and `Retry-After`.
 
@@ -62,7 +62,7 @@ It does not remove conversations, settings, credentials, databases, or logs.
 ## Frontend lifecycle
 
 `AuthGate` checks public authentication status before mounting `App`, so no
-conversation, settings, provider, MCP, run, or tool request starts while logged
+conversation, settings, provider, or run request starts while logged
 out. A shared HTTP boundary converts any later protected 401 into an immediate
 App unmount. EventSource failures recheck authentication status so an expired
 session is distinguished from a general connection failure. The requested chat

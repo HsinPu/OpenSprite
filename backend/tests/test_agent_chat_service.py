@@ -43,9 +43,6 @@ from opensprite_backend.models import (
     ProviderSummary,
     ResponseMode,
 )
-from opensprite_backend.tools.policy import ReadOnlyToolPolicy
-from opensprite_backend.tools.registry import ToolRegistry
-from opensprite_backend.schedules.models import ExecutionProfile
 from opensprite_backend.workspaces import (
     DEFAULT_WORKSPACE_ID,
     JsonWorkspaceStore,
@@ -76,39 +73,6 @@ class FixedSettings:
     async def put(self, payload: AiSettings) -> AiSettings:
         self.settings = payload
         return payload
-
-
-@pytest.mark.parametrize("enabled,disabled", [(True, []), (False, []), (True, ["openrouter/auto"])])
-@async_test
-async def test_native_policy_is_frozen_for_accepted_run(tmp_path, enabled, disabled):
-    from opensprite_backend.models import ProviderToolPolicy
-
-    chat, repository, manager, _ = service(tmp_path)
-    policy = ProviderToolPolicy(toolsEnabled=enabled, transport="non_streaming", disabledModels=disabled)
-    chat._ai_settings.settings.providerToolPolicies = {"openrouter": policy}
-    captured = []
-
-    class CaptureGateway:
-        async def stream(self, request, *, attempt=None):
-            captured.append(request.provider_endpoint)
-            yield ModelTextDelta("done")
-            yield ModelCompleted(ModelFinishReason.FINAL)
-
-    manager._loop._gateway = CaptureGateway()
-    accepted = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
-        client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
-    policy.toolsEnabled = not enabled
-    policy.transport = "stream"
-    policy.disabledModels.clear()
-    completed = await manager.wait(accepted.run.id)
-    assert completed.status is RunStatus.COMPLETED
-    endpoint = captured[0]
-    assert endpoint.non_streaming_tools is True
-    assert endpoint.tools_enabled is enabled
-    assert endpoint.disabled_models == tuple(disabled)
-    capability = await manager._loop._resolve_run_capability(repository.get_run(accepted.run.id), endpoint)
-    assert capability.supports_tools == (enabled and not disabled)
-    await chat.close()
 
 
 class FixedConnections:
@@ -213,7 +177,7 @@ def service(
     loop = AgentLoop(
         repository=repository,
         gateway=FinalGateway(),
-        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+
         capability_resolver=TestCapabilityResolver(),
     )
     manager = RunManager(repository, loop)
@@ -334,7 +298,7 @@ async def test_custom_provider_acceptance_passes_endpoint_snapshot(tmp_path, mon
         contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.MEDIUM))
     captured = []
 
-    async def capture(*args):
+    async def capture(*args, **kwargs):
         captured.append(args)
         return True
 
@@ -350,66 +314,14 @@ async def test_custom_provider_acceptance_passes_endpoint_snapshot(tmp_path, mon
     await chat.close()
 
 
-@pytest.mark.parametrize("scheduled", [False, True])
-@async_test
-async def test_custom_provider_run_completes_with_registered_capability(tmp_path, scheduled):
-    from uuid import uuid4
-    from opensprite_backend.credentials.encrypted_json_store import EncryptedJsonCredentialStore
-    from opensprite_backend.providers.catalog_store import CustomModel, JsonProviderCatalog
-    from opensprite_backend.providers.catalog_transaction import ProviderCatalogTransaction
-    from opensprite_backend.providers.custom_service import CustomProviderService
-    from opensprite_backend.model_capability_resolver import ProviderModelCapabilityResolver
-
-    chat, repository, old_manager, _ = service(tmp_path)
-    await old_manager.close()
-    custom = CustomProviderService(ProviderCatalogTransaction(JsonProviderCatalog(tmp_path / "providers.json"),
-        EncryptedJsonCredentialStore(tmp_path / "auth.json", tmp_path / "key"), tmp_path / "transaction.json"))
-    provider = custom.save(provider_id=None, name="Local", base_url="https://example.com/v1", auth_mode="none",
-        allow_insecure_local=False, expected_revision=0, secret=None)
-    custom.save_model(provider.id, CustomModel(key=str(uuid4()), model_id="local", name="Local",
-        context_limit=32000, output_limit=4000, tools=False), expected_revision=1)
-    requests = []
-
-    class CustomGateway:
-        async def stream(self, request):
-            requests.append(request)
-            assert request.provider_id == provider.id
-            assert request.provider_endpoint == custom.execution_endpoint(provider.id)
-            yield ModelTextDelta("custom response")
-            yield ModelCompleted(ModelFinishReason.FINAL)
-
-    loop = AgentLoop(repository=repository, gateway=CustomGateway(),
-        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
-        capability_resolver=ProviderModelCapabilityResolver(FixedConnections(set()), custom_providers=custom))
-    manager = RunManager(repository, loop)
-    chat._run_manager = manager
-    chat._custom_providers = custom
-    await chat._ai_settings.put(AiSettings(model=ModelSelection(providerId=provider.id, modelId="local",
-        contextBudget="auto", outputBudget="auto"), responseMode=ResponseMode.MEDIUM))
-    try:
-        if scheduled:
-            accepted = await chat.start_scheduled_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
-                occurrence_id=str(uuid4()), message="hello", profile=ExecutionProfile(provider_id=provider.id,
-                    model_id="local", response_mode="default", context_budget="auto", output_budget="auto",
-                    output_continuation="off"))
-        else:
-            accepted = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
-                client_request_id=str(uuid4()), message="hello")
-        result = await manager.wait(accepted.run.id)
-        assert result.status is RunStatus.COMPLETED
-        assert requests and requests[0].max_output_tokens == 4000
-    finally:
-        await chat.close()
-
-
 @async_test
 async def test_concurrent_replays_start_only_one_agent(tmp_path: Path, monkeypatch) -> None:
     chat, repository, manager, _workspaces = service(tmp_path)
     original = manager.start
     started = []
-    async def recording_start(*args):
+    async def recording_start(*args, **kwargs):
         started.append(args[0])
-        await original(*args)
+        await original(*args, **kwargs)
     monkeypatch.setattr(manager, "start", recording_start)
     request = dict(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
                    client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429", message="hello")
@@ -497,9 +409,9 @@ async def test_custom_workspace_is_resolved_persisted_and_movable(
     captured_workspaces = []
     original_start = manager.start
 
-    async def capture_start(run_id, workspace_context):
+    async def capture_start(run_id, workspace_context, provider_endpoint=None, **kwargs):
         captured_workspaces.append(workspace_context)
-        return await original_start(run_id, workspace_context)
+        return await original_start(run_id, workspace_context, provider_endpoint, **kwargs)
 
     monkeypatch.setattr(manager, "start", capture_start)
 
@@ -604,48 +516,6 @@ async def test_shared_workspace_gate_serializes_run_start_and_mount_change(
 
     assert busy.value.failure is WorkspaceFailure.WORKSPACE_BUSY
     await manager.wait(accepted.run.id)
-    await chat.close()
-
-
-@async_test
-async def test_scheduled_start_uses_fixed_profile_and_disables_prompt_log(
-    tmp_path: Path,
-) -> None:
-    chat, repository, manager, _workspaces = service(tmp_path)
-    occurrence_id = "e898796c-71e9-4eb5-aac1-7a6e9430a430"
-    profile = ExecutionProfile(
-        "openrouter",
-        "openrouter/fixed-model",
-        "deep",
-        "128k",
-        "32k",
-        "10",
-    )
-
-    accepted = await chat.start_scheduled_run(
-        conversation_id=None,
-        occurrence_id=occurrence_id,
-        message="scheduled work",
-        profile=profile,
-    )
-    completed = await manager.wait(accepted.run.id)
-
-    assert completed is not None
-    assert completed.source == "schedule"
-    assert completed.occurrence_id == occurrence_id
-    assert completed.model_id == "openrouter/fixed-model"
-    assert completed.response_mode == "deep"
-    assert completed.context_budget == "128k"
-    assert completed.output_budget == "32k"
-    assert completed.output_continuation == "10"
-    assert completed.log_full_prompts is False
-    assert repository.get_run(completed.id) == completed
-    chat._provider_connections.connected.clear()
-    replay = await chat.start_scheduled_run(
-        conversation_id=None, occurrence_id=occurrence_id,
-        message="scheduled work", profile=profile,
-    )
-    assert replay.replayed and replay.run.id == completed.id
     await chat.close()
 
 

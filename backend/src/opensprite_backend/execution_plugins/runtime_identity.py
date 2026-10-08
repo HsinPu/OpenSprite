@@ -83,8 +83,8 @@ def verify_distribution(package: DeploymentPackage, *, distribution_lookup=metad
                     return False
                 elif not path.is_dir():
                     return False
-        groups = {"loop": "opensprite_backend.agent_loops.v1", "policy": "opensprite_backend.execution_policies.v1"}
-        if not 1 <= len(package.plugins) <= 32 or not all(plugin.apiVersion == 1 and any(
+        groups = {"loop": "opensprite_backend.agent_loops.v2", "policy": "opensprite_backend.execution_policies.v2"}
+        if not 1 <= len(package.plugins) <= 32 or not all(plugin.apiVersion == 2 and any(
             point.group == groups[plugin.kind] and point.name == plugin.id and point.value == plugin.entryPoint
             for point in dist.entry_points) for plugin in package.plugins):
             return False

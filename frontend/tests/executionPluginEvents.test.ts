@@ -3,7 +3,7 @@ import { listRunEventHistory } from "../src/api/agentChat";
 
 const runId = "e7527bf5-81c9-4534-908c-a9a9bc501f26";
 const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
-const profile = { loopId: "standard", loopVersion: "1.0.0", policyId: "no_recovery", policyVersion: "1.0.0", apiVersion: 1 };
+const profile = { loopId: "standard", loopVersion: "1.0.0", policyId: "no_recovery", policyVersion: "1.0.0", apiVersion: 2 };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -20,7 +20,7 @@ it("reads the actual execution plugin IDs and versions from persisted history", 
 });
 
 it.each([
-  { ...profile, apiVersion: 2 },
+  { ...profile, apiVersion: 1 },
   { ...profile, loopId: "../external" },
   { ...profile, policyVersion: "" },
   { ...profile, rawCredential: "private" },

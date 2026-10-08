@@ -1,3 +1,5 @@
+
+from opensprite_backend.inference.models import ModelMessage
 from datetime import UTC, datetime
 
 import pytest
@@ -12,11 +14,6 @@ from opensprite_backend.agent.context import (
 from opensprite_backend.conversations.models import Message
 from opensprite_backend.conversations.models import ConversationCompaction
 from opensprite_backend.inference.capabilities import ModelCapability
-from opensprite_backend.inference.models import (
-    ModelMessage,
-    ModelToolCall,
-    ModelToolDefinition,
-)
 
 
 def capability(maximum: int = 262_144) -> ModelCapability:
@@ -120,32 +117,6 @@ def test_output_budget_respects_context_safety_and_model_capability(
     assert result.input_budget_tokens >= result.context_limit_tokens // 4
 
 
-def test_counter_includes_tool_definitions_calls_and_results() -> None:
-    counter = ConservativeTokenCounter()
-    tool = ModelToolDefinition(
-        name="search",
-        description="Search local records",
-        input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
-    )
-    plain = (ModelMessage(role="system", content="System"),)
-    with_tools = (
-        *plain,
-        ModelMessage(
-            role="assistant",
-            content="Searching",
-            tool_calls=(ModelToolCall(call_id="call-1", name="search", arguments={"query": "工作"}),),
-        ),
-        ModelMessage(
-            role="tool",
-            content="結果",
-            tool_call_id="call-1",
-            tool_name="search",
-        ),
-    )
-
-    assert counter.request(with_tools, (tool,)) > counter.request(plain, ())
-
-
 def test_assembler_keeps_recent_messages_and_marks_older_context_for_compaction() -> None:
     history = tuple(message(sequence, "x" * 90) for sequence in range(1, 21))
     assembler = ContextAssembler(recent_message_floor=4)
@@ -154,12 +125,11 @@ def test_assembler_keeps_recent_messages_and_marks_older_context_for_compaction(
         (ModelMessage(role="system", content="System"), *(
             ModelMessage(role=item.role, content=item.content) for item in history[-4:]
         )),
-        (),
     )
     result = assembler.assemble(
         system_prompt="System",
         history=history,
-        tools=(),
+
         budget=plan(input_budget=required_tokens + 200, trigger=required_tokens + 1),
     )
 
@@ -182,7 +152,7 @@ def test_assembler_marks_historical_instructions_and_preserves_current_user() ->
     result = ContextAssembler(recent_message_floor=3).assemble(
         system_prompt="System",
         history=history,
-        tools=(),
+
         budget=plan(input_budget=2000, trigger=1500),
         current_user_message_id=history[-1].id,
     )
@@ -199,7 +169,7 @@ def test_assembler_fails_instead_of_silently_dropping_required_recent_context() 
         ContextAssembler(recent_message_floor=4).assemble(
             system_prompt="System",
             history=history,
-            tools=(),
+
             budget=plan(input_budget=20, trigger=15),
         )
 
@@ -209,7 +179,7 @@ def test_assembler_rejects_unordered_history() -> None:
         ContextAssembler().assemble(
             system_prompt="System",
             history=(message(2), message(1)),
-            tools=(),
+
             budget=plan(input_budget=1000, trigger=750),
         )
 
@@ -232,7 +202,7 @@ def test_existing_summary_uses_compaction_target_and_stays_historical_user_data(
     result = ContextAssembler(recent_message_floor=2).assemble(
         system_prompt="System",
         history=history,
-        tools=(),
+
         budget=ContextBudgetPlan(
             requested="auto",
             context_limit_tokens=1000,

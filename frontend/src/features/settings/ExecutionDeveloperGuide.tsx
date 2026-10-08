@@ -9,16 +9,12 @@ const loopSource = `from opensprite_backend.agent.driver import DriverResult, Ex
 class CheckpointedDriver:
     async def execute(self, host: ExecutionHost) -> DriverResult:
         await host.checkpoint()
-        while True:
-            turn = await host.next_turn()
-            if not turn.tool_calls:
-                return await host.finish(turn)
-            await host.checkpoint()
-            await host.execute_tools(turn)
-            await host.checkpoint()
+        turn = await host.next_turn()
+        await host.checkpoint()
+        return await host.finish(turn)
 
 class CheckpointedDriverFactory:
-    api_version = 1
+    api_version = 2
 
     def create(self) -> CheckpointedDriver:
         return CheckpointedDriver()
@@ -35,7 +31,7 @@ class MainRetryOnlyPolicy:
         return False
 
 class MainRetryOnlyPolicyFactory:
-    api_version = 1
+    api_version = 2
 
     def create(self) -> MainRetryOnlyPolicy:
         return MainRetryOnlyPolicy()
@@ -48,14 +44,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opensprite-execution-example"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.12,<3.14"
-dependencies = ["opensprite-backend>=0.21.27,<0.22"]
+dependencies = ["opensprite-backend>=0.21.31,<0.22"]
 
-[project.entry-points."opensprite_backend.agent_loops.v1"]
+[project.entry-points."opensprite_backend.agent_loops.v2"]
 example_checkpointed = "opensprite_execution_example.plugin:create_loop_factory"
 
-[project.entry-points."opensprite_backend.execution_policies.v1"]
+[project.entry-points."opensprite_backend.execution_policies.v2"]
 example_main_retry_only = "opensprite_execution_example.plugin:create_policy_factory"
 
 [tool.hatch.build.targets.wheel]
@@ -65,10 +61,10 @@ const bundleSource = `$env:OPENSPRITE_PLUGIN_BUNDLE_DIR = (Get-Location).Path
 docker compose -f D:/ABS/OpenSprite/compose.yaml -f D:/ABS/extracted/compose.override.yaml up -d --build --wait`;
 const localLinuxSource = `uv pip install --python /ABS/opensprite/backend/.venv/bin/python \\
     --offline --no-deps --force-reinstall \\
-    tmp/execution-plugin-wheel/opensprite_execution_example-0.1.0-py3-none-any.whl
+    tmp/execution-plugin-wheel/opensprite_execution_example-0.2.0-py3-none-any.whl
 uv pip check --python /ABS/opensprite/backend/.venv/bin/python`;
 const localWindowsSource = `$taskBackendPython = 'D:/ABS/opensprite/backend/.venv/Scripts/python.exe'
-uv pip install --python $taskBackendPython --offline --no-deps --force-reinstall ./tmp/execution-plugin-wheel/opensprite_execution_example-0.1.0-py3-none-any.whl
+uv pip install --python $taskBackendPython --offline --no-deps --force-reinstall ./tmp/execution-plugin-wheel/opensprite_execution_example-0.2.0-py3-none-any.whl
 uv pip check --python $taskBackendPython`;
 
 export function ExecutionDeveloperGuide({ open, tab, onTab, onClose }: { open: boolean; tab: DeveloperGuideTab; onTab: (tab: DeveloperGuideTab) => void; onClose: () => void }) {

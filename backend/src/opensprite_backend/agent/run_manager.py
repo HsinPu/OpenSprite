@@ -16,16 +16,12 @@ from opensprite_backend.conversations.repository import (
 )
 from opensprite_backend.workspaces import WorkspaceExecutionContext
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
-from opensprite_backend.skills.models import SkillExecutionSnapshot
 
 from .loop import AgentLoop
 from .events import INTERNAL_ERROR
 from .plugin_catalog import ExecutionPluginSelection
 
 _LOGGER = logging.getLogger("opensprite.agent.run_manager")
-
-
-from opensprite_backend.custom_agents.models import AgentExecutionSnapshot
 
 
 class RunManager:
@@ -46,8 +42,6 @@ class RunManager:
         self,
         run_id: str,
         workspace: WorkspaceExecutionContext,
-        skills: SkillExecutionSnapshot | None = None,
-        agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         *,
         execution_plugins: ExecutionPluginSelection | None = None,
@@ -65,15 +59,12 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._execute(run_id, cancellation, workspace, skills, agents, provider_endpoint, execution_plugins),
+                self._execute(run_id, cancellation, workspace, provider_endpoint, execution_plugins),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
             self._cancellations[run_id] = cancellation
-            self._provider_references[run_id] = frozenset((
-                run.provider_id,
-                *(endpoint.provider_id for endpoint in agents.provider_endpoints),
-            )) if agents is not None else frozenset((run.provider_id,))
+            self._provider_references[run_id] = frozenset((run.provider_id,))
             task.add_done_callback(
                 lambda completed, owned_run_id=run_id: self._discard(
                     owned_run_id,
@@ -98,24 +89,14 @@ class RunManager:
         run_id: str,
         cancellation: asyncio.Event,
         workspace: WorkspaceExecutionContext,
-        skills: SkillExecutionSnapshot | None = None,
-        agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         try:
-            if execution_plugins is not None:
-                return await self._loop.execute(
-                    run_id, cancellation, workspace, skills, agents, provider_endpoint,
-                    execution_plugins=execution_plugins,
-                )
-            if provider_endpoint is not None:
-                return await self._loop.execute(run_id, cancellation, workspace, skills, agents, provider_endpoint)
-            if agents is not None:
-                return await self._loop.execute(run_id, cancellation, workspace, skills, agents)
-            if skills is None:
-                return await self._loop.execute(run_id, cancellation, workspace)
-            return await self._loop.execute(run_id, cancellation, workspace, skills)
+            return await self._loop.execute(
+                run_id, cancellation, workspace, provider_endpoint,
+                execution_plugins=execution_plugins,
+            )
         except ConversationStoreError as execution_error:
             _LOGGER.exception("run execution failed run_id=%s", run_id)
             try:

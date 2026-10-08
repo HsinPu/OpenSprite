@@ -7,13 +7,12 @@ import json
 import logging
 from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
-from opensprite_backend.skills.models import SkillExecutionSnapshot
-from opensprite_backend.skills.execution import SkillRunState, LoadSkillTool, DiscoverSkillsTool
 from datetime import UTC, datetime
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, TypeVar
+from time import monotonic
 from uuid import uuid4
 
 from opensprite_backend.conversations.models import (
@@ -40,16 +39,8 @@ from opensprite_backend.inference.models import (
     ModelRequest,
     ModelStreamEvent,
     ModelTextDelta,
-    ModelToolCall,
-    ModelToolDefinition,
     ModelUsage,
 )
-from opensprite_backend.tools.availability import (
-    ToolAvailabilityProvider,
-    ToolAvailabilitySnapshot,
-)
-from opensprite_backend.tools.dynamic import DynamicToolProvider
-from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.workspaces import (
     DEFAULT_WORKSPACE_ID,
     DefaultWorkspaceResolver,
@@ -62,7 +53,6 @@ from .events import (
     CONTEXT_PREPARATION_ERROR,
     INTERNAL_ERROR,
     INVALID_PROVIDER_RESPONSE,
-    SCHEDULED_TOOL_APPROVAL_REQUIRED,
     WORKSPACE_CONTEXT_ERROR,
     inference_error,
 )
@@ -117,17 +107,17 @@ _BOUNDED_CONTINUATIONS = {
 _CONTINUATION_TAIL_TOKENS = 4_096
 _CONTEXT_PAGE_SIZE: Final = 200
 _ASSISTANT_DELTA_BATCH_CHARS: Final = 4_096
+_ASSISTANT_DELTA_BATCH_SECONDS: Final = 0.1
 _CONTINUATION_INSTRUCTION = (
     "Continue the assistant response from the exact point where it stopped. "
-    "Do not repeat or summarize text that was already produced. Do not call "
-    "tools. Return only the continuation of the response."
+    "Do not repeat or summarize text that was already produced. "
+    "Return only the continuation of the response."
 )
 
 
 @dataclass(frozen=True, slots=True)
 class _PreparedContext:
     messages: tuple[ModelMessage, ...]
-    tools: tuple[ModelToolDefinition, ...]
     budget: ContextBudgetPlan
     compaction_id: str | None = None
     sources: ReceiptSources = ReceiptSources()
@@ -148,11 +138,16 @@ class _AssistantDeltaBuffer:
         self._batch_chars = batch_chars
         self._pending: list[str] = []
         self._pending_chars = 0
+        self._last_flush: float | None = None
 
     async def append(self, text: str) -> None:
         self._pending.append(text)
         self._pending_chars += len(text)
-        if self._pending_chars >= self._batch_chars:
+        if (
+            self._last_flush is None
+            or self._pending_chars >= self._batch_chars
+            or monotonic() - self._last_flush >= _ASSISTANT_DELTA_BATCH_SECONDS
+        ):
             await self.flush()
 
     async def flush(self) -> None:
@@ -166,12 +161,7 @@ class _AssistantDeltaBuffer:
         )
         self._pending.clear()
         self._pending_chars = 0
-
-
-from opensprite_backend.custom_agents.models import AgentExecutionSnapshot, AgentError
-from opensprite_backend.custom_agents.delegation import DelegationCoordinator, ParentDelegation
-from opensprite_backend.custom_agents.delegation_tools import delegation_tools, DELEGATION_NAMES
-from opensprite_backend.custom_agents.discovery import discovery_prompt
+        self._last_flush = monotonic()
 
 
 class AgentLoop:
@@ -180,34 +170,23 @@ class AgentLoop:
         *,
         repository: ConversationRepository,
         gateway: ModelGateway,
-        tools: ToolRegistry,
-        tool_availability: ToolAvailabilityProvider | None = None,
-        dynamic_tools: DynamicToolProvider | None = None,
         capability_resolver: ModelCapabilityResolver,
         system_prompt_provider: SystemPromptProvider | None = None,
         max_model_rounds: int = 8,
-        max_tool_calls: int = 16,
         max_compactions_per_run: int | None = None,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
         prompt_log_writer: PromptLogWriter | None = None,
-        allow_tool_approval: bool = True,
-        delegation: DelegationCoordinator | None = None,
         driver_factory: AgentDriverFactory | None = None,
         execution_strategy: ExecutionStrategy | None = None,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
-        if not 0 <= max_tool_calls <= 64:
-            raise ValueError("invalid tool call bound")
         if max_compactions_per_run is not None and not 1 <= max_compactions_per_run <= 32:
             raise ValueError("invalid compaction bound")
         if not 1 <= max_assistant_chars <= MAX_ASSISTANT_CHARS:
             raise ValueError("invalid assistant output bound")
         self._repository = repository
         self._gateway = TracedGateway(gateway, repository)
-        self._tools = tools
-        self._tool_availability = tool_availability
-        self._dynamic_tools = dynamic_tools
         self._capability_resolver = capability_resolver
         self._counter = ConservativeTokenCounter()
         self._context_assembler = ContextAssembler(self._counter)
@@ -221,12 +200,9 @@ class AgentLoop:
             else StaticSystemPromptProvider()
         )
         self._max_model_rounds = max_model_rounds
-        self._max_tool_calls = max_tool_calls
         self._max_compactions_per_run = max_compactions_per_run
         self._max_assistant_chars = max_assistant_chars
         self._prompt_log_writer = prompt_log_writer
-        self._allow_tool_approval = allow_tool_approval
-        self._delegation = delegation
         self._driver_factory = driver_factory if driver_factory is not None else StandardDriverFactory()
         self._execution_strategy = (
             execution_strategy if execution_strategy is not None else StandardExecutionStrategy()
@@ -235,35 +211,17 @@ class AgentLoop:
     async def execute(
         self, run_id: str, cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
-        skills: SkillExecutionSnapshot | None = None,
-        agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         *, execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
-        try:
-            return await self._execute(run_id, cancellation_event, workspace, skills, agents, provider_endpoint,
-                                       execution_plugins=execution_plugins)
-        finally:
-            if self._delegation is not None:
-                cleanup = asyncio.create_task(self._delegation.release(run_id))
-                cleanup_cancelled = False
-                while not cleanup.done():
-                    try:
-                        await asyncio.shield(cleanup)
-                    except asyncio.CancelledError:
-                        cleanup_cancelled = True
-                        continue
-                cleanup.result()
-                if cleanup_cancelled:
-                    raise asyncio.CancelledError
+        return await self._execute(run_id, cancellation_event, workspace, provider_endpoint,
+                                   execution_plugins=execution_plugins)
 
     async def _execute(
         self,
         run_id: str,
         cancellation_event: asyncio.Event,
         workspace: WorkspaceExecutionContext | None = None,
-        skills: SkillExecutionSnapshot | None = None,
-        agents: AgentExecutionSnapshot | None = None,
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         *, execution_plugins: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
@@ -312,20 +270,6 @@ class AgentLoop:
             if execution_plugins is not None:
                 await asyncio.to_thread(self._repository.append_run_event, run_id,
                                         RunEventType.EXECUTION_SELECTED, execution_plugins.profile())
-            run_tools = (
-                self._tools.extended(await self._dynamic_tools.snapshot_tools())
-                if self._dynamic_tools is not None
-                else self._tools
-            )
-            availability = (
-                await self._tool_availability.snapshot()
-                if self._tool_availability is not None
-                else ToolAvailabilitySnapshot(
-                    frozenset(
-                        definition.name for definition in run_tools.definitions()
-                    )
-                )
-            )
             system_prompt = await self._system_prompt_provider.build(
                 run_id=run_id,
                 workspace=workspace,
@@ -334,46 +278,17 @@ class AgentLoop:
                 self._resolve_run_capability(run, provider_endpoint), cancellation_event)
             if run.reasoning_resolution is None:
                 run = await asyncio.to_thread(self._repository.set_reasoning_resolution, run.id, resolve_response_mode(run.response_mode, capability.reasoning_efforts))
-            if not capability.supports_tools:
-                availability = ToolAvailabilitySnapshot(frozenset())
-                system_prompt += "\nTool calling is disabled for this model. No tools are available. Do not simulate tool calls with JSON text. Explain this limitation if a tool is requested."
-            if self._delegation is not None and agents is not None and agents.available:
-                capability = await self._await_with_cancellation(
-                    self._resolve_run_capability(run, provider_endpoint), cancellation_event)
-                if capability.supports_tools:
-                    self._delegation.register(ParentDelegation(
-                        run, workspace, skills or SkillExecutionSnapshot(), agents,
-                        run_tools, availability, system_prompt, execution_plugins=execution_plugins))
-                    run_tools = run_tools.extended(delegation_tools())
-                    availability = ToolAvailabilitySnapshot(availability.enabled_names | DELEGATION_NAMES)
-                    system_prompt += discovery_prompt(agents)
-            skill_state = SkillRunState(skills or SkillExecutionSnapshot())
-            base_system_prompt = system_prompt
-            system_prompt = skill_state.prompt(base_system_prompt)
-            if skill_state.snapshot.available:
-                capability = await self._await_with_cancellation(self._resolve_run_capability(run, provider_endpoint), cancellation_event)
-                if capability.supports_tools:
-                    run_tools = run_tools.extended((LoadSkillTool(), DiscoverSkillsTool()))
-                    availability = ToolAvailabilitySnapshot(availability.enabled_names | {"load_skill", "discover_skills"})
-                else:
-                    system_prompt += "\nAutomatic Skill selection is unavailable for this model. Only manually selected Skills are loaded."
             prepared = await self._prepare_context(
                 run=run,
                 provider_endpoint=provider_endpoint,
                 system_prompt=system_prompt,
                 cancellation_event=cancellation_event,
-                availability=availability,
-                tools=run_tools,
                 current_user_message_id=run.user_message_id,
             )
-            for identifier in skill_state.loaded:
-                await asyncio.to_thread(self._repository.append_run_event, run_id, RunEventType.SKILL_LOADED,
-                                        skill_state.event(identifier, "manual"))
             host = LoopExecutionHost(
-                loop=self, run=run, cancellation_event=cancellation_event, workspace=workspace,
-                tools=run_tools, availability=availability, prepared=prepared,
-                system_prompt=system_prompt, base_system_prompt=base_system_prompt,
-                skill_state=skill_state, delta_buffer=delta_buffer, strategy=execution_strategy,
+                loop=self, run=run, cancellation_event=cancellation_event,
+                prepared=prepared, system_prompt=system_prompt,
+                delta_buffer=delta_buffer, strategy=execution_strategy,
                 provider_endpoint=provider_endpoint,
             )
             try:
@@ -474,11 +389,8 @@ class AgentLoop:
         prepared: _PreparedContext,
         accumulated_text: str,
         cancellation_event: asyncio.Event,
-        availability: ToolAvailabilitySnapshot,
-        tools: ToolRegistry,
         prompt_log_sequence: list[int],
         delta_buffer: _AssistantDeltaBuffer,
-        receipt_skills: tuple[dict[str, object], ...] = (),
         provider_endpoint: ProviderEndpointSnapshot | None = None,
         execution_strategy: ExecutionStrategy,
     ) -> DriverResult:
@@ -523,8 +435,7 @@ class AgentLoop:
                             provider_endpoint=provider_endpoint,
                             system_prompt=system_prompt,
                             cancellation_event=cancellation_event,
-                            availability=availability,
-                            tools=tools,
+
                             force_compaction=True,
                             compaction_limit=1,
                             compaction_reason="local_budget",
@@ -540,7 +451,7 @@ class AgentLoop:
                     continuation_base = prepared.messages
                     continue
 
-                estimated_round_tokens = self._counter.request(transcript, ())
+                estimated_round_tokens = self._counter.request(transcript)
                 await asyncio.to_thread(
                     self._repository.append_run_event,
                     run.id,
@@ -549,7 +460,7 @@ class AgentLoop:
                         run=run,
                         budget=prepared.budget,
                         context_tokens=estimated_round_tokens,
-                        tool_definitions=(),
+
                     ),
                 )
                 request = ModelRequest(
@@ -559,7 +470,7 @@ class AgentLoop:
                     response_mode=run.response_mode,
                     reasoning_resolution=run.reasoning_resolution,
                     messages=transcript,
-                    tools=(),
+
                     max_output_tokens=prepared.budget.output_reserve_tokens,
                 )
                 self._write_prompt_log(
@@ -577,7 +488,7 @@ class AgentLoop:
                         retry_of=None if previous_attempt is None else previous_attempt.id,
                         cause=None if previous_attempt is None else "provider_context_limit",
                         compaction_id=prepared.compaction_id,
-                        sources=replace(prepared.sources, skills=receipt_skills),
+                        sources=prepared.sources,
                     ))),
                     cancellation_event,
                 )
@@ -603,8 +514,7 @@ class AgentLoop:
                                     provider_endpoint=provider_endpoint,
                                     system_prompt=system_prompt,
                                     cancellation_event=cancellation_event,
-                                    availability=availability,
-                                    tools=tools,
+
                                     force_compaction=True,
                                     compaction_limit=1,
                                     current_user_message_id=run.user_message_id,
@@ -694,8 +604,6 @@ class AgentLoop:
         cancellation_event: asyncio.Event,
     ) -> DriverResult:
         self._raise_if_cancelled(cancellation_event)
-        if self._delegation is not None:
-            await self._await_with_cancellation(self._delegation.settle(run_id), cancellation_event)
         return DriverResult(accumulated_text, reason)
 
     def _write_prompt_log(
@@ -721,7 +629,7 @@ class AgentLoop:
                 reasoning_effort=request.reasoning_resolution.effective if request.reasoning_resolution else None,
                 max_output_tokens=request.max_output_tokens,
                 messages=request.messages,
-                tools=request.tools,
+
             )
         except PromptLogError:
             _LOGGER.warning(
@@ -736,7 +644,6 @@ class AgentLoop:
         run: RunSnapshot,
         budget: ContextBudgetPlan,
         context_tokens: int,
-        tool_definitions: tuple[ModelToolDefinition, ...],
     ) -> dict[str, object]:
         return {
             "providerId": run.provider_id,
@@ -746,7 +653,6 @@ class AgentLoop:
             "contextTokens": context_tokens,
             "contextLimitTokens": budget.context_limit_tokens,
             "inputBudgetTokens": budget.input_budget_tokens,
-            "toolNames": [tool.name for tool in tool_definitions],
         }
 
     def _continuation_transcript(
@@ -764,7 +670,7 @@ class AgentLoop:
             ),
             *base_transcript[1:],
         )
-        base_tokens = self._counter.request(instructed, ())
+        base_tokens = self._counter.request(instructed)
         available = min(
             _CONTINUATION_TAIL_TOKENS,
             budget.input_budget_tokens - base_tokens - 8,
@@ -786,7 +692,7 @@ class AgentLoop:
         if best is None:
             raise ContextLimitExceeded
         result = (*instructed, ModelMessage(role="assistant", content=best))
-        if self._counter.request(result, ()) > budget.input_budget_tokens:
+        if self._counter.request(result) > budget.input_budget_tokens:
             raise ContextLimitExceeded
         return result
 
@@ -795,7 +701,7 @@ class AgentLoop:
             return await self._capability_resolver.resolve(run.provider_id, run.model_id)
         if endpoint.protocol != "openai_chat_completions":
             capability = await self._capability_resolver.resolve(run.provider_id, run.model_id)
-            return replace(capability, supports_tools=capability.supports_tools and endpoint.tools_enabled and run.model_id not in endpoint.disabled_models)
+            return capability
         for model in endpoint.models:
             if model.provider_id == run.provider_id and model.model_id == run.model_id:
                 return model
@@ -807,8 +713,6 @@ class AgentLoop:
         run: RunSnapshot,
         system_prompt: str,
         cancellation_event: asyncio.Event,
-        availability: ToolAvailabilitySnapshot | None = None,
-        tools: ToolRegistry | None = None,
         force_compaction: bool = False,
         compaction_reason: str = "provider_context_limit",
         provider_endpoint: ProviderEndpointSnapshot | None = None,
@@ -841,18 +745,6 @@ class AgentLoop:
             capability,
             run.output_budget,
         )
-        resolved_tools = tools or self._tools
-        resolved_availability = availability or ToolAvailabilitySnapshot(
-            frozenset(definition.name for definition in resolved_tools.definitions())
-        )
-        tool_definitions = tuple(
-            ModelToolDefinition(
-                name=definition.name,
-                description=definition.description,
-                input_schema=dict(definition.input_schema),
-            )
-            for definition in resolved_tools.definitions(resolved_availability)
-        )
         page = await asyncio.to_thread(
             self._repository.list_messages,
             run.conversation_id,
@@ -881,7 +773,7 @@ class AgentLoop:
                 assembled = self._context_assembler.assemble(
                     system_prompt=system_prompt,
                     history=uncovered,
-                    tools=tool_definitions,
+
                     budget=budget,
                     summary=summary,
                     has_older_history=has_older,
@@ -903,7 +795,7 @@ class AgentLoop:
                 )
                 return _PreparedContext(
                     messages=assembled.messages,
-                    tools=tool_definitions,
+
                     budget=budget,
                     compaction_id=last_compaction_id,
                     sources=ReceiptSources(
@@ -1066,13 +958,9 @@ class AgentLoop:
         run_id: str,
         error: PublicRunError,
     ) -> RunSnapshot:
-        if self._delegation is not None:
-            await self._delegation.settle(run_id, cancel=True)
         return await asyncio.to_thread(self._repository.fail_run, run_id, error)
 
     async def _cancel(self, run_id: str) -> RunSnapshot:
-        if self._delegation is not None:
-            await self._delegation.settle(run_id, cancel=True)
         requested = await asyncio.to_thread(self._repository.request_cancel, run_id)
         if requested.status is RunStatus.CANCELLED:
             return requested
@@ -1151,13 +1039,3 @@ class AgentLoop:
         with suppress(asyncio.CancelledError):
             await cancelled
         return operation.result()
-
-    @staticmethod
-    def _tool_fingerprint(call: ModelToolCall) -> str:
-        return json.dumps(
-            {"name": call.name, "arguments": call.arguments},
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )

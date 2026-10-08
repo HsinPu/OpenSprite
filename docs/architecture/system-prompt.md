@@ -4,10 +4,6 @@
 
 OpenSprite builds one bounded base system-prompt snapshot when a Run starts.
 Settings changed during an active Run take effect only on the next Run.
-Since 0.13.0 a separate Skills JSON projection initially supplies metadata and
-adds explicitly loaded instructions from the immutable Run snapshot. Its full
-content and tool definition count against Context budget; compaction and
-continuation preserve loaded versions. See [Skills](skills.md).
 
 The initial dynamic surface is intentionally small:
 
@@ -17,16 +13,15 @@ The initial dynamic surface is intentionally small:
 - current date and time from an injectable clock; and
 - the immutable Workspace execution snapshot for this Run.
 
-Tool definitions remain in the Provider's structured tool field. User
-messages, conversation history, credentials, Provider responses, hidden
-reasoning, memory, Skills, subagents and MCP catalogs are not inserted into this
-Prompt.
+User messages and conversation history enter the model request as separate
+text messages. Credentials, Provider responses and hidden reasoning are not
+inserted into this Prompt. The core sends no tool definitions.
 
 Prompt version 2 includes a delimited Workspace section containing ID, name,
 revision, availability, managed root and external mounts with their access modes.
 Workspace names and roots are JSON-encoded untrusted metadata, not instructions. The fixed text
-also states that knowing a path grants no file capability; only tools actually
-provided to the Run may perform an action. The fixed Default Workspace uses the
+also states that knowing a path grants no file capability. The text core cannot
+read or write Workspace files. The fixed Default Workspace uses the
 managed `.opensprite/workspace/default` root.
 
 ## Ownership and dependency direction
@@ -51,7 +46,8 @@ FastAPI or the filesystem log writer.
 
 ## Failure and bounds
 
-The rendered Prompt is limited to 16 KiB. Missing General Settings use the
+The renderer limits the Prompt to 128 Ki characters; the production receipt
+also enforces its 64 KiB UTF-8 content bound. Missing General Settings use the
 normal `zh-TW` and `system` defaults. An unavailable or malformed General
 Settings store falls back without writing settings: follow the user's language
 and use UTC time.

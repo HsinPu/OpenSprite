@@ -391,7 +391,7 @@ class WorkspaceCatalogService:
             usage = self._usage_for(workspace_id)
             if usage.active_run_count:
                 raise WorkspaceError(WorkspaceFailure.WORKSPACE_BUSY)
-            if usage.conversation_count or usage.schedule_count:
+            if usage.conversation_count:
                 raise WorkspaceError(WorkspaceFailure.WORKSPACE_NOT_EMPTY)
             next_state = replace(
                 state,

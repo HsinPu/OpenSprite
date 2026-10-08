@@ -12,18 +12,17 @@ const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed1
 import { validCompactionPayload } from "./compactionEvents";
 import { validAttemptPayload } from "./attemptEvents";
 
-export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "skill.loaded", "skill.load_failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict", "workspace_managed_by_schedule"] as const;
+export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
-export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error" | "skill_unavailable";
+export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
 
 export type ConversationSummary = {
   id: string;
   workspaceId: string;
   revision: number;
-  workspaceManagedBySchedule: boolean;
   title: string;
   latestMessagePreview: string | null;
   createdAt: string;
@@ -101,7 +100,6 @@ export type StartRunInput = {
   workspaceId: string;
   clientRequestId: string;
   message: string;
-  skillIds?: string[];
 };
 
 export type StartRunResult = {
@@ -152,7 +150,7 @@ function boundedString(value: unknown, minimum: number, maximum: number): value 
 }
 
 function conversation(value: unknown): ConversationSummary {
-  if (!record(value) || !exactKeys(value, ["id", "workspaceId", "revision", "workspaceManagedBySchedule", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || typeof value.workspaceManagedBySchedule !== "boolean" || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
+  if (!record(value) || !exactKeys(value, ["id", "workspaceId", "revision", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !isIdentifier(value.workspaceId) || !Number.isInteger(value.revision) || (value.revision as number) < 1 || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
     throw new AgentChatApiError("malformed_response");
   }
   return value as ConversationSummary;
@@ -206,7 +204,6 @@ async function jsonRequest(path: string, init: RequestInit | undefined, successS
     throw new AgentChatApiError("malformed_response");
   }
   if (response.status !== successStatus) {
-    if (path === "/api/runs" && response.status === 400 && record(body) && exactKeys(body, ["error"]) && record(body.error) && exactKeys(body.error, ["code", "message", "retryable"]) && body.error.code === "skill_unavailable" && typeof body.error.message === "string" && typeof body.error.retryable === "boolean") throw new AgentChatApiError("skill_unavailable");
     if (response.ok) throw new AgentChatApiError("malformed_response");
     throw new AgentChatApiError(errorCode(body, errors.get(response.status) ?? []));
   }
@@ -241,12 +238,11 @@ export async function getConversation(conversationId: string): Promise<Conversat
 
 export async function moveConversationToWorkspace(conversationId: string, workspaceId: string, expectedRevision: number): Promise<ConversationSummary> {
   if (!isIdentifier(conversationId) || !isIdentifier(workspaceId) || !Number.isInteger(expectedRevision) || expectedRevision < 1) throw new AgentChatApiError("malformed_response");
-  const body = await jsonRequest(`/api/conversations/${conversationId}/workspace`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, expectedRevision }) }, 200, new Map([[400, ["invalid_request"]], [404, ["not_found", "workspace_not_found"]], [409, ["run_busy", "revision_conflict", "workspace_managed_by_schedule"]], [503, ["database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
+  const body = await jsonRequest(`/api/conversations/${conversationId}/workspace`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, expectedRevision }) }, 200, new Map([[400, ["invalid_request"]], [404, ["not_found", "workspace_not_found"]], [409, ["run_busy", "revision_conflict"]], [503, ["database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
   return conversation(body);
 }
 
 export async function startRun(input: StartRunInput): Promise<StartRunResult> {
-  if (input.skillIds && (input.skillIds.length > 5 || new Set(input.skillIds).size !== input.skillIds.length || input.skillIds.some(id => !isIdentifier(id)))) throw new AgentChatApiError("malformed_response");
   if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.workspaceId) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
   const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [404, ["workspace_not_found"]], [409, ["idempotency_conflict", "run_busy", "model_not_selected", "provider_not_connected", "workspace_mismatch"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "workspace_store_unavailable"]], [500, ["internal_error"]]]));
   if (!record(body) || !exactKeys(body, ["conversationId", "workspaceId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.workspaceId) || body.workspaceId !== input.workspaceId || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
@@ -285,15 +281,8 @@ export async function cancelRun(runId: string): Promise<CancelRunResult> {
 function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   let data = value.data;
-  if (expectedType === "execution.selected" && (!exactKeys(data, ["loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"]) || data.apiVersion !== 1 || ![data.loopId, data.policyId].every(id => typeof id === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(id)) || !boundedString(data.loopVersion, 1, 64) || !boundedString(data.policyVersion, 1, 64))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "skill.loaded" || expectedType === "skill.load_failed") {
-    const keys = ["skillId", "scope", "name", "revision", "contentHash", "source"];
-    if (expectedType === "skill.load_failed") keys.push("errorCode");
-    if (expectedType === "skill.load_failed" && exactKeys(data, keys) && data.source === "model" && ["invalid_request", "skill_unavailable"].includes(String(data.errorCode)) && ["skillId", "scope", "name", "revision", "contentHash"].every(key => data[key] === null)) return value as RunEvent;
-    if (!exactKeys(data, keys) || !isIdentifier(data.skillId) || !["global", "workspace"].includes(String(data.scope)) || !boundedString(data.name, 1, 80) || !Number.isInteger(data.revision) || Number(data.revision) < 1 || typeof data.contentHash !== "string" || !/^[0-9a-f]{64}$/.test(data.contentHash) || !["manual", "model"].includes(String(data.source)) || (expectedType === "skill.load_failed" && !["context_limit", "limit_reached", "invalid_request", "skill_unavailable"].includes(String(data.errorCode)))) throw new AgentChatApiError("malformed_response");
-  }
-  const safeError = (candidate: unknown) => runError(candidate);
-  if (expectedType === "run.started" && !exactKeys(data, [])) {
+  if (expectedType === "execution.selected" && (!exactKeys(data, ["loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"]) || data.apiVersion !== 2 || ![data.loopId, data.policyId].every(id => typeof id === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(id)) || !boundedString(data.loopVersion, 1, 64) || !boundedString(data.policyVersion, 1, 64))) throw new AgentChatApiError("malformed_response");
+    if (expectedType === "run.started" && !exactKeys(data, [])) {
     const legacyKeys = ["workspaceId", "workspaceRevision", "workspaceName", "workspaceRootHash", "workspaceAvailability"] as const;
     const currentKeys = [...legacyKeys, "workspaceMountManifestHash", "workspaceMountCount", "workspaceMounts"] as const;
     const legacyPayload = exactKeys(data, legacyKeys);
@@ -332,28 +321,18 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   if (expectedType === "model.started") {
     const legacyKeys = ["providerId", "modelId", "responseMode", "maxOutputTokens"] as const;
     const contextKeys = [...legacyKeys, "contextTokens", "contextLimitTokens", "inputBudgetTokens"] as const;
-    const toolContextKeys = [...contextKeys, "toolNames"] as const;
-    const hasContext = exactKeys(data, contextKeys) || exactKeys(data, toolContextKeys);
+    const hasContext = exactKeys(data, contextKeys);
     if ((!exactKeys(data, legacyKeys) && !hasContext) || !isProviderId(data.providerId) || !boundedString(data.modelId, 1, 256) || !(historicalResponseModes as readonly string[]).includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072) throw new AgentChatApiError("malformed_response");
     if (hasContext && (!Number.isInteger(data.contextTokens) || (data.contextTokens as number) < 1 || !Number.isInteger(data.contextLimitTokens) || (data.contextLimitTokens as number) < 1 || (data.contextLimitTokens as number) > 4_000_000 || !Number.isInteger(data.inputBudgetTokens) || (data.inputBudgetTokens as number) < 1 || (data.inputBudgetTokens as number) > (data.contextLimitTokens as number) || (data.contextTokens as number) > (data.inputBudgetTokens as number))) throw new AgentChatApiError("malformed_response");
-    if (exactKeys(data, toolContextKeys)) {
-      if (!Array.isArray(data.toolNames) || data.toolNames.some((name) => !boundedString(name, 1, 64) || !/^[a-z][a-z0-9_]{0,63}$/.test(name)) || data.toolNames.join("\0") !== [...new Set(data.toolNames)].sort().join("\0")) throw new AgentChatApiError("malformed_response");
-    }
   }
   if (expectedType === "response.continuation.started") {
     const maximum = data.maxAttempts;
     if (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 64 || (maximum !== null && (!Number.isInteger(maximum) || ![1, 2, 3, 5, 10, 20, 50].includes(maximum as number) || (data.attempt as number) > (maximum as number)))) throw new AgentChatApiError("malformed_response");
   }
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.approval_requested" && (!exactKeys(data, ["approvalId", "toolName", "toolDisplayName", "serverId", "argumentHash", "expiresAt"]) || !isIdentifier(data.approvalId) || !boundedString(data.toolName, 1, 64) || !boundedString(data.toolDisplayName, 1, 256) || !isIdentifier(data.serverId) || typeof data.argumentHash !== "string" || !/^[0-9a-f]{64}$/.test(data.argumentHash) || !utc(data.expiresAt))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.approval_decided" && (!exactKeys(data, ["approvalId", "decision"]) || !isIdentifier(data.approvalId) || !["allow_once", "deny", "expired"].includes(data.decision as string))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.started" && (!exactKeys(data, ["callId", "toolName"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.completed" && (!exactKeys(data, ["callId", "toolName", "summary"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !boundedString(data.summary, 1, 4096))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.failed" && (!exactKeys(data, ["callId", "toolName", "error"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !record(data.error))) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "tool.failed") safeError(data.error);
   if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId", "completionReason"]) || !isIdentifier(data.assistantMessageId) || !completionReasons.includes(data.completionReason as CompletionReason))) throw new AgentChatApiError("malformed_response");
   if (["run.failed", "run.interrupted"].includes(expectedType) && (!exactKeys(data, ["error"]) || !record(data.error))) throw new AgentChatApiError("malformed_response");
-  if (["run.failed", "run.interrupted"].includes(expectedType)) safeError(data.error);
+  if (["run.failed", "run.interrupted"].includes(expectedType)) runError(data.error);
   return { ...value, data } as RunEvent;
 }
 
@@ -398,7 +377,7 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     not_found: "error.chat.notFound",
     run_busy: "error.chat.runBusy",
     run_not_active: "error.chat.runNotActive",
-    skill_unavailable: "skills.unavailable",
+
     model_not_selected: "error.chat.modelNotSelected",
     provider_not_connected: "error.chat.providerNotConnected",
     invalid_credentials: "error.chat.invalidCredentials",
@@ -411,15 +390,15 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     agent_limit_reached: "error.chat.agentLimit",
     context_limit_exceeded: "error.chat.contextLimit",
     context_preparation_failed: "error.chat.contextPreparation",
-    tool_failure: "error.chat.toolFailure",
-    scheduled_tool_approval_required: "error.chat.scheduledToolApprovalRequired",
+
+
     invalid_provider_response: "error.chat.invalidProviderResponse",
     internal_error: "error.chat.internal",
     workspace_not_found: "error.chat.workspaceNotFound",
     workspace_mismatch: "error.chat.workspaceMismatch",
     workspace_store_unavailable: "error.chat.workspaceStore",
     revision_conflict: "error.chat.revisionConflict",
-    workspace_managed_by_schedule: "error.chat.workspaceManaged",
+
     malformed_response: "error.chat.malformed",
     network_error: "error.network",
   } satisfies Record<AgentChatErrorCode, MessageKey>;

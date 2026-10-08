@@ -19,12 +19,12 @@ async def test_custom_model_capability_uses_registered_metadata(tmp_path):
     provider = service.save(provider_id=None, name="Local", base_url="https://example.com/v1",
         auth_mode="none", allow_insecure_local=False, expected_revision=0, secret=None)
     service.save_model(provider.id, CustomModel(key=str(uuid4()), model_id="local", name="Local model",
-        context_limit=16000, output_limit=4000, tools=False, source="manual"), expected_revision=1)
+        context_limit=16000, output_limit=4000,  source="manual"), expected_revision=1)
     resolver = ProviderModelCapabilityResolver(None, custom_providers=service)
     capability = await resolver.resolve(provider.id, "local")
     assert capability.context_window_tokens == 16000
     assert capability.max_output_tokens == 4000
-    assert capability.supports_tools is False
+    assert not hasattr(capability, "supports_tools")
     with pytest.raises(ModelCapabilityNotFound):
         await resolver.resolve(provider.id, "missing")
     with pytest.raises(ModelCapabilityNotFound):

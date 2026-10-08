@@ -87,7 +87,8 @@ def check_environment(requires_python, requirements, *, versions=None, environme
 
 
 def inspect_wheel(data: bytes, file_name: str, *, validate_environment=True,
-                  versions=None, environment=None, owners=None) -> WheelInspection:
+                  versions=None, environment=None, owners=None,
+                  allow_retired_api=False) -> WheelInspection:
     if len(data) > MAX_WHEEL_BYTES:
         raise ExecutionPackageError("package_too_large")
     try:
@@ -220,7 +221,7 @@ def inspect_wheel(data: bytes, file_name: str, *, validate_environment=True,
             if match is None:
                 _invalid()
             api_version = int(match[2])
-            if api_version != 1:
+            if api_version != 2 and not (allow_retired_api and api_version == 1):
                 raise ExecutionPackageError("incompatible_package")
             kind = "loop" if match[1] == "agent_loops" else "policy"
             for identifier, entry in parser.items(group, raw=True):
@@ -238,7 +239,7 @@ def inspect_wheel(data: bytes, file_name: str, *, validate_environment=True,
         if validate_environment:
             installed_points = metadata.entry_points()
             for plugin in plugins:
-                group = "opensprite_backend." + ("agent_loops" if plugin.kind == "loop" else "execution_policies") + ".v1"
+                group = "opensprite_backend." + ("agent_loops" if plugin.kind == "loop" else "execution_policies") + f".v{plugin.apiVersion}"
                 for point in installed_points.select(group=group, name=plugin.id):
                     if point.dist is None or canonicalize_name(point.dist.metadata["Name"]) != normalized:
                         _invalid()

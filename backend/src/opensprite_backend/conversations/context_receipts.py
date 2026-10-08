@@ -3,7 +3,7 @@
 import re
 from uuid import UUID
 
-_COMPONENTS = {"system", "summary", "history", "currentUser", "toolResults", "assistant", "summaryInput", "unattributed", "toolDefinitions", "framing"}
+_COMPONENTS = {"system", "summary", "history", "currentUser", "assistant", "summaryInput", "unattributed", "framing"}
 
 
 def _integer(value, minimum=0):
@@ -23,20 +23,15 @@ def _id(value):
 
 def valid_context_receipt(data):
     keys = {"schemaVersion", "requestHash", "estimateMethod", "estimatedInputTokens", "components",
-            "contextLimitTokens", "inputBudgetTokens", "outputReserveTokens", "messageCount", "toolCount",
-            "systemHash", "toolsHash", "historyMessageIds", "summary", "skills", "workspace"}
+            "contextLimitTokens", "inputBudgetTokens", "outputReserveTokens", "messageCount",
+            "systemHash", "historyMessageIds", "summary", "workspace"}
     if not isinstance(data, dict):
         return False
-    if "toolExecution" in data:
-        keys.add("toolExecution")
-        execution = data["toolExecution"]
-        if not isinstance(execution, dict) or set(execution) != {"policy", "transport"} or execution["policy"] not in ("builtin", "inherit", "provider_disabled", "model_disabled") or execution["transport"] not in ("streaming", "non_streaming"):
-            return False
-    if set(data) != keys or type(data["schemaVersion"]) is not int or data["schemaVersion"] != 1:
+    if set(data) != keys or type(data["schemaVersion"]) is not int or data["schemaVersion"] != 2:
         return False
-    if data["estimateMethod"] != "utf8-conservative-v1" or not all(_hash(data[key]) for key in ("requestHash", "systemHash", "toolsHash")):
+    if data["estimateMethod"] != "utf8-conservative-v1" or not all(_hash(data[key]) for key in ("requestHash", "systemHash")):
         return False
-    if not all(_integer(data[key]) for key in ("estimatedInputTokens", "messageCount", "toolCount", "outputReserveTokens")):
+    if not all(_integer(data[key]) for key in ("estimatedInputTokens", "messageCount", "outputReserveTokens")):
         return False
     if not 1 <= data["messageCount"] <= 256 or not 1 <= data["outputReserveTokens"] <= 131072:
         return False
@@ -50,9 +45,6 @@ def valid_context_receipt(data):
         return False
     summary = data["summary"]
     if summary is not None and (not isinstance(summary, dict) or set(summary) != {"id", "version", "sourceHash", "throughSequence"} or not _id(summary["id"]) or not _integer(summary["version"], 1) or not _hash(summary["sourceHash"]) or not _integer(summary["throughSequence"], 1)):
-        return False
-    skills = data["skills"]
-    if not isinstance(skills, list) or len(skills) > 5 or any(not isinstance(skill, dict) or set(skill) != {"id", "revision", "contentHash"} or not _id(skill["id"]) or not _integer(skill["revision"], 1) or not _hash(skill["contentHash"]) for skill in skills):
         return False
     workspace = data["workspace"]
     return workspace is None or (isinstance(workspace, dict) and set(workspace) == {"id", "revision", "mountManifestHash"} and _id(workspace["id"]) and _integer(workspace["revision"], 1) and _hash(workspace["mountManifestHash"]))

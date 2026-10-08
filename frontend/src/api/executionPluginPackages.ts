@@ -48,7 +48,7 @@ function catalog(value: unknown): ExecutionPackageCatalog {
     const pluginIds = new Set<string>();
     const plugins = item.plugins.map((point: unknown): ExecutionPackagePlugin => {
       if (!record(point) || !exactKeys(point, ["id", "kind", "apiVersion", "entryPoint"]) || !pluginId(point.id)
-        || (point.kind !== "loop" && point.kind !== "policy") || point.apiVersion !== 1
+        || (point.kind !== "loop" && point.kind !== "policy") || typeof point.apiVersion !== "number" || !Number.isSafeInteger(point.apiVersion) || point.apiVersion < 1
         || !text(point.entryPoint, 256, 1) || pluginIds.has(`${point.kind}:${point.id}`)) throw invalid();
       pluginIds.add(`${point.kind}:${point.id}`);
       return { id: point.id, kind: point.kind, apiVersion: point.apiVersion, entryPoint: point.entryPoint };

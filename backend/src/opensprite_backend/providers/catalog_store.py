@@ -26,7 +26,6 @@ class CustomModel(BaseModel):
     name: str = Field(min_length=1, max_length=256)
     context_limit: int = Field(ge=1024)
     output_limit: int = Field(ge=1)
-    tools: bool = False
     source: Literal["manual", "discovered"] = "manual"
 
     @model_validator(mode="after")
@@ -47,15 +46,10 @@ class CustomProvider(BaseModel):
     base_url: str
     auth_mode: Literal["none", "bearer"]
     allow_insecure_local: bool = False
-    non_streaming_tools: bool = False
-    tools_enabled: bool = True
     created_at: str
     updated_at: str
     models: tuple[CustomModel, ...] = ()
 
-    def allows_model_tools(self, model: CustomModel) -> bool:
-        """Model tools=True inherits; False is a preserved individual opt-out."""
-        return self.tools_enabled and model.tools
 
     @field_validator("name")
     @classmethod
@@ -117,8 +111,16 @@ class JsonProviderCatalog:
                     data = stream.read(16 * 1024 * 1024 + 1)
                 if len(data) > 16 * 1024 * 1024:
                     raise ValueError("oversized_catalog")
-                json.loads(data.decode("utf-8"), object_pairs_hook=_strict_pairs)
-                return ProviderCatalog.model_validate_json(data)
+                raw = json.loads(data.decode("utf-8"), object_pairs_hook=_strict_pairs)
+                if isinstance(raw, dict) and isinstance(raw.get("providers"), list):
+                    for provider in raw["providers"]:
+                        if isinstance(provider, dict):
+                            provider.pop("non_streaming_tools", None)
+                            provider.pop("tools_enabled", None)
+                            for model in provider.get("models", []):
+                                if isinstance(model, dict):
+                                    model.pop("tools", None)
+                return ProviderCatalog.model_validate_json(json.dumps(raw))
             except FileNotFoundError:
                 return ProviderCatalog()
             except Exception:

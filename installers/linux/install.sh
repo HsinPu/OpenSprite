@@ -108,7 +108,7 @@ check_user_linger() {
   if [[ "${linger,,}" != "yes" ]]; then
     printf '%s\n' \
       'Warning: user lingering is not enabled or could not be confirmed.' \
-      'OpenSprite schedules may stop after logout.' \
+      'OpenSprite background service may stop after logout.' \
       "Ask an administrator to run: sudo loginctl enable-linger $target_user" >&2
   fi
 }
@@ -196,9 +196,8 @@ printf '  User data: %s\n' "$USER_DATA_ROOT"
 printf '%s\n' \
   '    config/: settings, local access and encryption key' \
   '    auth.json: encrypted provider credentials (back up with config/credential.key)' \
-  '    data/opensprite.db: conversations, runs and schedules' \
+  '    data/opensprite.db: conversations, runs, events and summaries' \
   '    workspace/: managed workspaces and their files' \
-  '    skills/, agents/, archive/: installed definitions and archived copies' \
   '    logs/, state/, cache/: logs, runtime state and cache' \
   '  Data locations are created as needed; this list does not mean they all exist.'
 printf '  User service file: %s\n' "$UNIT_FILE"

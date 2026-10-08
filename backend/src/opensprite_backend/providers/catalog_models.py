@@ -84,9 +84,6 @@ class ProviderEndpointSnapshot:
     base_url: str
     auth_mode: Literal["none", "bearer"]
     models: tuple[ModelCapability, ...] = ()
-    non_streaming_tools: bool = False
-    tools_enabled: bool = True
-    disabled_models: tuple[str, ...] = ()
 
     def endpoint(self, resource: Literal["models", "chat/completions"]) -> str:
         return f"{self.base_url}/{resource}"

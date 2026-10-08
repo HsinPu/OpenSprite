@@ -23,4 +23,4 @@ The installer checks user lingering before registering the user service. It
 never enables lingering or invokes `sudo`. When lingering is not enabled or
 cannot be confirmed, the installer prints the administrator command
 `sudo loginctl enable-linger $USER`; until an administrator enables it,
-OpenSprite and its schedules may stop after logout.
+OpenSprite may stop after logout.

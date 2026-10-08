@@ -70,7 +70,6 @@ class MountWorkspaceRequest(WorkspaceContractModel):
 
 class WorkspaceUsageResponse(WorkspaceContractModel):
     conversationCount: int = Field(ge=0)
-    scheduleCount: int = Field(ge=0)
     activeRunCount: int = Field(ge=0)
 
 
@@ -180,7 +179,6 @@ def workspace_response(item: WorkspaceSummary) -> WorkspaceResponse:
         updatedAt=item.updated_at,
         usage=WorkspaceUsageResponse(
             conversationCount=item.usage.conversation_count,
-            scheduleCount=item.usage.schedule_count,
             activeRunCount=item.usage.active_run_count,
         ),
     )

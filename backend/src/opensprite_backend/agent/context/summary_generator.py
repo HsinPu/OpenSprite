@@ -9,7 +9,6 @@ from opensprite_backend.inference.models import (
     ModelMessage,
     ModelRequest,
     ModelTextDelta,
-    ModelToolCall,
     ModelUsage,
 )
 from opensprite_backend.models import ProviderId
@@ -46,7 +45,7 @@ class GatewaySummaryGenerator:
                 ),
                 ModelMessage(role="user", content=prompt),
             ),
-            tools=(),
+
             max_output_tokens=2_048,
         )
         text = ""
@@ -65,8 +64,6 @@ class GatewaySummaryGenerator:
                 if completed or event.reason is not ModelFinishReason.FINAL:
                     raise ValueError("invalid compaction completion")
                 completed = True
-            elif isinstance(event, ModelToolCall):
-                raise ValueError("compaction may not call tools")
             else:  # pragma: no cover - the stream union is exhaustive
                 raise ValueError("invalid compaction event")
         if not completed or not text.strip():

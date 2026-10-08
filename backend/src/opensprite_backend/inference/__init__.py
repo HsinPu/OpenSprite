@@ -10,8 +10,6 @@ from .models import (
     ModelRequest,
     ModelStreamEvent,
     ModelTextDelta,
-    ModelToolCall,
-    ModelToolDefinition,
     ModelUsage,
 )
 
@@ -26,7 +24,5 @@ __all__ = [
     "ModelRequest",
     "ModelStreamEvent",
     "ModelTextDelta",
-    "ModelToolCall",
-    "ModelToolDefinition",
     "ModelUsage",
 ]

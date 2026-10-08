@@ -89,42 +89,73 @@
         }
       }
     },
-    "/api/settings/ai/providers/{provider_id}/tools": {
-      "put": {"operationId":"putProviderToolPolicy","summary":"Update one native provider tool policy atomically","parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","enum":["openai","anthropic","openrouter"]}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ProviderToolPolicy"}}}},"responses":{"200":{"description":"Policy saved; other preferences preserved","content":{"application/json":{"schema":{"$ref":"#/components/schemas/AiSettings"}}}},"400":{"$ref":"#/components/responses/InvalidRequest"},"503":{"$ref":"#/components/responses/SettingsStoreUnavailable"},"500":{"$ref":"#/components/responses/InternalError"}}}
-    },
     "/api/settings/ai": {
       "get": {
         "operationId": "getAiSettings",
         "summary": "Read AI settings",
         "description": "Returns a null model, default response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
-        "tags": ["ai-settings"],
+        "tags": [
+          "ai-settings"
+        ],
         "responses": {
           "200": {
             "description": "The confirmed local AI settings.",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
           },
-          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
-          "500": {"$ref": "#/components/responses/InternalError"}
+          "503": {
+            "$ref": "#/components/responses/SettingsStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       },
       "put": {
         "operationId": "putAiSettings",
         "summary": "Replace AI settings atomically",
         "description": "A non-null model requires a currently connected Provider. A null model preserves and persists the supplied response mode.",
-        "tags": ["ai-settings"],
+        "tags": [
+          "ai-settings"
+        ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiSettings"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
             "description": "The requested values are now the confirmed local AI settings.",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequest"},
-          "409": {"$ref": "#/components/responses/NotConnected"},
-          "503": {"$ref": "#/components/responses/SettingsOrCredentialStoreUnavailable"},
-          "500": {"$ref": "#/components/responses/InternalError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/NotConnected"
+          },
+          "503": {
+            "$ref": "#/components/responses/SettingsOrCredentialStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     }
@@ -179,8 +210,10 @@
           }
         }
       },
-      "ProviderToolPolicy": {"type":"object","additionalProperties":false,"properties":{"toolsEnabled":{"type":"boolean","default":true},"transport":{"type":"string","enum":["stream","non_streaming"],"default":"stream"},"disabledModels":{"type":"array","maxItems":1000,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":256},"default":[]}}},
-      "ProviderId": {"type": "string", "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"},
+      "ProviderId": {
+        "type": "string",
+        "pattern": "^(?:openai|anthropic|openrouter|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"
+      },
       "ResponseMode": {
         "type": "string",
         "enum": [
@@ -194,23 +227,68 @@
         ],
         "description": "Requested reasoning preference. default omits the reasoning effort parameter and uses provider defaults; it does not force reasoning off. Unsupported levels use the highest supported native effort; ultra is resolved to the highest available effort. Unknown or unavailable effort control omits the provider parameter."
       },
-      "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
-      "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]},
+      "ResponseDelivery": {
+        "type": "string",
+        "enum": [
+          "stream",
+          "complete"
+        ],
+        "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."
+      },
+      "OutputContinuation": {
+        "type": "string",
+        "enum": [
+          "off",
+          "1",
+          "2",
+          "3",
+          "5",
+          "10",
+          "20",
+          "50",
+          "unlimited"
+        ]
+      },
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["providerId", "modelId", "contextBudget", "outputBudget"],
+        "required": [
+          "providerId",
+          "modelId",
+          "contextBudget",
+          "outputBudget"
+        ],
         "properties": {
-          "providerId": {"$ref": "#/components/schemas/ProviderId"},
-          "modelId": {"type": "string", "minLength": 1, "maxLength": 256},
+          "providerId": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
           "contextBudget": {
             "type": "string",
-            "enum": ["auto", "32k", "64k", "128k", "256k", "max"],
+            "enum": [
+              "auto",
+              "32k",
+              "64k",
+              "128k",
+              "256k",
+              "max"
+            ],
             "description": "OpenSprite context-use ceiling for this model selection; max still reserves output and safety space."
           },
           "outputBudget": {
             "type": "string",
-            "enum": ["auto", "8k", "16k", "32k", "64k", "max"],
+            "enum": [
+              "auto",
+              "8k",
+              "16k",
+              "32k",
+              "64k",
+              "max"
+            ],
             "description": "Requested response-token budget; the backend still caps it to the selected model and safe Context capacity."
           }
         }
@@ -218,43 +296,133 @@
       "AiSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"],
+        "required": [
+          "model",
+          "responseMode",
+          "outputContinuation",
+          "responseDelivery",
+          "logFullPrompts"
+        ],
         "properties": {
-          "model": {"anyOf": [{"$ref": "#/components/schemas/ModelSelection"}, {"type": "null"}]},
-          "responseMode": {"$ref": "#/components/schemas/ResponseMode"},
-          "outputContinuation": {"$ref": "#/components/schemas/OutputContinuation"},
-          "responseDelivery": {"$ref": "#/components/schemas/ResponseDelivery"},
-          "logFullPrompts": {"type": "boolean", "description": "Whether complete model request messages are written to local per-request Prompt logs."},
-          "providerToolPolicies": {"type":"object","additionalProperties":false,"description":"Native provider policies. Omitted on general PUT preserves current policies.","properties":{"openai":{"$ref":"#/components/schemas/ProviderToolPolicy"},"anthropic":{"$ref":"#/components/schemas/ProviderToolPolicy"},"openrouter":{"$ref":"#/components/schemas/ProviderToolPolicy"}}}
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "responseMode": {
+            "$ref": "#/components/schemas/ResponseMode"
+          },
+          "outputContinuation": {
+            "$ref": "#/components/schemas/OutputContinuation"
+          },
+          "responseDelivery": {
+            "$ref": "#/components/schemas/ResponseDelivery"
+          },
+          "logFullPrompts": {
+            "type": "boolean",
+            "description": "Whether complete model request messages are written to local per-request Prompt logs."
+          }
         }
       },
       "ErrorCode": {
         "type": "string",
-        "enum": ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"]
+        "enum": [
+          "invalid_request",
+          "not_connected",
+          "credential_store_unavailable",
+          "settings_store_unavailable",
+          "internal_error"
+        ]
       },
       "ErrorDetail": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "message", "retryable"],
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
         "properties": {
-          "code": {"$ref": "#/components/schemas/ErrorCode"},
-          "message": {"type": "string"},
-          "retryable": {"type": "boolean"}
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
         }
       },
       "ErrorEnvelope": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["error"],
-        "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
       }
     },
     "responses": {
-      "InvalidRequest": {"description": "Malformed or noncanonical AI settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
-      "NotConnected": {"description": "The selected Provider is not connected.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
-      "SettingsStoreUnavailable": {"description": "The local AI settings file is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
-      "SettingsOrCredentialStoreUnavailable": {"description": "AI settings or Provider state could not be safely accessed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
-      "InternalError": {"description": "An unexpected local backend error occurred.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+      "InvalidRequest": {
+        "description": "Malformed or noncanonical AI settings.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotConnected": {
+        "description": "The selected Provider is not connected.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "SettingsStoreUnavailable": {
+        "description": "The local AI settings file is unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "SettingsOrCredentialStoreUnavailable": {
+        "description": "AI settings or Provider state could not be safely accessed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected local backend error occurred.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
     }
   }
 }

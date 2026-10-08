@@ -18,8 +18,6 @@ from opensprite_backend.conversations.models import (
     PublicRunError,
     RunEventType,
 )
-from opensprite_backend.custom_agents.delegation_tools import DELEGATION_NAMES
-from opensprite_backend.custom_agents.models import AgentError
 from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.inference.models import (
     InferenceFailure,
@@ -28,11 +26,8 @@ from opensprite_backend.inference.models import (
     ModelMessage,
     ModelRequest,
     ModelTextDelta,
-    ModelToolCall,
     ModelUsage,
 )
-from opensprite_backend.tools.definition import ToolContext
-from opensprite_backend.tools.registry import ToolInvocationError
 
 from .driver import DriverResult, ModelTurn
 from .events import (
@@ -40,18 +35,13 @@ from .events import (
     CONTEXT_LIMIT_ERROR,
     INTERNAL_ERROR,
     INVALID_PROVIDER_RESPONSE,
-    SCHEDULED_TOOL_APPROVAL_REQUIRED,
 )
 from .request_trace import Attempt
-from .skill_phase import handle_skill_call
 from .strategies import CompletionState, ContextRetryState
 
 if TYPE_CHECKING:
     from opensprite_backend.conversations.models import RunSnapshot
     from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
-    from opensprite_backend.skills.execution import SkillRunState
-    from opensprite_backend.tools.availability import ToolAvailabilitySnapshot
-    from opensprite_backend.tools.registry import ToolRegistry
     from opensprite_backend.workspaces import WorkspaceExecutionContext
 
     from .loop import AgentLoop, _AssistantDeltaBuffer, _PreparedContext
@@ -98,13 +88,8 @@ class LoopExecutionHost:
         loop: AgentLoop,
         run: RunSnapshot,
         cancellation_event: asyncio.Event,
-        workspace: WorkspaceExecutionContext,
-        tools: ToolRegistry,
-        availability: ToolAvailabilitySnapshot,
         prepared: _PreparedContext,
         system_prompt: str,
-        base_system_prompt: str,
-        skill_state: SkillRunState,
         delta_buffer: _AssistantDeltaBuffer,
         strategy: ExecutionStrategy,
         provider_endpoint: ProviderEndpointSnapshot | None,
@@ -112,30 +97,19 @@ class LoopExecutionHost:
         self._loop = loop
         self._run = run
         self._cancellation_event = cancellation_event
-        self._workspace = workspace
-        self._tools = tools
-        self._availability = availability
         self._prepared = prepared
         self._system_prompt = system_prompt
-        self._base_system_prompt = base_system_prompt
-        self._skill_state = skill_state
         self._delta_buffer = delta_buffer
         self._strategy = _SafeExecutionStrategy(strategy)
         self._provider_endpoint = provider_endpoint
         self._transcript = list(prepared.messages)
-        self._tool_definitions = prepared.tools
         self._accumulated_text = run.partial_text
-        self._tool_call_count = 0
         self._prompt_log_sequence = [0]
         self._context_retry_used = False
-        self._failed_calls: Counter[str] = Counter()
-        self._used_call_ids: set[str] = set()
         self._request_id = str(uuid4())
         self._previous_attempt: Attempt | None = None
-        self._receipt_skills: tuple[dict[str, object], ...] = ()
         self._attempt_count = 0
         self._turn: ModelTurn | None = None
-        self._tool_calls: tuple[ModelToolCall, ...] = ()
         self._turn_signature: str | None = None
         self._result: DriverResult | None = None
         self._result_signature: tuple[str, CompletionReason] | None = None
@@ -198,8 +172,7 @@ class LoopExecutionHost:
     @staticmethod
     def _signature(turn: ModelTurn) -> str:
         return json.dumps(
-            [turn.text, turn.finish_reason.value,
-             [(call.call_id, call.name, call.arguments) for call in turn.tool_calls]],
+            [turn.text, turn.finish_reason.value],
             ensure_ascii=False,
             sort_keys=True,
             allow_nan=False,
@@ -224,7 +197,6 @@ class LoopExecutionHost:
             self._loop._raise_if_cancelled(self._cancellation_event)
             estimated_round_tokens = self._loop._counter.request(
                 tuple(self._transcript),
-                self._tool_definitions,
             )
             if estimated_round_tokens > self._prepared.budget.input_budget_tokens:
                 raise _ExecutionFailed(CONTEXT_LIMIT_ERROR)
@@ -236,7 +208,7 @@ class LoopExecutionHost:
                     run=self._run,
                     budget=self._prepared.budget,
                     context_tokens=estimated_round_tokens,
-                    tool_definitions=self._tool_definitions,
+
                 ),
             )
             request = ModelRequest(
@@ -246,7 +218,7 @@ class LoopExecutionHost:
                 response_mode=self._run.response_mode,
                 reasoning_resolution=self._run.reasoning_resolution,
                 messages=tuple(self._transcript),
-                tools=self._tool_definitions,
+
                 max_output_tokens=self._prepared.budget.output_reserve_tokens,
             )
             self._loop._write_prompt_log(
@@ -256,7 +228,6 @@ class LoopExecutionHost:
                 sequence=self._prompt_log_sequence,
             )
             round_text = ""
-            tool_calls: list[ModelToolCall] = []
             completion: ModelCompleted | None = None
             current_attempt = Attempt(
                 self._run.id, self._request_id, "main",
@@ -264,10 +235,7 @@ class LoopExecutionHost:
                 retry_of=None if self._previous_attempt is None else self._previous_attempt.id,
                 cause=None if self._previous_attempt is None else "provider_context_limit",
                 compaction_id=self._prepared.compaction_id,
-                sources=replace(self._prepared.sources, skills=tuple(
-                    {"id": identifier, "revision": self._skill_state.snapshot.get(identifier).revision,
-                     "contentHash": self._skill_state.snapshot.get(identifier).content_hash}
-                    for identifier in self._skill_state.loaded)),
+                sources=self._prepared.sources,
             )
             stream = self._loop._gateway.stream(request, attempt=current_attempt)
             events = self._loop._with_cancellation(
@@ -287,7 +255,6 @@ class LoopExecutionHost:
                         and not self._context_retry_used
                         and not self._accumulated_text
                         and not round_text
-                        and not tool_calls
                         and self._strategy.allow_context_retry(
                             ContextRetryState("main", "provider_context_limit")
                         )
@@ -303,15 +270,14 @@ class LoopExecutionHost:
                             provider_endpoint=self._provider_endpoint,
                             system_prompt=self._system_prompt,
                             cancellation_event=self._cancellation_event,
-                            availability=self._availability,
-                            tools=self._tools,
+
+
                             force_compaction=True,
                             compaction_limit=1,
                             current_user_message_id=self._run.user_message_id,
                             parent_request_id=self._request_id,
                         )
                         self._transcript = list(self._prepared.messages)
-                        self._tool_definitions = self._prepared.tools
                         retry_with_compaction = True
                         break
                     raise
@@ -330,12 +296,6 @@ class LoopExecutionHost:
                     round_text += event.text
                     self._accumulated_text += event.text
                     await self._delta_buffer.append(event.text)
-                elif isinstance(event, ModelToolCall):
-                    if event.call_id in self._used_call_ids:
-                        await self._delta_buffer.flush()
-                        raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE,)
-                    self._used_call_ids.add(event.call_id)
-                    tool_calls.append(event)
                 elif isinstance(event, ModelCompleted):
                     completion = event
                 elif isinstance(event, ModelUsage):
@@ -354,157 +314,26 @@ class LoopExecutionHost:
                 continue
             self._request_id = str(uuid4())
             self._previous_attempt = None
-            self._receipt_skills = current_attempt.sources.skills if current_attempt.sources else ()
             if completion is None:
                 await self._delta_buffer.flush()
                 raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
             if completion.reason in {ModelFinishReason.FINAL, ModelFinishReason.OUTPUT_LIMIT}:
                 if (
-                    tool_calls
-                    or not self._accumulated_text.strip()
+                    not self._accumulated_text.strip()
                     or (completion.reason is ModelFinishReason.OUTPUT_LIMIT and not round_text.strip())
                 ):
                     raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
-            elif completion.reason is not ModelFinishReason.TOOL_CALLS or not tool_calls:
+            else:
                 raise _ExecutionFailed(INVALID_PROVIDER_RESPONSE)
-            self._tool_calls = tuple(tool_calls)
-            self._turn = ModelTurn(round_text, completion.reason, deepcopy(self._tool_calls))
+            self._turn = ModelTurn(round_text, completion.reason)
             self._turn_signature = self._signature(self._turn)
             return self._turn
 
-    async def execute_tools(self, turn: ModelTurn) -> None:
-        async with self._operation():
-            self._check_turn(turn)
-            if turn.finish_reason is not ModelFinishReason.TOOL_CALLS or not self._tool_calls:
-                raise _ExecutionFailed(INTERNAL_ERROR)
-            round_text = turn.text
-            tool_calls = self._tool_calls
-            self._transcript.append(
-                ModelMessage(
-                    role="assistant",
-                    content=round_text,
-                    tool_calls=tuple(tool_calls),
-                )
-            )
-            for call in tool_calls:
-                if call.name in DELEGATION_NAMES and self._loop._delegation is not None:
-                    try:
-                        delegated = await self._loop._await_with_cancellation(
-                            self._loop._delegation.invoke(self._run.id, call.call_id, call.name, call.arguments),
-                            self._cancellation_event)
-                    except AgentError as error:
-                        delegated = {"error": error.code}
-                    self._transcript.append(ModelMessage(
-                        role="tool", content=json.dumps(delegated, ensure_ascii=False),
-                        tool_call_id=call.call_id, tool_name=call.name))
-                    continue
-                if call.name in {"discover_skills", "load_skill"}:
-                    self._system_prompt, self._transcript = await handle_skill_call(
-                        call=call, skill_state=self._skill_state, base_system_prompt=self._base_system_prompt,
-                        system_prompt=self._system_prompt, transcript=self._transcript, tool_definitions=self._tool_definitions,
-                        input_budget_tokens=self._prepared.budget.input_budget_tokens, counter=self._loop._counter,
-                        repository=self._loop._repository, run_id=self._run.id,
-                    )
-                    continue
-                self._tool_call_count += 1
-                if self._tool_call_count > self._loop._max_tool_calls:
-                    await self._delta_buffer.flush()
-                    raise _ExecutionFailed(AGENT_LIMIT_ERROR)
-                self._loop._raise_if_cancelled(self._cancellation_event)
-                context = ToolContext(
-                    run_id=self._run.id,
-                    conversation_id=self._run.conversation_id,
-                    cancellation_event=self._cancellation_event,
-                    workspace=self._workspace,
-                )
-
-                async def record_tool_started() -> None:
-                    await asyncio.to_thread(
-                        self._loop._repository.append_run_event,
-                        self._run.id,
-                        RunEventType.TOOL_STARTED,
-                        {"callId": call.call_id, "toolName": call.name},
-                    )
-
-                try:
-                    result = await self._loop._await_with_cancellation(
-                        self._tools.invoke(
-                            call.name,
-                            call.arguments,
-                            context,
-                            self._availability,
-                            record_tool_started,
-                            allow_approval=self._loop._allow_tool_approval and self._run.source != "schedule",
-                        ),
-                        self._cancellation_event,
-                    )
-                except ToolInvocationError as error:
-                    if error.code == "scheduled_tool_approval_required":
-                        await self._delta_buffer.flush()
-                        raise _ExecutionFailed(SCHEDULED_TOOL_APPROVAL_REQUIRED if self._loop._allow_tool_approval
-                            else PublicRunError("subagent_tool_approval_required",
-                                                "Subagents cannot request tool approval.", False),
-                        )
-                    public_error = PublicRunError(
-                        code="tool_failure",
-                        message=error.message,
-                        retryable=error.retryable,
-                    )
-                    await asyncio.to_thread(
-                        self._loop._repository.append_run_event,
-                        self._run.id,
-                        RunEventType.TOOL_FAILED,
-                        {
-                            "callId": call.call_id,
-                            "toolName": call.name,
-                            "error": {
-                                "code": public_error.code,
-                                "message": public_error.message,
-                                "retryable": public_error.retryable,
-                            },
-                        },
-                    )
-                    fingerprint = self._loop._tool_fingerprint(call)
-                    self._failed_calls[fingerprint] += 1
-                    self._transcript.append(
-                        ModelMessage(
-                            role="tool",
-                            content=f"Tool failed: {public_error.message}",
-                            tool_call_id=call.call_id,
-                            tool_name=call.name,
-                        )
-                    )
-                    if self._failed_calls[fingerprint] >= 2:
-                        await self._delta_buffer.flush()
-                        raise _ExecutionFailed(AGENT_LIMIT_ERROR)
-                else:
-                    await asyncio.to_thread(
-                        self._loop._repository.append_run_event,
-                        self._run.id,
-                        RunEventType.TOOL_COMPLETED,
-                        {
-                            "callId": call.call_id,
-                            "toolName": call.name,
-                            "summary": result.summary,
-                        },
-                    )
-                    self._transcript.append(
-                        ModelMessage(
-                            role="tool",
-                            content=result.content,
-                            tool_call_id=call.call_id,
-                            tool_name=call.name,
-                        )
-                    )
-
-            self._turn = None
-            self._tool_calls = ()
-            self._turn_signature = None
 
     async def finish(self, turn: ModelTurn) -> DriverResult:
         async with self._operation():
             self._check_turn(turn)
-            if self._tool_calls or turn.finish_reason not in {
+            if turn.finish_reason not in {
                 ModelFinishReason.FINAL, ModelFinishReason.OUTPUT_LIMIT
             }:
                 raise _ExecutionFailed(INTERNAL_ERROR)
@@ -523,9 +352,9 @@ class LoopExecutionHost:
                 self._result = await self._loop._continue_output(
                     run=self._run, system_prompt=self._system_prompt,
                     base_transcript=tuple(self._transcript), prepared=self._prepared,
-                    receipt_skills=self._receipt_skills, accumulated_text=self._accumulated_text,
-                    cancellation_event=self._cancellation_event, availability=self._availability,
-                    tools=self._tools, prompt_log_sequence=self._prompt_log_sequence,
+                    accumulated_text=self._accumulated_text,
+                    cancellation_event=self._cancellation_event,
+                    prompt_log_sequence=self._prompt_log_sequence,
                     delta_buffer=self._delta_buffer, provider_endpoint=self._provider_endpoint,
                     execution_strategy=self._strategy)
             else:

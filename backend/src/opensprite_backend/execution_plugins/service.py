@@ -44,6 +44,8 @@ class ExecutionPackageService:
 
     def bundle(self, package_id: str) -> bytes:
         stored, wheel = self.store.get(package_id)
+        if any(plugin.apiVersion != 2 for plugin in stored.inspection.plugins):
+            raise ExecutionPackageError("incompatible_package")
         if self.identity.kind != "docker":
             raise ExecutionPackageError("deployment_unavailable")
         return deployment_bundle(stored, wheel, self.identity.base_image)

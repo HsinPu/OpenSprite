@@ -40,14 +40,7 @@ class StartRunRequest(BaseModel):
     workspaceId: UUID
     clientRequestId: UUID
     message: str = Field(min_length=1, max_length=32768)
-    skillIds: list[UUID] = Field(default_factory=list, max_length=5)
 
-    @field_validator("skillIds")
-    @classmethod
-    def unique_skills(cls, value):
-        if len(value) != len(set(value)):
-            raise ValueError("duplicate skills")
-        return value
 
     @field_validator("message")
     @classmethod
@@ -68,7 +61,6 @@ class ConversationResponse(ChatContractModel):
     id: UUID
     workspace_id: UUID
     revision: int = Field(ge=1)
-    workspace_managed_by_schedule: bool
     title: str
     latest_message_preview: str | None
     created_at: datetime
@@ -172,15 +164,15 @@ _ERRORS: dict[ChatErrorCode, tuple[int, str, bool]] = {
     ChatErrorCode.AGENT_LIMIT_REACHED: (409, "本次執行已達安全步驟上限。", False),
     ChatErrorCode.CONTEXT_LIMIT_EXCEEDED: (409, "必要的近期對話超過目前選擇的內容上限。", False),
     ChatErrorCode.CONTEXT_PREPARATION_FAILED: (502, "暫時無法準備這次對話的模型內容。", True),
-    ChatErrorCode.TOOL_FAILURE: (502, "工具執行失敗。", False),
-    ChatErrorCode.SCHEDULED_TOOL_APPROVAL_REQUIRED: (409, "排程無法執行需要人工核准的工具。", False),
+
+
     ChatErrorCode.INVALID_PROVIDER_RESPONSE: (502, "模型廠家的回應無法安全使用。", False),
     ChatErrorCode.INTERNAL_ERROR: (500, "本機服務暫時無法完成操作。", True),
     ChatErrorCode.WORKSPACE_NOT_FOUND: (404, "找不到指定的工作區。", False),
     ChatErrorCode.WORKSPACE_MISMATCH: (409, "對話不屬於指定的工作區。", True),
     ChatErrorCode.WORKSPACE_STORE_UNAVAILABLE: (503, "工作區設定暫時無法使用。", True),
     ChatErrorCode.REVISION_CONFLICT: (409, "對話已在其他頁面更新。", True),
-    ChatErrorCode.WORKSPACE_MANAGED_BY_SCHEDULE: (409, "這個對話的工作區由排程管理。", False),
+
 }
 
 
@@ -201,7 +193,6 @@ def conversation_response(item: ConversationSummary) -> ConversationResponse:
         id=item.id,
         workspaceId=item.workspace_id,
         revision=item.revision,
-        workspaceManagedBySchedule=item.workspace_managed_by_schedule,
         title=item.title,
         latestMessagePreview=item.latest_message_preview,
         createdAt=item.created_at,

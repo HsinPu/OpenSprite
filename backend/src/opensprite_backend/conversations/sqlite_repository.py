@@ -33,7 +33,6 @@ from .models import (
     RunEvent,
     RunEventType,
     RunSnapshot,
-    RunSource,
     RunStatus,
     StartRunResult,
     StoreFailure,
@@ -87,15 +86,12 @@ _PUBLIC_ERROR_CODES = {
     "agent_limit_reached",
     "context_limit_exceeded",
     "context_preparation_failed",
-    "tool_failure",
-    "scheduled_tool_approval_required",
     "invalid_provider_response",
     "internal_error",
     "workspace_not_found",
     "workspace_mismatch",
     "workspace_store_unavailable",
     "revision_conflict",
-    "workspace_managed_by_schedule",
 }
 _MAX_EVENT_JSON_BYTES = 65536
 _MAX_ASSISTANT_DELTA_CHARS = 16384
@@ -103,10 +99,8 @@ _ASSISTANT_DELTA_JSON_PREFIX_BYTES = len(b'{"text":"')
 _ASSISTANT_DELTA_JSON_SUFFIX_BYTES = len(b'"}')
 
 
-
-
 class SqliteConversationRepository:
-    """Own four chat tables below one explicit AppPaths database file."""
+    """Own five core chat tables below one explicit AppPaths database file."""
 
     def __init__(
         self,
@@ -150,8 +144,7 @@ class SqliteConversationRepository:
                 if cursor is None:
                     rows = connection.execute(
                         """
-                        SELECT conversations.*,
-                               EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                        SELECT conversations.*
                         FROM conversations
                         WHERE workspace_id = ?
                         ORDER BY updated_at DESC, id DESC
@@ -163,8 +156,7 @@ class SqliteConversationRepository:
                     updated_at, identifier = cursor
                     rows = connection.execute(
                         """
-                        SELECT conversations.*,
-                               EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                        SELECT conversations.*
                         FROM conversations
                         WHERE workspace_id = ? AND (
                             updated_at < ? OR (updated_at = ? AND id < ?)
@@ -200,8 +192,7 @@ class SqliteConversationRepository:
                 return None
             try:
                 row = connection.execute(
-                    """SELECT conversations.*,
-                              EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                    """SELECT conversations.*
                        FROM conversations WHERE id = ?""",
                     (conversation_id,),
                 ).fetchone()
@@ -462,8 +453,7 @@ class SqliteConversationRepository:
 
     def find_run_request(
         self, *, conversation_id: str | None, workspace_id: str,
-        client_request_id: str, message: str, source: RunSource,
-        occurrence_id: str | None, skill_ids: tuple[str, ...] = (),
+        client_request_id: str, message: str,
     ) -> StartRunResult | None:
         """Replay an accepted identity without consulting mutable configuration."""
         if conversation_id is not None:
@@ -471,16 +461,8 @@ class SqliteConversationRepository:
         self._require_identifier(workspace_id)
         self._require_identifier(client_request_id)
         normalized_message = self._require_text(message, maximum=32768)
-        if source not in {"user", "schedule"} or (source == "user") != (occurrence_id is None):
-            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if occurrence_id is not None:
-            self._require_identifier(occurrence_id)
-        if len(skill_ids) > 5 or len(set(skill_ids)) != len(skill_ids):
-            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        for skill_id in skill_ids:
-            self._require_identifier(skill_id)
         fingerprint = self._request_fingerprint(
-            conversation_id, workspace_id, normalized_message, source, occurrence_id, skill_ids,
+            conversation_id, workspace_id, normalized_message,
         )
         with self._lock:
             connection = self._open_read()
@@ -518,14 +500,11 @@ class SqliteConversationRepository:
         output_budget: OutputBudget = "auto",
         output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
-        source: RunSource = "user",
-        occurrence_id: str | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
         workspace_name_snapshot: str = DEFAULT_WORKSPACE_NAME,
         workspace_root_hash: str | None = None,
         workspace_mount_manifest_hash: str = EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
-        skill_ids: tuple[str, ...] = (),
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -544,10 +523,6 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if not isinstance(log_full_prompts, bool):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if source not in {"user", "schedule"} or (source == "user") != (occurrence_id is None):
-            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if occurrence_id is not None:
-            self._require_identifier(occurrence_id)
         self._require_identifier(workspace_id)
         normalized_workspace_name = self._require_text(
             workspace_name_snapshot,
@@ -568,17 +543,10 @@ class SqliteConversationRepository:
             or re.fullmatch(r"[0-9a-f]{64}", workspace_mount_manifest_hash) is None
         ):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if len(skill_ids) > 5 or len(set(skill_ids)) != len(skill_ids):
-            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        for skill_id in skill_ids:
-            self._require_identifier(skill_id)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
             workspace_id,
             normalized_message,
-            source,
-            occurrence_id,
-            skill_ids,
         )
         with self._lock:
             connection = self._open_write()
@@ -687,10 +655,10 @@ class SqliteConversationRepository:
                         client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
                         response_mode, context_budget, output_budget, output_continuation,
-                        log_full_prompts, source, occurrence_id,
+                        log_full_prompts,
                         status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
@@ -710,8 +678,6 @@ class SqliteConversationRepository:
                         output_budget,
                         output_continuation,
                         int(log_full_prompts),
-                        source,
-                        occurrence_id,
                         now_text,
                     ),
                 )
@@ -960,8 +926,7 @@ class SqliteConversationRepository:
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
-                    """SELECT conversations.*,
-                              EXISTS(SELECT 1 FROM schedules WHERE schedules.conversation_id = conversations.id) AS workspace_managed_by_schedule
+                    """SELECT conversations.*
                        FROM conversations WHERE id = ?""",
                     (conversation_id,),
                 ).fetchone()
@@ -969,13 +934,6 @@ class SqliteConversationRepository:
                     raise ConversationStoreError(StoreFailure.NOT_FOUND)
                 if int(row["revision"]) != expected_revision:
                     raise ConversationStoreError(StoreFailure.REVISION_CONFLICT)
-                if connection.execute(
-                    "SELECT 1 FROM schedules WHERE conversation_id = ? LIMIT 1",
-                    (conversation_id,),
-                ).fetchone() is not None:
-                    raise ConversationStoreError(
-                        StoreFailure.WORKSPACE_MANAGED_BY_SCHEDULE
-                    )
                 if connection.execute(
                     """
                     SELECT 1 FROM runs
@@ -1010,11 +968,10 @@ class SqliteConversationRepository:
             finally:
                 connection.close()
 
-    def provider_usage(self, provider_id: str, model_id: str | None = None) -> tuple[int, int]:
-        """Return active Run and schedule references, never historical use.
+    def provider_usage(self, provider_id: str, model_id: str | None = None) -> int:
+        """Return active Run references, never historical use.
 
         The application mutation gate coordinates this read with reference creation.
-        Completed schedules remain references because manual execution is supported.
         """
         if not valid_provider_id(provider_id):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
@@ -1023,7 +980,7 @@ class SqliteConversationRepository:
         with self._lock:
             connection = self._open_read()
             if connection is None:
-                return (0, 0)
+                return 0
             try:
                 parameters = (provider_id,) if model_id is None else (provider_id, model_id)
                 predicate = "provider_id = ?" + (" AND model_id = ?" if model_id is not None else "")
@@ -1031,10 +988,7 @@ class SqliteConversationRepository:
                     "SELECT COUNT(*) FROM runs WHERE " + predicate + " AND status IN (?, ?, ?)",
                     (*parameters, *_ACTIVE_STATUSES),
                 ).fetchone()[0]
-                schedules = connection.execute(
-                    "SELECT COUNT(*) FROM schedules WHERE " + predicate, parameters,
-                ).fetchone()[0]
-                return (int(active), int(schedules))
+                return int(active)
             except (sqlite3.Error, TypeError, ValueError) as error:
                 raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
             finally:
@@ -1053,12 +1007,6 @@ class SqliteConversationRepository:
                         (workspace_id,),
                     ).fetchone()[0]
                 )
-                schedule_count = int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM schedules WHERE workspace_id = ?",
-                        (workspace_id,),
-                    ).fetchone()[0]
-                )
                 active_run_count = int(
                     connection.execute(
                         """
@@ -1070,7 +1018,6 @@ class SqliteConversationRepository:
                 )
                 return WorkspaceUsage(
                     conversation_count,
-                    schedule_count,
                     active_run_count,
                 )
             except (sqlite3.Error, TypeError, ValueError) as error:
@@ -1402,18 +1349,30 @@ class SqliteConversationRepository:
             if connection is None:
                 return ()
             try:
-                rows = connection.execute(
-                    """
-                    SELECT e.*, r.conversation_id
-                    FROM run_events AS e
-                    JOIN runs AS r ON r.id = e.run_id
-                    WHERE e.run_id = ? AND e.sequence > ?
-                    ORDER BY e.sequence
-                    LIMIT ?
-                    """,
-                    (run_id, after_sequence, limit),
-                ).fetchall()
-                return tuple(self._event(row) for row in rows)
+                events = []
+                cursor = after_sequence
+                types = tuple(item.value for item in RunEventType)
+                placeholders = ",".join("?" for _ in types)
+                while len(events) < limit:
+                    rows = connection.execute(
+                        f"""
+                        SELECT e.*, r.conversation_id FROM run_events AS e
+                        JOIN runs AS r ON r.id = e.run_id
+                        WHERE e.run_id = ? AND e.sequence > ?
+                          AND e.type IN ({placeholders})
+                        ORDER BY e.sequence LIMIT ?
+                        """,
+                        (run_id, cursor, *types, limit - len(events)),
+                    ).fetchall()
+                    if not rows:
+                        break
+                    cursor = int(rows[-1]["sequence"])
+                    for row in rows:
+                        event = self._event(row)
+                        if event is not None:
+                            events.append(event)
+                return tuple(events)
+
             except (sqlite3.Error, TypeError, ValueError, json.JSONDecodeError) as error:
                 raise ConversationStoreError(
                     StoreFailure.DATABASE_UNAVAILABLE
@@ -1548,17 +1507,13 @@ class SqliteConversationRepository:
                 """
             ).fetchall()
         }
-        if tables != {
+        if not {
             "conversations",
             "conversation_compactions",
             "messages",
             "runs",
             "run_events",
-            "schedules",
-            "schedule_occurrences",
-            "agent_executions",
-            "agent_execution_events",
-        }:
+        }.issubset(tables):
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
 
     @staticmethod
@@ -1644,11 +1599,6 @@ class SqliteConversationRepository:
             ),
             workspace_id=row["workspace_id"],
             revision=int(row["revision"]),
-            workspace_managed_by_schedule=(
-                bool(row["workspace_managed_by_schedule"])
-                if "workspace_managed_by_schedule" in row.keys()
-                else False
-            ),
         )
 
     @staticmethod
@@ -1696,9 +1646,9 @@ class SqliteConversationRepository:
         error = None
         if row["error_code"] is not None:
             error = PublicRunError(
-                code=row["error_code"],
-                message=row["error_message"],
-                retryable=bool(row["error_retryable"]),
+                code=row["error_code"] if row["error_code"] in _PUBLIC_ERROR_CODES else "internal_error",
+                message=row["error_message"] if row["error_code"] in _PUBLIC_ERROR_CODES else "This historical run failed in a retired capability.",
+                retryable=bool(row["error_retryable"]) if row["error_code"] in _PUBLIC_ERROR_CODES else False,
             )
         return RunSnapshot(
             id=row["id"],
@@ -1734,8 +1684,6 @@ class SqliteConversationRepository:
                 )
             ),
             completion_reason=completion_reason,
-            source=row["source"],
-            occurrence_id=row["occurrence_id"],
             workspace_id=row["workspace_id"],
             workspace_revision=int(row["workspace_revision"]),
             workspace_name_snapshot=row["workspace_name_snapshot"],
@@ -1744,13 +1692,29 @@ class SqliteConversationRepository:
         )
 
     @staticmethod
-    def _event(row: sqlite3.Row) -> RunEvent:
+    def _event(row: sqlite3.Row) -> RunEvent | None:
         data = json.loads(
             row["payload_json"],
             object_pairs_hook=SqliteConversationRepository._strict_object,
         )
         if not isinstance(data, dict):
             raise ValueError("event payload must be an object")
+        event_type = RunEventType(row["type"])
+        if event_type is RunEventType.MODEL_STARTED:
+            data.pop("toolNames", None)
+        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") != 2:
+            return None
+        if event_type is RunEventType.MODEL_ATTEMPT:
+            # v1 receipts and action attempts remain stored, but are not current diagnostics.
+            context = data.get("context")
+            if context is not None and not isinstance(context, dict):
+                raise ValueError("Invalid persisted model context")
+            if (context is not None and context.get("schemaVersion") != 2) or data.get("purpose") not in {"main", "continuation", "compaction"} or data.get("finishReason") == "tool_calls":
+                return None
+        if event_type in {RunEventType.RUN_FAILED, RunEventType.RUN_INTERRUPTED}:
+            error = data.get("error")
+            if isinstance(error, dict) and error.get("code") not in _PUBLIC_ERROR_CODES:
+                data = {"error": {"code": "internal_error", "message": "This historical run failed in a retired capability.", "retryable": False}}
         return RunEvent(
             sequence=int(row["sequence"]),
             type=RunEventType(row["type"]),
@@ -1812,13 +1776,10 @@ class SqliteConversationRepository:
         conversation_id: str | None,
         workspace_id: str,
         message: str,
-        source: RunSource = "user",
-        occurrence_id: str | None = None,
-        skill_ids: tuple[str, ...] = (),
     ) -> str:
         canonical = json.dumps(
-            {"conversationId": conversation_id, "workspaceId": workspace_id, "message": message, "source": source, "occurrenceId": occurrence_id,
-             **({"skillIds": list(skill_ids)} if skill_ids else {})},
+            {"conversationId": conversation_id, "workspaceId": workspace_id, "message": message,
+},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -1918,7 +1879,7 @@ class SqliteConversationRepository:
     ) -> None:
         keys = set(data)
         if event_type is RunEventType.EXECUTION_SELECTED:
-            if keys != {"loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"} or type(data.get("apiVersion")) is not int or data["apiVersion"] != 1:
+            if keys != {"loopId", "loopVersion", "policyId", "policyVersion", "apiVersion"} or type(data.get("apiVersion")) is not int or data["apiVersion"] != 2:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             for key in ("loopId", "policyId"):
                 if not isinstance(data[key], str) or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", data[key]) is None:
@@ -1926,20 +1887,6 @@ class SqliteConversationRepository:
             for key in ("loopVersion", "policyVersion"):
                 if not SqliteConversationRepository._is_bounded_text(data[key], maximum=64):
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            return
-        if event_type in {RunEventType.SKILL_LOADED, RunEventType.SKILL_LOAD_FAILED}:
-            expected = {"skillId", "scope", "name", "revision", "contentHash", "source"}
-            if event_type is RunEventType.SKILL_LOAD_FAILED:
-                expected.add("errorCode")
-                if keys == expected and data["source"] == "model" and data["errorCode"] in {"invalid_request", "skill_unavailable"} and all(data[key] is None for key in {"skillId", "scope", "name", "revision", "contentHash"}):
-                    return
-            if keys != expected or data["scope"] not in {"global", "workspace"} or data["source"] not in {"manual", "model"}:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            SqliteConversationRepository._require_identifier(data["skillId"])
-            if not isinstance(data["name"], str) or not 1 <= len(data["name"]) <= 80 or type(data["revision"]) is not int or data["revision"] < 1 or not isinstance(data["contentHash"], str) or re.fullmatch(r"[0-9a-f]{64}", data["contentHash"]) is None:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if event_type is RunEventType.SKILL_LOAD_FAILED and data["errorCode"] not in {"context_limit", "limit_reached", "invalid_request", "skill_unavailable"}:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         if event_type is RunEventType.RUN_STARTED:
             expected = {
@@ -2014,11 +1961,9 @@ class SqliteConversationRepository:
                 "contextLimitTokens",
                 "inputBudgetTokens",
             }
-            tool_context_keys = context_keys | {"toolNames"}
             if (
                 keys != legacy_keys
                 and keys != context_keys
-                and keys != tool_context_keys
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             if not valid_provider_id(data["providerId"]):
@@ -2037,7 +1982,7 @@ class SqliteConversationRepository:
                 or not 1 <= max_output_tokens <= 131_072
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if keys == context_keys or keys == tool_context_keys:
+            if keys == context_keys:
                 context_tokens = data["contextTokens"]
                 context_limit_tokens = data["contextLimitTokens"]
                 input_budget_tokens = data["inputBudgetTokens"]
@@ -2052,21 +1997,6 @@ class SqliteConversationRepository:
                     or isinstance(input_budget_tokens, bool)
                     or not 1 <= input_budget_tokens <= context_limit_tokens
                     or context_tokens > input_budget_tokens
-                ):
-                    raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if keys == tool_context_keys:
-                tool_names = data["toolNames"]
-                if (
-                    not isinstance(tool_names, list)
-                    or any(
-                        not SqliteConversationRepository._is_bounded_text(
-                            name,
-                            maximum=64,
-                        )
-                        for name in tool_names
-                    )
-                    or any(re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) is None for name in tool_names)
-                    or tool_names != sorted(set(tool_names))
                 ):
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
@@ -2091,69 +2021,11 @@ class SqliteConversationRepository:
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
-        if event_type is RunEventType.TOOL_APPROVAL_REQUESTED:
-            if keys != {
-                "approvalId",
-                "toolName",
-                "toolDisplayName",
-                "serverId",
-                "argumentHash",
-                "expiresAt",
-            }:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if (
-                not SqliteConversationRepository._is_bounded_text(data["approvalId"], maximum=36)
-                or not SqliteConversationRepository._is_bounded_text(data["toolName"], maximum=64)
-                or not SqliteConversationRepository._is_bounded_text(data["toolDisplayName"], maximum=256)
-                or not SqliteConversationRepository._is_bounded_text(data["serverId"], maximum=36)
-                or not SqliteConversationRepository._is_bounded_text(data["argumentHash"], maximum=64)
-                or not SqliteConversationRepository._is_bounded_text(data["expiresAt"], maximum=40)
-            ):
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            return
-        if event_type is RunEventType.TOOL_APPROVAL_DECIDED:
-            if keys != {"approvalId", "decision"} or not SqliteConversationRepository._is_bounded_text(data["approvalId"], maximum=36) or data["decision"] not in {"allow_once", "deny", "expired"}:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            return
         if event_type is RunEventType.ASSISTANT_DELTA:
             if keys != {"text"} or not SqliteConversationRepository._is_bounded_text(
-                data.get("text"),
-                maximum=_MAX_ASSISTANT_DELTA_CHARS,
+                data.get("text"), maximum=_MAX_ASSISTANT_DELTA_CHARS,
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            return
-        if event_type in {
-            RunEventType.TOOL_STARTED,
-            RunEventType.TOOL_COMPLETED,
-            RunEventType.TOOL_FAILED,
-        }:
-            required = {"callId", "toolName"}
-            if event_type is RunEventType.TOOL_COMPLETED:
-                required.add("summary")
-            if event_type is RunEventType.TOOL_FAILED:
-                required.add("error")
-            if keys != required:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if not SqliteConversationRepository._is_bounded_text(
-                data["callId"],
-                maximum=128,
-            ):
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            tool_name = data["toolName"]
-            if not isinstance(tool_name, str) or re.fullmatch(
-                r"[a-z][a-z0-9_]{0,63}",
-                tool_name,
-            ) is None:
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if event_type is RunEventType.TOOL_COMPLETED and not (
-                SqliteConversationRepository._is_bounded_text(
-                    data["summary"],
-                    maximum=4096,
-                )
-            ):
-                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if event_type is RunEventType.TOOL_FAILED:
-                SqliteConversationRepository._validate_error_mapping(data["error"])
             return
         if event_type is RunEventType.RUN_COMPLETED:
             if keys != {"assistantMessageId", "completionReason"}:
