@@ -30,6 +30,20 @@ beforeEach(() => {
 });
 
 describe("mobile navigation accessibility", () => {
+  it("fills the first task starter after switching to a fresh conversation", () => {
+    render(<App />);
+    const input = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "previous conversation draft" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "新對話" })[0]!);
+    const nextInput = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    expect(nextInput.value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "解讀程式碼" }));
+    expect(nextInput.value).toContain("程式碼");
+    expect(nextInput.value).not.toContain("previous conversation draft");
+    expect(document.activeElement).toBe(nextInput);
+    expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
   it("preserves edited draft across acceptance of a new conversation", async () => {
     const id = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     let accept!: (response: Response) => void;
@@ -456,6 +470,8 @@ describe("conversation navigation", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "切換工作區，目前是 Alpha" }));
+    const input = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "Alpha draft" } });
     fireEvent.click(await screen.findByText("Beta"));
 
     await waitFor(() => expect(window.location.hash).toBe("#new-chat"));
@@ -464,6 +480,11 @@ describe("conversation navigation", () => {
       body: JSON.stringify({ workspaceId: beta.id, expectedRevision: 1 }),
     }));
     await screen.findByRole("button", { name: "切換工作區，目前是 Beta" });
+    const nextInput = screen.getByRole("textbox", { name: "輸入訊息" }) as HTMLTextAreaElement;
+    expect(nextInput.value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "規劃任務" }));
+    expect(nextInput.value).toContain("目標：");
+    expect(nextInput.value).not.toContain("Alpha draft");
   });
 
   it("resolves a deep-linked conversation and activates its Workspace", async () => {

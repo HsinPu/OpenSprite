@@ -303,7 +303,7 @@ export function ChatWorkspace({
                 <p>{t("chat.emptyDescription")}</p>
                 <div className="chat-workspace__starters" aria-label={t("workbench.starters")}>
                   {([ ["code", <CodeOutlined />], ["plan", <OrderedListOutlined />], ["write", <FileTextOutlined />] ] as const).map(([kind, icon]) => (
-                    <Button key={kind} aria-label={t(`workbench.starter.${kind}`)} icon={icon} onClick={() => { const template = t(`workbench.prompt.${kind}`); setDraft(previous => previous.trim() ? `${previous}\n\n${template}` : template); composerInputRef.current?.focus(); }}>{t(`workbench.starter.${kind}`)}</Button>
+                    <Button key={kind} aria-label={t(`workbench.starter.${kind}`)} icon={icon} onClick={() => { const template = t(`workbench.prompt.${kind}`); setDraft(draft.trim() ? `${draft}\n\n${template}` : template); composerInputRef.current?.focus(); }}>{t(`workbench.starter.${kind}`)}</Button>
                   ))}
                 </div>
               </div>
