@@ -12,10 +12,10 @@ function Harness() {
       <output data-testid="loaded">{String(settings.loaded)}</output>
       <output data-testid="error">{settings.error ?? ""}</output>
       <output data-testid="response-mode">{settings.responseMode}</output>
-      <output data-testid="output-continuation">{settings.outputContinuation}</output>
+      <output data-testid="response-delivery">{settings.responseDelivery}</output>
       <button type="button" onClick={() => void settings.reload()}>reload</button>
       <button type="button" onClick={() => void settings.saveResponseMode("high")}>deep</button>
-      <button type="button" onClick={() => void settings.saveOutputContinuation("5")}>five</button>
+      <button type="button" onClick={() => void settings.saveResponseDelivery("complete")}>complete</button>
     </div>
   );
 }
@@ -36,7 +36,7 @@ describe("useAiSettings", () => {
   it("exposes a retryable loading state when the initial read fails", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ model: null, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<I18nProvider><Harness /></I18nProvider>);
@@ -55,7 +55,7 @@ describe("useAiSettings", () => {
     const secondPut = deferred<Response>();
     const payloads: Array<Record<string, unknown>> = [];
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/settings/ai" && init?.method === "PUT") {
         const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
         payloads.push(payload);
@@ -68,19 +68,19 @@ describe("useAiSettings", () => {
 
     await waitFor(() => expect(screen.getByTestId("loaded").textContent).toBe("true"));
     fireEvent.click(screen.getByRole("button", { name: "deep" }));
-    fireEvent.click(screen.getByRole("button", { name: "five" }));
+    fireEvent.click(screen.getByRole("button", { name: "complete" }));
 
     await waitFor(() => expect(payloads).toHaveLength(1));
     expect(payloads[0]?.responseMode).toBe("high");
     firstPut.resolve(new Response(JSON.stringify(payloads[0])));
     await waitFor(() => expect(payloads).toHaveLength(2));
     expect(payloads[1]?.responseMode).toBe("high");
-    expect(payloads[1]?.outputContinuation).toBe("5");
+    expect(payloads[1]?.responseDelivery).toBe("complete");
     secondPut.resolve(new Response(JSON.stringify(payloads[1])));
 
     await waitFor(() => {
       expect(screen.getByTestId("response-mode").textContent).toBe("high");
-      expect(screen.getByTestId("output-continuation").textContent).toBe("5");
+      expect(screen.getByTestId("response-delivery").textContent).toBe("complete");
     });
   });
 });

@@ -190,7 +190,7 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         assert schemas["ModelStartedEventData"]["properties"][field]["minimum"] == 1
         assert schemas["ModelStartedEventData"]["properties"][field]["maximum"] == 4_000_000
     continuation = schemas["ContinuationStartedEventData"]["properties"]
-    assert continuation["attempt"]["maximum"] == 64
+    assert continuation["attempt"]["maximum"] == 128
     assert continuation["maxAttempts"]["anyOf"] == [
         {"type": "integer", "enum": [1, 2, 3, 5, 10, 20, 50]},
         {"type": "null"},

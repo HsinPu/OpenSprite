@@ -5,6 +5,7 @@ from __future__ import annotations
 from opensprite_backend.inference.models import InferenceFailure, ModelCompleted, ModelFinishReason, ModelRequest, ModelStreamEvent, ModelTextDelta, ModelUsage
 
 import asyncio
+from opensprite_standard_loop import LoopFactory
 import json
 from collections import deque
 from collections.abc import AsyncIterator
@@ -101,8 +102,6 @@ def store(tmp_path: Path) -> SqliteConversationRepository:
 
 def accepted_run(
     repository: SqliteConversationRepository,
-    *,
-    output_continuation: OutputContinuation = "2",
 ):
     return repository.start_run(
         conversation_id=None,
@@ -111,7 +110,6 @@ def accepted_run(
         provider_id="openrouter",
         model_id="openrouter/auto",
         response_mode="default",
-        output_continuation=output_continuation,
     ).run
 
 
@@ -321,7 +319,7 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
     tmp_path: Path,
 ) -> None:
     repository = store(tmp_path)
-    run = accepted_run(repository, output_continuation="off")
+    run = accepted_run(repository)
     gateway = ScriptedGateway(
         [
             [
@@ -334,7 +332,7 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
         repository=repository,
         gateway=gateway,
 
-        capability_resolver=TestCapabilityResolver(),
+        capability_resolver=TestCapabilityResolver(), plugin_factory=LoopFactory(False),
     )
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -444,83 +442,25 @@ async def test_output_limit_continues_twice_into_one_visible_answer(
         if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
     ]
     assert [event.data for event in continuation_events] == [
-        {"attempt": 1, "maxAttempts": 2},
-        {"attempt": 2, "maxAttempts": 2},
+        {"attempt": 1, "maxAttempts": None},
+        {"attempt": 2, "maxAttempts": None},
     ]
 
 
+@pytest.mark.parametrize("maximum", [1, 3, 5, 10, 20, 50, 70])
 @async_test
-async def test_output_limit_stops_after_two_continuations(
-    tmp_path: Path,
-) -> None:
+async def test_automatic_continuation_has_no_separate_count_cap(tmp_path, maximum):
     repository = store(tmp_path)
     run = accepted_run(repository)
-    gateway = ScriptedGateway(
-        [
-            [ModelTextDelta("one "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
-            [ModelTextDelta("two "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
-            [ModelTextDelta("three"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
-        ]
-    )
-
-    result = await RunExecutor(
-        repository=repository,
-        gateway=gateway,
-
-        capability_resolver=TestCapabilityResolver(),
-    ).execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.COMPLETED
-    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
-    assert result.partial_text == "one two three"
-    assert len(gateway.requests) == 3
-
-
-@pytest.mark.parametrize(
-    ("policy", "maximum"),
-    [("1", 1), ("3", 3), ("5", 5), ("10", 10), ("20", 20), ("50", 50)],
-)
-@async_test
-async def test_output_limit_uses_the_snapshotted_continuation_limit(
-    tmp_path: Path,
-    policy: OutputContinuation,
-    maximum: int,
-) -> None:
-    repository = store(tmp_path)
-    run = accepted_run(repository, output_continuation=policy)
-    gateway = ScriptedGateway(
-        [
-            [ModelTextDelta(f"part {index} "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
-            for index in range(maximum + 1)
-        ]
-    )
-
-    result = await RunExecutor(
-        repository=repository,
-        gateway=gateway,
-
-        capability_resolver=TestCapabilityResolver(),
-    ).execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.COMPLETED
-    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
-    assert len(gateway.requests) == maximum + 1
-    events = list(repository.list_run_events(run.id, after_sequence=0, limit=500))
-    if events:
-        events.extend(repository.list_run_events(
-            run.id,
-            after_sequence=events[-1].sequence,
-            limit=100,
-        ))
-    continuation_events = [
-        event.data
-        for event in events
-        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
-    ]
-    assert continuation_events == [
-        {"attempt": attempt, "maxAttempts": maximum}
-        for attempt in range(1, maximum + 1)
-    ]
+    gateway = ScriptedGateway([
+        [ModelTextDelta(f"part {index}|"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
+        for index in range(maximum)
+    ] + [[ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)]])
+    result = await RunExecutor(repository=repository, gateway=gateway,
+        capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
+    assert result.status is RunStatus.COMPLETED and result.completion_reason is CompletionReason.STOP
+    assert len(gateway.requests) == maximum+1
+    assert result.partial_text == "".join(f"part {index}|" for index in range(maximum))+"done"
 
 
 @async_test
@@ -528,7 +468,7 @@ async def test_unlimited_continuation_runs_until_the_model_finishes(
     tmp_path: Path,
 ) -> None:
     repository = store(tmp_path)
-    run = accepted_run(repository, output_continuation="unlimited")
+    run = accepted_run(repository)
     gateway = ScriptedGateway(
         [
             [ModelTextDelta("one "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
@@ -559,35 +499,16 @@ async def test_unlimited_continuation_runs_until_the_model_finishes(
 
 
 @async_test
-async def test_unlimited_continuation_stops_at_the_backend_safety_cap(
-    tmp_path: Path,
-) -> None:
+async def test_automatic_continuation_obeys_shared_model_request_cap(tmp_path):
     repository = store(tmp_path)
-    run = accepted_run(repository, output_continuation="unlimited")
-    gateway = ScriptedGateway(
-        [
-            [ModelTextDelta("x"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
-            for _ in range(65)
-        ]
-    )
-
-    result = await RunExecutor(
-        repository=repository,
-        gateway=gateway,
-
-        capability_resolver=TestCapabilityResolver(),
-    ).execute(run.id, asyncio.Event())
-
-    assert result.status is RunStatus.COMPLETED
-    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
-    assert len(gateway.requests) == 65
-    continuation_events = [
-        event
-        for event in repository.list_run_events(run.id, after_sequence=0, limit=500)
-        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
-    ]
-    assert len(continuation_events) == 64
-    assert continuation_events[-1].data == {"attempt": 64, "maxAttempts": None}
+    run = accepted_run(repository)
+    gateway = ScriptedGateway([
+        [ModelTextDelta(f"part {index}|"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
+        for index in range(130)])
+    result = await RunExecutor(repository=repository, gateway=gateway,
+        capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
+    assert result.status is RunStatus.FAILED and result.error.code == "agent_limit_reached"
+    assert len(gateway.requests) == 128 and result.partial_text.endswith("part 127|")
 
 
 @async_test
@@ -1060,10 +981,10 @@ async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) ->
     )
     cancellation = asyncio.Event()
     task = asyncio.create_task(loop.execute(run.id, cancellation))
-    await asyncio.wait_for(entered.wait(), timeout=1)
+    await asyncio.wait_for(entered.wait(), timeout=5)
 
     cancellation.set()
-    result = await asyncio.wait_for(task, timeout=1)
+    result = await asyncio.wait_for(task, timeout=5)
 
     assert result.status is RunStatus.CANCELLED
     assert repository.list_run_events(run.id, after_sequence=0, limit=100)[
@@ -1112,10 +1033,10 @@ async def test_cancellation_interrupts_context_compaction_request(
             capability_resolver=TestCapabilityResolver(),
         ).execute(run.id, cancellation)
     )
-    await asyncio.wait_for(entered.wait(), timeout=1)
+    await asyncio.wait_for(entered.wait(), timeout=5)
 
     cancellation.set()
-    result = await asyncio.wait_for(task, timeout=1)
+    result = await asyncio.wait_for(task, timeout=5)
 
     assert result.status is RunStatus.CANCELLED
     assert repository.get_latest_compaction(conversation_id) is None

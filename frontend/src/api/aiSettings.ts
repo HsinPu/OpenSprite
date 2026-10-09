@@ -12,14 +12,12 @@ import { responseModes, type ResponseMode } from "./responseModes";
 export type { ResponseMode } from "./responseModes";
 export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
 export type OutputBudget = "auto" | "8k" | "16k" | "32k" | "64k" | "max";
-export type OutputContinuation = "off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited";
 export type ResponseDelivery = "stream" | "complete";
 
 
 export type AiSettings = {
   model: PersistedModelSelection | null;
   responseMode: ResponseMode;
-  outputContinuation: OutputContinuation;
   responseDelivery: ResponseDelivery;
   logFullPrompts: boolean;
 };
@@ -40,7 +38,6 @@ const errorCodes = ["invalid_request", "not_connected", "credential_store_unavai
 
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
-const outputContinuations = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const;
 const responseDeliveries = ["stream", "complete"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {
@@ -52,10 +49,10 @@ function model(value: unknown): PersistedModelSelection | null {
 }
 
 function responseBody(value: unknown): AiSettings {
-  if (!record(value) || !exactKeys(value, ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.outputContinuation !== "string" || !outputContinuations.includes(value.outputContinuation as OutputContinuation) || typeof value.responseDelivery !== "string" || !responseDeliveries.includes(value.responseDelivery as ResponseDelivery) || typeof value.logFullPrompts !== "boolean") {
+  if (!record(value) || !exactKeys(value, ["model", "responseMode", "responseDelivery", "logFullPrompts"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.responseDelivery !== "string" || !responseDeliveries.includes(value.responseDelivery as ResponseDelivery) || typeof value.logFullPrompts !== "boolean") {
     throw new AiSettingsApiError("malformed_response");
   }
-  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, outputContinuation: value.outputContinuation as OutputContinuation, responseDelivery: value.responseDelivery as ResponseDelivery, logFullPrompts: value.logFullPrompts };
+  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, responseDelivery: value.responseDelivery as ResponseDelivery, logFullPrompts: value.logFullPrompts };
 }
 
 function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorCode {

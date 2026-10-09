@@ -15,7 +15,8 @@ from opensprite_backend.conversations.sqlite_schema import migrate_schema
 from opensprite_backend.conversations.models import PublicRunError, RunStatus
 
 
-def test_actual_v21_schema_preserves_all_raw_rows_and_summary_provenance(tmp_path):
+@pytest.mark.parametrize("version", [21, 22])
+def test_actual_legacy_schema_preserves_all_raw_rows_and_summary_provenance(tmp_path, version):
     source = store(tmp_path / "source")
     conversation = seed_completed_turns(source, 2, assistant_size=30)
     source.append_compaction(conversation_id=conversation, covers_through_sequence=2,
@@ -24,11 +25,11 @@ def test_actual_v21_schema_preserves_all_raw_rows_and_summary_provenance(tmp_pat
     target = tmp_path / "legacy.sqlite"
     with closing(sqlite3.connect(source.database_file)) as original, closing(sqlite3.connect(target)) as old:
         original.row_factory = sqlite3.Row
-        old.executescript((Path(__file__).parent / "fixtures/core_schema_v21.sql").read_text())
+        old.executescript((Path(__file__).parent / f"fixtures/core_schema_v{version}.sql").read_text())
         before = {}
         for table in ("conversations", "messages", "runs", "conversation_compactions", "run_events"):
             columns = [row[1] for row in old.execute(f"PRAGMA table_info({table})")]
-            rows = [tuple(row[column] for column in columns) for row in original.execute(f"SELECT * FROM {table}")]
+            rows = [tuple("5" if column == "output_continuation" else row[column] for column in columns) for row in original.execute(f"SELECT * FROM {table}")]
             old.executemany(f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", rows)
             before[table] = (columns, rows)
         old.commit()
@@ -38,7 +39,7 @@ def test_actual_v21_schema_preserves_all_raw_rows_and_summary_provenance(tmp_pat
     with closing(repository._open_write()):
         pass
     with closing(sqlite3.connect(target)) as upgraded:
-        assert upgraded.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert upgraded.execute("PRAGMA user_version").fetchone()[0] == 23
         assert upgraded.execute("PRAGMA foreign_key_check").fetchall() == []
         for table, (columns, rows) in before.items():
             assert all(row in upgraded.execute(f"SELECT {','.join(columns)} FROM {table}").fetchall() for row in rows)

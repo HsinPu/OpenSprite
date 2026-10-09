@@ -314,7 +314,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   if (expectedType === "execution.selected") {
     const ids = Number(data.apiVersion) >= 3 ? ["pluginId"] : ["loopId", "policyId"];
     const versions = Number(data.apiVersion) >= 3 ? ["pluginVersion"] : ["loopVersion", "policyVersion"];
-    if (![2, 3, 4].includes(Number(data.apiVersion)) || typeof data.apiVersion !== "number"
+    if (![2, 3, 4, 5].includes(Number(data.apiVersion)) || typeof data.apiVersion !== "number"
       || !exactKeys(data, [...ids, ...versions, "apiVersion"])
       || !ids.every(key => typeof data[key] === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(String(data[key])))
       || !versions.every(key => boundedString(data[key], 1, 64))) throw new AgentChatApiError("malformed_response");
@@ -372,7 +372,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   }
   if (expectedType === "response.continuation.started") {
     const maximum = data.maxAttempts;
-    if (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 64 || (maximum !== null && (!Number.isInteger(maximum) || ![1, 2, 3, 5, 10, 20, 50].includes(maximum as number) || (data.attempt as number) > (maximum as number)))) throw new AgentChatApiError("malformed_response");
+    if (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 128 || (maximum !== null && (!Number.isInteger(maximum) || ![1, 2, 3, 5, 10, 20, 50].includes(maximum as number) || (data.attempt as number) > (maximum as number)))) throw new AgentChatApiError("malformed_response");
   }
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId", "completionReason"]) || !isIdentifier(data.assistantMessageId) || !completionReasons.includes(data.completionReason as CompletionReason))) throw new AgentChatApiError("malformed_response");

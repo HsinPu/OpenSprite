@@ -10,11 +10,11 @@ import {
 describe("context budget policy", () => {
   it.each([
     [32_768, 32_768],
-    [65_536, 49_152],
-    [131_072, 98_304],
-    [262_144, 196_608],
-    [1_050_000, 262_144],
-  ])("resolves auto safely for a %i-token model", (maximum, expected) => {
+    [65_536, 65_536],
+    [131_072, 131_072],
+    [262_144, 262_144],
+    [1_050_000, 1_050_000],
+  ])("shows the model ceiling for auto for a %i-token model", (maximum, expected) => {
     expect(contextBudgetLimit("auto", maximum)).toBe(expected);
   });
 

@@ -16,7 +16,7 @@ from .providers.catalog_store import CatalogError
 from .providers.custom_service import CustomProviderService
 from .workspaces import WorkspaceMutationGate
 
-_SCHEMA_VERSION: Final = 11
+_SCHEMA_VERSION: Final = 12
 _PREVIOUS_CANONICAL_SCHEMA_VERSION: Final = 7
 _BOOLEAN_CONTINUATION_SCHEMA_VERSION: Final = 6
 _PREVIOUS_SCHEMA_VERSION: Final = 5
@@ -50,7 +50,6 @@ def default_ai_settings() -> AiSettings:
     return AiSettings(
         model=None,
         responseMode="default",
-        outputContinuation="5",
         responseDelivery="stream",
         logFullPrompts=False,
     )
@@ -64,7 +63,12 @@ class JsonAiSettingsStore:
 
     def get(self) -> AiSettings:
         raw = self._read()
-        return self._decode(raw) if raw is not None else default_ai_settings()
+        if raw is None:
+            return default_ai_settings()
+        settings = self._decode(raw)
+        if raw["version"] != _SCHEMA_VERSION:
+            self.set(settings)
+        return settings
 
     def set(self, settings: AiSettings) -> None:
         payload = json.dumps(
@@ -174,7 +178,7 @@ class JsonAiSettingsStore:
             output_continuation = raw["outputContinuation"]
             response_delivery = "stream"
             log_full_prompts = raw["logFullPrompts"]
-        elif raw["version"] in {8, 9, 10, _SCHEMA_VERSION}:
+        elif raw["version"] in {8, 9, 10, 11}:
             expected = {
                 "version",
                 "model",
@@ -190,7 +194,17 @@ class JsonAiSettingsStore:
             output_continuation = raw["outputContinuation"]
             response_delivery = raw["responseDelivery"]
             log_full_prompts = raw["logFullPrompts"]
+        elif raw["version"] == _SCHEMA_VERSION:
+            if set(raw) != {"version", "model", "responseMode", "responseDelivery", "logFullPrompts"}:
+                raise SettingsStoreError
+            output_continuation = None
+            response_delivery = raw["responseDelivery"]
+            log_full_prompts = raw["logFullPrompts"]
         else:
+            raise SettingsStoreError
+        if output_continuation is not None and (type(output_continuation) is not str or output_continuation not in {
+            "off", "1", "2", "3", "5", "10", "20", "50", "unlimited"
+        }):
             raise SettingsStoreError
         failed = False
         settings: AiSettings | None = None
@@ -198,8 +212,7 @@ class JsonAiSettingsStore:
             settings = AiSettings.model_validate(
                 {
                     "model": model,
-                    "responseMode": migrate_response_mode(raw["responseMode"]) if raw["version"] < _SCHEMA_VERSION else raw["responseMode"],
-                    "outputContinuation": output_continuation,
+                    "responseMode": migrate_response_mode(raw["responseMode"]) if raw["version"] < 11 else raw["responseMode"],
                     "responseDelivery": response_delivery,
                     "logFullPrompts": log_full_prompts,
                 }

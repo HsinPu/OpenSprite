@@ -5,7 +5,7 @@ import { ExecutionPackageApiError, MAX_EXECUTION_PACKAGE_BYTES, downloadExecutio
 const id = "064c4419-443f-4d30-a2e9-eab8cbd03712";
 const sample = { packages: [{ id, fileName: "example-0.1.0-py3-none-any.whl", distributionName: "example", version: "0.1.0", sha256: "a".repeat(64), sizeBytes: 2000,
   importedAt: "2026-10-08T01:02:03+00:00", requiresPython: ">=3.12", requiresDist: ["opensprite-backend>=0.21.27,<0.22"],
-  plugins: [{ id: "example", kind: "loop", apiVersion: 4, entryPoint: "example.plugin:factory" }], runtimeStatus: "not_installed" }],
+  plugins: [{ id: "example", kind: "loop", apiVersion: 5, entryPoint: "example.plugin:factory" }], runtimeStatus: "not_installed" }],
   runtime: { kind: "docker", baseImage: "opensprite:local", manifestStatus: "missing" } };
 const body = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 afterEach(() => vi.unstubAllGlobals());

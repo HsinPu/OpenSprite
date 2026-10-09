@@ -242,18 +242,6 @@ class ModelSelection(ContractModel):
         return value
 
 
-class OutputContinuation(StrEnum):
-    OFF = "off"
-    ONE = "1"
-    TWO = "2"
-    THREE = "3"
-    FIVE = "5"
-    TEN = "10"
-    TWENTY = "20"
-    FIFTY = "50"
-    UNLIMITED = "unlimited"
-
-
 class ResponseDelivery(StrEnum):
     STREAM = "stream"
     COMPLETE = "complete"
@@ -262,7 +250,6 @@ class ResponseDelivery(StrEnum):
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
-    outputContinuation: OutputContinuation = OutputContinuation.FIVE
     responseDelivery: ResponseDelivery = ResponseDelivery.STREAM
     logFullPrompts: StrictBool = False
 
@@ -270,7 +257,6 @@ class AiSettings(ContractModel):
 class PutAiSettingsRequest(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
-    outputContinuation: OutputContinuation
     responseDelivery: ResponseDelivery
     logFullPrompts: StrictBool
 

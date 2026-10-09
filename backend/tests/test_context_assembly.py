@@ -4,13 +4,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from opensprite_backend.agent.context import (
-    ConservativeTokenCounter,
-    ContextAssembler,
-    ContextBudgetPlan,
-    ContextLimitExceeded,
-    resolve_context_budget,
-)
+from opensprite_standard_loop._counter import ConservativeTokenCounter
+from opensprite_standard_loop._context import ContextAssembler, ContextLimitExceeded
+from opensprite_standard_loop._budget import ContextBudgetPlan, resolve_context_budget
+from opensprite_backend.agent.plugin import ModelLimits
 from opensprite_backend.conversations.models import Message
 from opensprite_backend.conversations.models import ConversationCompaction
 from opensprite_backend.inference.capabilities import ModelCapability
@@ -65,7 +62,7 @@ def test_budget_resolves_user_choices_with_output_and_safety_reserves(
     maximum: int,
     expected: int,
 ) -> None:
-    result = resolve_context_budget(requested, capability(maximum))  # type: ignore[arg-type]
+    result = resolve_context_budget(requested, ModelLimits(maximum, min(128_000, maximum)))  # type: ignore[arg-type]
 
     assert result.context_limit_tokens == expected
     assert result.output_reserve_tokens <= 32_768
@@ -104,7 +101,7 @@ def test_output_budget_respects_context_safety_and_model_capability(
 
     result = resolve_context_budget(
         context_budget,  # type: ignore[arg-type]
-        selected,
+        ModelLimits(selected.context_window_tokens, selected.max_output_tokens),
         output_budget,  # type: ignore[arg-type]
     )
 

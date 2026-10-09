@@ -1293,7 +1293,8 @@
                 "type": "integer",
                 "enum": [
                   3,
-                  4
+                  4,
+                  5
                 ]
               }
             }
@@ -1302,7 +1303,7 @@
             "$ref": "#/components/schemas/LegacyExecutionSelectedEventData"
           }
         ],
-        "description": "API v4 profile is stored transactionally at admission. API v2/v3 events remain readable without rewriting."
+        "description": "API v5 profile is stored transactionally at admission. API v2/v3/v4 events remain readable without rewriting."
       },
       "EmptyEventData": {
         "description": "Legacy compaction start or run cancellation.",
@@ -1419,208 +1420,14 @@
         }
       },
       "ContextReceipt": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "schemaVersion",
-          "requestHash",
-          "estimateMethod",
-          "estimatedInputTokens",
-          "components",
-          "contextLimitTokens",
-          "inputBudgetTokens",
-          "outputReserveTokens",
-          "messageCount",
-          "systemHash",
-          "historyMessageIds",
-          "summary",
-          "workspace"
-        ],
-        "properties": {
-          "schemaVersion": {
-            "const": 2
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ContextReceiptV2"
           },
-          "requestHash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "estimateMethod": {
-            "const": "utf8-conservative-v1"
-          },
-          "estimatedInputTokens": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "components": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "system",
-              "summary",
-              "history",
-              "currentUser",
-              "assistant",
-              "summaryInput",
-              "unattributed",
-              "framing"
-            ],
-            "properties": {
-              "system": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "summary": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "history": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "currentUser": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "assistant": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "summaryInput": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "unattributed": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "framing": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              }
-            }
-          },
-          "contextLimitTokens": {
-            "oneOf": [
-              {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "inputBudgetTokens": {
-            "oneOf": [
-              {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "outputReserveTokens": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 131072
-          },
-          "messageCount": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 256
-          },
-          "systemHash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "historyMessageIds": {
-            "type": "array",
-            "maxItems": 256,
-            "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Identifier"
-            }
-          },
-          "summary": {
-            "oneOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "id",
-                  "version",
-                  "sourceHash",
-                  "throughSequence"
-                ],
-                "properties": {
-                  "id": {
-                    "$ref": "#/components/schemas/Identifier"
-                  },
-                  "version": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "sourceHash": {
-                    "type": "string",
-                    "pattern": "^[0-9a-f]{64}$"
-                  },
-                  "throughSequence": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 9007199254740991
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "workspace": {
-            "oneOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "id",
-                  "revision",
-                  "mountManifestHash"
-                ],
-                "properties": {
-                  "id": {
-                    "$ref": "#/components/schemas/Identifier"
-                  },
-                  "revision": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "mountManifestHash": {
-                    "type": "string",
-                    "pattern": "^[0-9a-f]{64}$"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+          {
+            "$ref": "#/components/schemas/ContextReceiptV3"
           }
-        }
+        ]
       },
       "ModelAttemptEventData": {
         "description": "One actual gateway attempt. Completed describes stream completion, not run success. No content or credentials. Provider-internal HTTP retries are not represented.",
@@ -2022,7 +1829,7 @@
           "attempt": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 64
+            "maximum": 128
           },
           "maxAttempts": {
             "anyOf": [
@@ -2400,6 +2207,427 @@
             ]
           }
         }
+      },
+      "ContextReceiptV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "requestHash",
+          "estimateMethod",
+          "estimatedInputTokens",
+          "components",
+          "contextLimitTokens",
+          "inputBudgetTokens",
+          "outputReserveTokens",
+          "messageCount",
+          "systemHash",
+          "historyMessageIds",
+          "summary",
+          "workspace"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "estimateMethod": {
+            "const": "utf8-conservative-v1"
+          },
+          "estimatedInputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "system",
+              "summary",
+              "history",
+              "currentUser",
+              "assistant",
+              "summaryInput",
+              "unattributed",
+              "framing"
+            ],
+            "properties": {
+              "system": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summary": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "history": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "currentUser": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "assistant": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summaryInput": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unattributed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "framing": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "contextLimitTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputBudgetTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputReserveTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 131072
+          },
+          "messageCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "systemHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "historyMessageIds": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "version",
+                  "sourceHash",
+                  "throughSequence"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "sourceHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "throughSequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "revision",
+                  "mountManifestHash"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "mountManifestHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Historical API v4 input receipt, schema 2."
+      },
+      "ContextReceiptV3": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "requestHash",
+          "estimateMethod",
+          "estimatedInputTokens",
+          "components",
+          "contextLimitTokens",
+          "inputBudgetTokens",
+          "outputReserveTokens",
+          "messageCount",
+          "systemHash",
+          "historyMessageIds",
+          "summary",
+          "workspace",
+          "stepIds"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 3
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "estimateMethod": {
+            "const": "utf8-conservative-v1"
+          },
+          "estimatedInputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "system",
+              "summary",
+              "history",
+              "currentUser",
+              "assistant",
+              "summaryInput",
+              "unattributed",
+              "framing"
+            ],
+            "properties": {
+              "system": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summary": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "history": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "currentUser": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "assistant": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summaryInput": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unattributed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "framing": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "contextLimitTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputBudgetTokens": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputReserveTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 131072
+          },
+          "messageCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "systemHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "historyMessageIds": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "version",
+                  "sourceHash",
+                  "throughSequence"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "sourceHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "throughSequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "revision",
+                  "mountManifestHash"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "mountManifestHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stepIds": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "description": "API v5 actual input receipt, schema 3. Source IDs record provenance, not semantic equivalence."
       }
     },
     "responses": {

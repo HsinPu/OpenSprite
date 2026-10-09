@@ -33,15 +33,17 @@ class AlternateDriver:
         self.operations.append("checkpoint")
         await host.checkpoint()
         self.operations.append("model")
-        from opensprite_backend.agent.plugin import StepRequest, FinalOutput
-        turn = await host.infer(StepRequest(await host.context()))
+        from opensprite_backend.agent.plugin import StepRequest, FinalOutput, InputSource, ModelMessage
+        snapshot = await host.read_context()
+        turn = await host.infer(StepRequest((ModelMessage("system", host.run.system_prompt), ModelMessage("user", snapshot.current_user.content)), 1000,
+            sources=(InputSource(1, snapshot, (snapshot.current_user.id,)),)))
         self.operations.append("finish")
         return await host.finish(FinalOutput(turn.text, (turn,)))
 
 
 @dataclass
 class AlternateFactory:
-    api_version: int = 4
+    api_version: int = 5
     instances: list[AlternateDriver] = field(default_factory=list)
 
     def create(self):

@@ -53,7 +53,7 @@ describe("mobile navigation accessibility", () => {
       if (path === "/api/runs" && init?.method === "POST") return pending;
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/providers") return json(connectedOpenAi);
-      if (path === "/api/settings/ai") return json({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false });
+      if (path === "/api/settings/ai") return json({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "64k", outputBudget: "16k" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false });
       if (path === "/api/settings/conversation") return json({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false });
       if (path.startsWith("/api/conversations?")) return json({ conversations: [], nextCursor: null });
       if (path.includes("/messages")) return json({ messages: [], nextBeforeSequence: null });
@@ -308,7 +308,7 @@ describe("Ant Design shell controls", () => {
 describe("persisted AI settings", () => {
   it("chooses the first available model when no selection exists", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -321,7 +321,7 @@ describe("persisted AI settings", () => {
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false }),
     });
   });
 
@@ -339,7 +339,7 @@ describe("persisted AI settings", () => {
     await openSettingsFromRail();
     fireEvent.click(await screen.findByRole("button", { name: "AI 模型" }));
     expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(true);
-    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "high", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "32k" }, responseMode: "high", responseDelivery: "stream", logFullPrompts: false })));
 
     await waitFor(() => expect(screen.getByLabelText("模型").hasAttribute("disabled")).toBe(false));
     expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6");
@@ -348,9 +348,9 @@ describe("persisted AI settings", () => {
 
   it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -363,12 +363,12 @@ describe("persisted AI settings", () => {
     fireEvent.mouseDown(screen.getByLabelText("模型"));
     fireEvent.click(await screen.findByText("GPT-5.6 Luna"));
     await waitFor(() => expect(screen.getByLabelText("模型").parentElement?.textContent).toContain("GPT-5.6 Luna"));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }) });
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false }) });
   });
 
   it("keeps the confirmed model when the PUT fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
       throw new Error(`unexpected request ${path}`);
@@ -389,7 +389,7 @@ describe("persisted AI settings", () => {
 
   it("hydrates and persists the response mode with the confirmed model", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "high", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "high", responseDelivery: "complete", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -409,13 +409,13 @@ describe("persisted AI settings", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "default", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "default", responseDelivery: "complete", logFullPrompts: false }),
     });
   });
 
   it("keeps the confirmed response mode when saving fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }));
       throw new Error(`unexpected request ${path}`);
@@ -564,7 +564,7 @@ it("has no retired capabilities in navigation or settings requests", async () =>
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify({ providers: [] })));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [], nextCursor: null })));
       return new Promise<Response>(() => undefined);
@@ -586,7 +586,7 @@ it("has no retired capabilities in navigation or settings requests", async () =>
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", workspaceId: DEFAULT_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -608,7 +608,7 @@ it("has no retired capabilities in navigation or settings requests", async () =>
       if (path === "/api/workspaces") return workspaceResponse();
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, workspaceId: DEFAULT_WORKSPACE_ID, revision: 1, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -627,7 +627,7 @@ it("has no retired capabilities in navigation or settings requests", async () =>
     const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/workspaces") return workspaceResponse();
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === `/api/conversations?workspaceId=${DEFAULT_WORKSPACE_ID}&limit=50`) return Promise.resolve(new Response(JSON.stringify({
         conversations: [{

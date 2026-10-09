@@ -14,7 +14,7 @@ let saves = 0;
 window.fetch = async (input, init) => {
   if (String(input).includes("/settings/ai")) {
     if (init?.method === "PUT" && saves++ === 0) return new Response(JSON.stringify({ error: { code: "invalid_request", message: "test", retryable: false } }), { status: 400 });
-    return new Response(JSON.stringify({ model: null, responseMode: "medium", outputContinuation: "5", responseDelivery: "stream", logFullPrompts: false }));
+    return new Response(JSON.stringify({ model: null, responseMode: "medium", responseDelivery: "stream", logFullPrompts: false }));
   }
   if (!scheduled) { scheduled = true; window.setTimeout(() => { finished = true; finish(); }, 8000); }
   const cursor = Number(new URL(String(input), location.origin).searchParams.get("afterSequence") ?? 0);

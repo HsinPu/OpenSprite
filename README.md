@@ -12,7 +12,7 @@
 
 OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Loop 插件控制多輪推論、摘要、重試與續寫；Python Host 處理模型連線、限制、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
 
-目前產品版本為 `0.21.34`。執行插件使用 **Host API v4**。
+目前產品版本為 `0.21.35`。執行插件使用 **Host API v5**。
 
 ![OpenSprite Agent 工作臺](docs/screenshots/agent-workbench.jpg)
 
@@ -106,18 +106,18 @@ cd OpenSprite
 
 ## 執行插件
 
-單一 Loop 插件編排 Host 操作，同一實例判斷是否允許符合核心條件的恢復與續寫。Provider、transcript、預算、取消與資料保存由 Host 管理。
+單一 Loop 插件組合完整模型輸入，掌握歷史選擇、摘要生成、重試與自動續寫。Host 提供原始資料、單次模型呼叫、來源核對、摘要／結果保存、取消及既有期限與硬上限。
 
 ```mermaid
 flowchart LR
   UI[Agent 工作臺] --> Run[Run 設定快照]
   Run --> Loop[Agent Loop]
-  Loop --> Host[Host API v4]
+  Loop --> Host[Host API v5]
   Host --> Provider[Provider]
   Host --> State[文字 / 事件 / SQLite]
 ```
 
-Host API v4 僅提供 `checkpoint()`、`next_turn()`、`finish(turn)`。API v1／v2 插件須合併執行與恢復方法、更新 entry point／factory 並重新建置。舊外部選擇保留原檔，套用 API v4 插件後才能建立新任務；歴史紀錄維持可讀。
+Host API v5 僅提供 `checkpoint()`、`read_context()`、`estimate_input()`、`infer()`、`save_summary()`、`finish()`。API v1–v4 插件須改用完整输入與獨立摘要保存接口、更新 entry point／factory 並重新建置。舊外部選擇保留原檔，套用 API v5 插件後才能建立新任務；歴史紀錄維持可讀。
 
 安裝流程：**匯入 wheel → 下載部署包 → 在主機安裝／建置映像 → 重啟 → 核對狀態 → 選擇並套用至新任務**。匯入只做靜態檢查與快取，不會安裝套件。
 

@@ -1,116 +1,124 @@
-# Agent Loop plugins — API v4
+# Agent Loop plugins — Host API v5
 
-OpenSprite 0.21.34 separates execution decisions from bounded effects. A trusted
-Python wheel exports a no-argument factory provider in
-`opensprite_backend.agent_loops.v4`. Its factory has integer `api_version = 4`
-and synchronous `create()` returns a fresh instance implementing only
-`async execute(host)`. There is one executable plugin category and one choice.
+OpenSprite 0.21.35 separates general execution mechanisms from text policy.
+A trusted Python wheel exports a no-argument factory provider under
+opensprite_backend.agent_loops.v5. Its factory has integer api_version = 5;
+synchronous create() returns a fresh instance with async execute(host).
 
-## Responsibility boundary
-
-| Loop decides | Core Host enforces |
+| Loop decides | Host provides/enforces |
 | --- | --- |
-| Number/order of inference steps and stage instructions | One model operation per infer; pinned Provider/model/reasoning settings |
-| History selection, recent-message floor and selection target | Immutable admission history; current user always included; actual input budget |
-| Summary trigger, contiguous source range, format and instructions | Source ownership/hash/coverage; one compact call; durable provenance |
-| Recoverable retries, backoff and continuation prompts | Error classification, user continuation ceiling, cancellation and resource ceilings |
-| Draft/review/revision and final text | Private draft storage; append-only answer stream; exactly one terminal transaction |
+| History selection, ordering, wrappers, message roles, prompts | Raw paginated data, immutable admission boundary, source ownership |
+| Soft input/output allocation, recent floor, summary triggers | Pinned model/user hard limits and conservative input validation |
+| Summary input, prompt, generation, output transformation and format | Generic draft inference, contiguous source hash, CAS and atomic summary/event storage |
+| Retry/backoff, continuation prompt, tail and stopping behavior | Single model request per infer, safe errors, request lineage and shared Run ceilings |
+| Draft/review/revision and selected final answer | Private step history, append-only answer stream, one terminal transaction |
 
-`RunExecutor` owns Run lifetime and terminal persistence, without iteration or
-strategy. `LoopExecutionHost` exposes checkpoint/context/infer/compact/finish.
-It never automatically summarizes, retries or continues. The independent
-`opensprite-standard-loop==0.1.0` wheel owns the standard recent-12, 75%/55%
-selection, summary instructions, one eligible context retry, continuation tail
-and stopping choices. `no_recovery` uses the same preparation but omits retries
-and continuation. Both are discovered through installed metadata. Missing the
-official package fails admission; there is no built-in executable fallback.
+RunExecutor owns lifetime and terminal persistence. LoopExecutionHost does not
+assemble context, prepare summary prompts, retry or continue. The independent
+opensprite-standard-loop==0.2.0 wheel owns the standard recent-12, 75%/55%
+selection, automatic context sizing, summary instructions, one
+eligible context recovery, continuation tail and stopping policy. No executable
+fallback lives in the core. no_recovery uses the same preparation but omits
+context retry and output continuation.
 
-The official wheel is bundled with the backend via a relative uv source to
-avoid a runtime dependency cycle. It requires the product's API v4 SDK and is
-not a standalone application. Docker and both desktop installers include and
-install this source as an ordinary distribution.
+## Public SDK
 
-## Public operation semantics
+All public types are available from opensprite_backend.agent.plugin.
 
-The immutable dataclasses live in `opensprite_backend.agent.plugin`.
+- run: fixed identity, Provider/model IDs, system prompt,
+  user context/output choices, ModelLimits and ExecutionLimits. Automatic soft
+  allocation belongs to the Loop. Explicit user choices cap the model limits.
+- checkpoint(): cooperative cancellation/deadline check.
+- read_context(ContextReadRequest): zero inference calls. Returns raw Messages,
+  separately identified current_user, a format-scoped summary and cursors.
+  limit is 1..200. Default/before_sequence reads a newest page in ascending
+  sequence order; after_sequence reads the oldest next page. Do not mix cursors.
+  All history excludes the admitted user message and anything after it.
+  summary_format=None disables summary reading.
+- estimate_input(tuple[ModelMessage]): generic conservative estimation. It
+  chooses no history or output budget.
+- infer(StepRequest): exactly one provider call, or a context-limit StepResult
+  before contacting the provider if the prepared input is too large. messages is
+  the complete tuple, including system message. The first system content must
+  start with the pinned workspace system prompt. Host does not insert wrappers.
+  max_output_tokens is mandatory. Optional input_limit_tokens is a tighter
+  Loop-selected input budget, within context minus output reserve.
+- save_summary(SummaryWriteRequest): zero provider calls. Saves the Loop-selected
+  text from an owned summary-generation step. Repeating the same write returns
+  the original summary without a second completion event.
+- finish(FinalOutput): validate the chosen final text/error, then return the
+  exact issued RunResult. The executor commits the terminal state after execute
+  returns. No operation is allowed afterward.
 
-- `host.run`: read-only Run IDs, model, budget, continuation choice, limits and selected plugin version.
-- `context(ContextSpec)`: assemble a bounded context without model calls.
-  `recent_messages` is 1..64, `selection_tokens` is at most the input budget,
-  `history_ids` selects from the latest 200 raw messages (current user is always
-  retained), and `summary_format` scopes compatible coverage.
-- `infer(StepRequest)`: one streamed model request; added messages are only
-  user/assistant text. `instruction` supplements the fixed system prompt.
-  `channel="draft"` persists text privately; `answer` also streams it publicly.
-  Returns a StepResult with text, finish reason, usage and optional safe error.
-- `compact(CompactionSpec)`: one draft inference of an owned, contiguous older
-  prefix; the Loop supplies format and instructions. Returns step plus persisted
-  summary, or step plus None when recovery is needed. A stale context cannot
-  replace newer coverage. Source hash and producing plugin ID/version are saved.
-- `finish(FinalOutput)`: validate final output or an owned step/context failure.
-  Return the exact issued RunResult. RunExecutor performs the terminal transaction
-  after the plugin returns; finishing is not a second Run completion.
+InputSource binds a message position to owned snapshot message IDs, summary ID
+or prior StepResults. Main/continuation inputs must declare the admitted user's
+source. Loops can transform, combine and reorder data; source checks establish
+provenance, not semantic equivalence or factual accuracy. Actual input hash and
+token receipt describe the transmitted messages. Receipt schema 3 adds stepIds;
+schema 2 remains readable for historical diagnostics. Neither contains raw
+prompt text. Full prompt logging remains an explicit sensitive-data preference.
 
-Await operations sequentially. Parallel/replayed/mutated contexts, steps or
-results, operations after finish, fabricated public exceptions and swallowed
-fatal Host failures cannot become successful Runs. Draft text may be revised;
-published answer text must remain a prefix of final text. This permits a draft
-step to be selected/transformed and published at finish without publishing other drafts.
+## Summary consistency
 
-Recoverable context/rate-limit/timeout/unreachable errors are StepResult errors.
-Retries explicitly reference the owned failed step via `retry_of`; a partially
-published answer cannot be retried. Authentication, malformed provider output,
-storage failures, cancellation and hard ceilings stop execution. The standard
-Loop handles only its documented context recovery; other retries are author policy.
+A summary-generation infer uses purpose="compaction", channel="draft",
+SummarySource and matching InputSource IDs. The Loop supplies complete prompt
+messages, output budget, source pages, previous summary ID and format.
+Sources must belong to this Host and form an ordered, contiguous older prefix:
+first sequence 1 without a prior summary, otherwise prior coverage plus 1.
+The current user cannot be summarized. The Host independently hashes canonical
+previous-summary coverage/hash/content plus raw source role/sequence/content.
 
-Default ceilings: 128 total actual model requests (including summaries/retries),
-32 compactions, 600 seconds of cooperative execution, 1,048,576 generated text
-characters, 2,048 Host operations. Smaller bounds are useful in regression tests.
-User continuation settings impose a further ceiling of 64 for unlimited.
-No hidden extra continuation requests are made after a final answer.
+The generated StepResult does not automatically become a summary. The Loop can
+reject it, transform it or save it explicitly. Persistence compares the declared
+previous summary with current stored coverage in the same transaction that
+inserts the summary and context.compaction.completed. Failed writes leave both
+absent. source_step_id, source_first_sequence and previous_summary_id record the
+provenance chain. Validation does not certify the meaning of generated text.
 
-## Admission, data and diagnostics
+## Errors, output and limits
 
-Discovery and settings read metadata without importing Python. Admission pins
-the factory and distribution version and persists the profile in the same
-transaction as user message/Run creation:
+All operations are awaited sequentially. Forged, copied, mutated or cross-Run
+snapshots/steps/results fail closed. Swallowed fatal errors, overlapping calls
+and calls after finish cannot produce a successful Run. Recoverable inference
+errors are returned in StepResult; retry_of must identify the owned failed
+retryable step. A partially published answer cannot replay that step.
 
-```json
-{"pluginId":"standard","pluginVersion":"0.1.0","apiVersion":4}
-```
+Draft output stays in authenticated step history. Answer output streams and is
+append-only; final text must retain its published prefix. Finish can publish
+selected/transformed draft text while keeping unused drafts private.
 
-Idempotent replay reads the accepted Run before mutable settings. Settings
-schema 2, expectedRevision/409 behavior and explicit external-choice migration
-are unchanged. API v2/v3 events remain readable without rewriting or executing
-the old package. New import/deployment accepts API v4 only.
+Standard Loop automatically continues OUTPUT_LIMIT, stopping on FINAL, repeated
+OUTPUT_LIMIT segments, unrecoverable context limits, cancellation or shared Run
+ceilings. There is no global continuation count or separate 64-request ceiling.
+A custom Loop owns its own stopping policy. Defaults remain 128 total actual
+model requests, 32 summary-generation calls, 600 seconds, 1,048,576 generated
+characters and 2,048 Host operations. Summaries, retries and continuations all
+consume the same counters. Python plugins are trusted in-process code:
+checkpoint/deadline handling is cooperative, not process isolation or a sandbox.
 
-SQLite schema 22 adds run_steps and format-scoped summary provenance. Upgrades
-from 20/21 transactionally copy all existing event and compaction columns/rows
-before replacing their constraints; no old text/IDs are discarded. Unexpected
-schemas fail without advancing the version. Older schemas need the preceding
-upgrade path. Restart marks active Runs and unfinished steps interrupted.
-An upgraded database cannot be written by the older backend.
+## Admission and migration
 
-step.started/step.completed carry bounded stage labels/status/usage, never draft
-text. GET /api/runs/{run_id}/steps is a same-origin, authenticated when configured,
-100-row paginated endpoint for persisted draft/answer text and retry references.
-Only answer deltas/final text become conversation messages. Draft is visible
-model output, not hidden reasoning; provider reasoning remains filtered.
-The workbench shows generic stages and step detail, without branching on plugin IDs.
-model.attempt preserves actual request/attempt lineage and content-free receipts.
+Metadata-only discovery does not import plugin Python. Admission pins factory
+and distribution version and transactionally saves the profile with the user
+message/Run. Replay looks up the accepted Run before mutable settings.
 
-## Wheel trust and delivery
+New wheel import/deployment accepts API v5 only. API v1..v4 wheels remain
+inspectable but incompatible; rewrite SDK use, entry point and factory, then
+build a new wheel. No compatibility executor is added.
 
-Import validates bounded ZIP, metadata, dependencies and RECORD without execution.
-Imported bytes are a cache, not installation or selection. Deployment installs the
-exact wheel offline, verifies installed files/entry points and saves provenance.
-Retired wheels stay readable as needs_update; they cannot be deployed on API v4.
-Use an API v4 base image and rebuild any retained incompatible external packages.
+AI settings schema 12 atomically migrates schemas 3..11 and removes the obsolete
+outputContinuation setting. SQLite schema 23 transactionally upgrades 20/21/22,
+preserving all original columns, rows, text, IDs, legacy continuation choices and
+opaque archived tables. New runs store NULL in the historical continuation
+column. Summary provenance columns are nullable for legacy summaries. An
+unexpected schema rolls back without advancing the version. Older backends
+must not write the upgraded database. Restart interrupts unfinished Runs/steps.
 
-Python plugins run with backend privileges in process. Static wheel validation
-and frozen dataclasses do not create a sandbox. Cancellation/time limits apply to
-cooperative async code; uncooperative blocking Python requires future process
-isolation, which is outside this change. No tools, Skill, Subagent, MCP, scheduler,
-command shim or generic lifecycle mechanism is introduced.
+Settings revision conflicts, package review/import and deployment confirmation
+keep their existing behavior. Import stores reviewed bytes; it neither installs
+nor selects a Loop. Docker bundles install a wheel into a rebuilt API v5 image
+as UID 10001; both desktop installers bundle the official wheel as an ordinary
+distribution. Keep one writer and back up the entire sensitive .opensprite
+directory before upgrading actual user data.
 
-See [authoring](execution-plugin-authoring.md) and [clean core](clean-agent-core.md).
+See execution-plugin-authoring.md for complete source, tests and installation.

@@ -299,7 +299,6 @@
         "required": [
           "model",
           "responseMode",
-          "outputContinuation",
           "responseDelivery",
           "logFullPrompts"
         ],
@@ -316,9 +315,6 @@
           },
           "responseMode": {
             "$ref": "#/components/schemas/ResponseMode"
-          },
-          "outputContinuation": {
-            "$ref": "#/components/schemas/OutputContinuation"
           },
           "responseDelivery": {
             "$ref": "#/components/schemas/ResponseDelivery"

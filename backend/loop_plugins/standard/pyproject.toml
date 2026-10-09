@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opensprite-standard-loop"
-version = "0.1.0"
-description = "Official API v4 text Loops for OpenSprite"
+version = "0.2.0"
+description = "Official API v5 text Loops for OpenSprite"
 requires-python = ">=3.12,<3.14"
 dependencies = []
 
-[project.entry-points."opensprite_backend.agent_loops.v4"]
-standard = "opensprite_standard_loop:create_standard_factory"
-no_recovery = "opensprite_standard_loop:create_no_recovery_factory"
+[project.entry-points."opensprite_backend.agent_loops.v5"]
+standard = "opensprite_standard_loop:standard"
+no_recovery = "opensprite_standard_loop:no_recovery"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opensprite_standard_loop"]

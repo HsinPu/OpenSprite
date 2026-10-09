@@ -11,7 +11,7 @@ import pytest
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError
 from opensprite_standard_loop import LoopFactory
 
-LOOPS = "opensprite_backend.agent_loops.v4"
+LOOPS = "opensprite_backend.agent_loops.v5"
 
 @dataclass
 class InstalledPoint:
@@ -50,13 +50,13 @@ def test_real_metadata_discovery_and_validation_never_import_until_resolve(tmp_p
         assert not marker.exists() and "opensprite_installed_probe" not in sys.modules
         binding = catalog.resolve("probe")
         assert marker.exists()
-        assert binding.profile() == {"pluginId": "probe", "pluginVersion": "4.2.1", "apiVersion": 4}
+        assert binding.profile() == {"pluginId": "probe", "pluginVersion": "4.2.1", "apiVersion": 5}
         assert binding.create() is not binding.create()
     finally:
         sys.modules.pop("opensprite_installed_probe", None)
 
 
-@pytest.mark.parametrize("group", ["opensprite_backend.agent_loops.v1", "opensprite_backend.agent_loops.v2", "opensprite_backend.agent_loops.v3", "opensprite_backend.agent_loops.v5"])
+@pytest.mark.parametrize("group", ["opensprite_backend.agent_loops.v1", "opensprite_backend.agent_loops.v2", "opensprite_backend.agent_loops.v3", "opensprite_backend.agent_loops.v4", "opensprite_backend.agent_loops.v6"])
 def test_retired_or_future_loops_are_incompatible_without_import(group):
     point = InstalledPoint("other", group, RuntimeError("must not import"))
     catalog = ExecutionPluginCatalog((point,))
@@ -128,7 +128,7 @@ def test_synchronous_self_cancellation_is_masked(phase):
     def provider():
         if phase == "provider": raise asyncio.CancelledError("private")
         class Factory:
-            api_version = 4
+            api_version = 5
             def create(self): raise asyncio.CancelledError("private")
         return Factory()
     class Point(InstalledPoint):
@@ -145,7 +145,7 @@ def test_synchronous_self_cancellation_is_masked(phase):
 def test_creation_requires_all_methods_on_same_instance(member):
     plugin = LoopFactory().create()
     setattr(plugin, member, None)
-    point = InstalledPoint("incomplete", LOOPS, lambda: SimpleNamespace(api_version=4, create=lambda: plugin))
+    point = InstalledPoint("incomplete", LOOPS, lambda: SimpleNamespace(api_version=5, create=lambda: plugin))
     with pytest.raises(ExecutionPluginError, match="plugin_unavailable"):
         ExecutionPluginCatalog((point,)).resolve("incomplete").create()
 
@@ -172,7 +172,7 @@ def test_async_factory_provider_is_rejected_without_unawaited_coroutine(wrapped)
 def test_async_create_is_rejected_without_unawaited_coroutine(wrapped):
     async def create():
         return LoopFactory().create()
-    factory = SimpleNamespace(api_version=4, create=(lambda: create()) if wrapped else create)
+    factory = SimpleNamespace(api_version=5, create=(lambda: create()) if wrapped else create)
     catalog = ExecutionPluginCatalog((InstalledPoint("async_create", LOOPS, lambda: factory),))
     with pytest.raises(ExecutionPluginError, match="plugin_unavailable"):
         catalog.resolve("async_create").create()

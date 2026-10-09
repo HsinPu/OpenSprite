@@ -359,7 +359,6 @@ class AgentChatService:
             profile=profile,
             log_full_prompts=settings.logFullPrompts,
             response_mode=settings.responseMode.value,
-            output_continuation=settings.outputContinuation.value,
         )
 
 
@@ -390,7 +389,6 @@ class AgentChatService:
         profile: ModelSelection,
         log_full_prompts: bool,
         response_mode: str,
-        output_continuation: str,
     ) -> StartRunResult:
         is_custom = profile.provider_id not in BUILTIN_PROVIDER_IDS
         if not is_custom:
@@ -434,7 +432,6 @@ class AgentChatService:
                     response_mode=response_mode,
                     context_budget=profile.context_budget,
                     output_budget=profile.output_budget,
-                    output_continuation=output_continuation,
                     log_full_prompts=log_full_prompts,
                     workspace_id=workspace.id,
                     workspace_revision=workspace.revision,

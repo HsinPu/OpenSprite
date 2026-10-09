@@ -27,7 +27,6 @@ from opensprite_backend.models import (
     ProviderSummary,
     ResponseDelivery,
     ResponseMode,
-    OutputContinuation,
 )
 from opensprite_backend.provider_connections import ProviderConnectionError
 from opensprite_backend.runtime import create_system_app, create_system_runtime
@@ -46,13 +45,11 @@ def settings(
     *,
     model: ModelSelection | None = None,
     response_mode: ResponseMode = ResponseMode.MEDIUM,
-    output_continuation: OutputContinuation = OutputContinuation.TWO,
     response_delivery: ResponseDelivery = ResponseDelivery.STREAM,
 ) -> AiSettings:
     return AiSettings(
         model=model,
         responseMode=response_mode,
-        outputContinuation=output_continuation,
         responseDelivery=response_delivery,
     )
 
@@ -91,7 +88,7 @@ class RecordingConnections:
         )
 
 
-def test_store_reads_current_v3_selection_as_auto_output_without_rewriting(tmp_path: Path) -> None:
+def test_store_reads_current_v3_selection_as_auto_output_with_atomic_migration(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     previous = (
         b'{"version":3,"model":{"providerId":"openai",'
@@ -103,10 +100,11 @@ def test_store_reads_current_v3_selection_as_auto_output_without_rewriting(tmp_p
         model=selection(),
         response_mode=ResponseMode.MEDIUM,
     )
-    assert path.read_bytes() == previous
+    assert json.loads(path.read_bytes())["version"] == 12
+    assert "outputContinuation" not in json.loads(path.read_bytes())
 
 
-def test_store_reads_v3_null_model_without_rewriting(tmp_path: Path) -> None:
+def test_store_reads_v3_null_model_with_atomic_migration(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     previous = b'{"version":3,"model":null,"responseMode":"deep"}'
     path.write_bytes(previous)
@@ -115,10 +113,11 @@ def test_store_reads_v3_null_model_without_rewriting(tmp_path: Path) -> None:
         model=None,
         response_mode=ResponseMode.HIGH,
     )
-    assert path.read_bytes() == previous
+    assert json.loads(path.read_bytes())["version"] == 12
+    assert "outputContinuation" not in json.loads(path.read_bytes())
 
 
-def test_store_reads_v4_as_auto_continue_without_rewriting(tmp_path: Path) -> None:
+def test_store_reads_v4_as_auto_continue_with_atomic_migration(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     previous = (
         b'{"version":4,"model":{"providerId":"openai",'
@@ -128,17 +127,18 @@ def test_store_reads_v4_as_auto_continue_without_rewriting(tmp_path: Path) -> No
     path.write_bytes(previous)
 
     assert JsonAiSettingsStore(path).get() == settings(model=selection())
-    assert path.read_bytes() == previous
+    assert json.loads(path.read_bytes())["version"] == 12
+    assert "outputContinuation" not in json.loads(path.read_bytes())
 
 
 @pytest.mark.parametrize(
     ("enabled", "expected"),
-    [(True, OutputContinuation.TWO), (False, OutputContinuation.OFF)],
+    [(True, None), (False, None)],
 )
-def test_store_reads_v6_boolean_continuation_without_rewriting(
+def test_store_reads_v6_boolean_continuation_with_atomic_migration(
     tmp_path: Path,
     enabled: bool,
-    expected: OutputContinuation,
+    expected: None,
 ) -> None:
     path = tmp_path / "settings.json"
     previous = json.dumps(
@@ -153,11 +153,12 @@ def test_store_reads_v6_boolean_continuation_without_rewriting(
     ).encode()
     path.write_bytes(previous)
 
-    assert JsonAiSettingsStore(path).get() == settings(output_continuation=expected)
-    assert path.read_bytes() == previous
+    assert JsonAiSettingsStore(path).get() == settings()
+    assert json.loads(path.read_bytes())["version"] == 12
+    assert "outputContinuation" not in json.loads(path.read_bytes())
 
 
-def test_store_reads_v7_without_response_delivery_as_stream_without_rewriting(tmp_path: Path) -> None:
+def test_store_reads_v7_without_response_delivery_as_stream_with_atomic_migration(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     previous = json.dumps(
         {
@@ -172,7 +173,8 @@ def test_store_reads_v7_without_response_delivery_as_stream_without_rewriting(tm
     path.write_bytes(previous)
 
     assert JsonAiSettingsStore(path).get() == settings()
-    assert path.read_bytes() == previous
+    assert json.loads(path.read_bytes())["version"] == 12
+    assert "outputContinuation" not in json.loads(path.read_bytes())
 
 
 @pytest.mark.parametrize(
@@ -281,7 +283,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "medium", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
+            json={"model": None, "responseMode": "medium", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
     assert response.status_code == 400

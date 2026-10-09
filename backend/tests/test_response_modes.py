@@ -28,13 +28,13 @@ from test_inference_adapters import response
 def test_modes_round_trip_and_reject_retired_writes(tmp_path, mode):
     store = JsonAiSettingsStore(tmp_path / "settings.json")
     with TestClient(create_app(RecordingConnections(), ai_settings=AiSettingsService(store, RecordingConnections()))) as client:
-        payload = {"model": None, "responseMode": mode, "outputContinuation": "5", "responseDelivery": "stream", "logFullPrompts": False}
+        payload = {"model": None, "responseMode": mode, "responseDelivery": "stream", "logFullPrompts": False}
         assert client.put("/api/settings/ai", json=payload).status_code == 200
         assert client.get("/api/settings/ai").json()["responseMode"] == mode
         for old in ("fast", "balanced", "deep", "medim"):
             assert client.put("/api/settings/ai", json={**payload, "responseMode": old}).status_code == 400
     assert JsonAiSettingsStore(store._path).get().responseMode == mode
-    assert json.loads(store._path.read_text())["version"] == 11
+    assert json.loads(store._path.read_text())["version"] == 12
 
 
 def test_highest_fallback_is_not_nearest_and_unknown_is_not_unsupported():

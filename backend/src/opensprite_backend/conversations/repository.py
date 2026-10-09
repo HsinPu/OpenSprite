@@ -82,6 +82,8 @@ class ConversationRepository(Protocol):
         limit: int,
     ) -> tuple[Message, ...]: ...
 
+    def get_message(self, message_id: str) -> Message | None: ...
+
     def get_run(self, run_id: str) -> RunSnapshot | None: ...
 
     def find_run_request(
@@ -100,7 +102,6 @@ class ConversationRepository(Protocol):
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
-        output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
@@ -113,7 +114,7 @@ class ConversationRepository(Protocol):
     def get_latest_compaction(
         self,
         conversation_id: str,
-        *, summary_format: str = "opensprite.text.v1",
+        *, summary_format: str = "opensprite.text.v1", before_sequence: int | None = None,
     ) -> ConversationCompaction | None: ...
 
     def append_compaction(
@@ -131,6 +132,10 @@ class ConversationRepository(Protocol):
         producer_plugin_version: str = "unknown",
         summary_format: str = "opensprite.text.v1",
         compaction_id: str | None = None,
+        source_step_id: str | None = None,
+        source_first_sequence: int | None = None,
+        expected_previous_summary_id: str | None = None,
+        run_id: str | None = None,
     ) -> ConversationCompaction: ...
 
     def set_reasoning_resolution(self, run_id: str, resolution: ReasoningResolution) -> RunSnapshot: ...

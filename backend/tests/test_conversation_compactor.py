@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from opensprite_backend.agent.context import (
+from opensprite_standard_loop._summary import (
     prepare_compaction_source,
 )
 from opensprite_backend.conversations.models import ConversationCompaction, Message

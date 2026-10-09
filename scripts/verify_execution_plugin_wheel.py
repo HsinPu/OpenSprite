@@ -36,16 +36,16 @@ from opensprite_backend.inference.models import ModelFinishReason
 import opensprite_execution_example.plugin as example
 
 distribution = metadata.distribution("opensprite-execution-example")
-assert distribution.version == "0.4.0"
+assert distribution.version == "0.5.0"
 assert Path(example.__file__).resolve().is_relative_to(target)
 assert Path(distribution.locate_file("opensprite_execution_example/plugin.py")).resolve() == Path(example.__file__).resolve()
-assert any("opensprite-backend" in requirement and ">=0.21.34" in requirement and "<0.22" in requirement
+assert any("opensprite-backend" in requirement and ">=0.21.35" in requirement and "<0.22" in requirement
            for requirement in distribution.requires or ())
 points = {(point.group, point.name): point for point in distribution.entry_points}
-assert set(points) == {("opensprite_backend.agent_loops.v4", "example_review")}
+assert set(points) == {("opensprite_backend.agent_loops.v5", "example_review")}
 catalog = ExecutionPluginCatalog()
 selection = catalog.resolve("example_review")
-assert selection.plugin_version == "0.4.0"
+assert selection.plugin_version == "0.5.0"
 plugin = selection.create()
 assert type(plugin) is example.ReviewLoop
 assert plugin is not selection.create()
@@ -142,11 +142,11 @@ def main() -> None:
     if not supplied.is_absolute():
         raise SystemExit("OPENSPRITE_PLUGIN_WHEEL must be absolute.")
     wheel = supplied.resolve(strict=True)
-    if wheel.name != "opensprite_execution_example-0.4.0-py3-none-any.whl":
-        raise SystemExit("This verifier accepts only the repository's 0.4.0 pure-Python example wheel.")
+    if wheel.name != "opensprite_execution_example-0.5.0-py3-none-any.whl":
+        raise SystemExit("This verifier accepts only the repository's 0.5.0 pure-Python example wheel.")
     version = tuple(int(part) for part in metadata.version("opensprite-backend").split("."))
-    if not (0, 21, 34) <= version < (0, 22, 0):
-        raise SystemExit("The example requires opensprite-backend>=0.21.34,<0.22.")
+    if not (0, 21, 35) <= version < (0, 22, 0):
+        raise SystemExit("The example requires opensprite-backend>=0.21.35,<0.22.")
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         wheel_info = [name for name in names if name.endswith(".dist-info/WHEEL")]

@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite local execution settings API",
     "version": "0.1.0-draft",
-    "description": "Select one trusted installed Agent Loop using API v4. Import and Docker bundles are defined in execution-plugin-packages.openapi.json."
+    "description": "Select one trusted installed Agent Loop using API v5. Import and Docker bundles are defined in execution-plugin-packages.openapi.json."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [
@@ -26,7 +26,7 @@
     "lazyCreation": "Absent settings stay implicit until PUT. Reading known v1 built-in pairs atomically migrates once; external pairs remain intact until explicit selection.",
     "revision": "Revision 0 denotes absent settings or an external v1 pair. PUT requires expectedRevision and increments it."
   },
-  "x-execution-selection": "One plugin ID and version per accepted Run, persisted atomically with admission. Replays use the original profile. Unavailable saved IDs remain visible; external v1 pairs block new Runs until explicit API v4 selection. Historical API v2/v3 events remain readable.",
+  "x-execution-selection": "One plugin ID and version per accepted Run, persisted atomically with admission. Replays use the original profile. Unavailable saved IDs remain visible; external v1 pairs block new Runs until explicit API v5 selection. Historical API v2/v3 events remain readable.",
   "x-trust": "Discovery, GET and PUT inspect metadata only. The selected factory is loaded at Run admission and creates one fresh complete plugin per Run. Trusted plugins execute in-process with backend privileges.",
   "tags": [
     {
@@ -199,7 +199,7 @@
             "items": {
               "$ref": "#/components/schemas/ExecutionPlugin"
             },
-            "description": "Unique plugin IDs. Available plugins implement API v4."
+            "description": "Unique plugin IDs. Available plugins implement API v5."
           },
           "migration": {
             "oneOf": [

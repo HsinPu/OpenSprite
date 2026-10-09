@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
-from opensprite_backend.conversations.models import (
+from opensprite_backend.agent.plugin import (
     ConversationCompaction,
     Message,
 )

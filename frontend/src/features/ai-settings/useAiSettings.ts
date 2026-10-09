@@ -5,7 +5,6 @@ import {
   getAiSettings,
   putAiSettings,
   type AiSettings,
-  type OutputContinuation,
   type ResponseDelivery,
   type ResponseMode,
 } from "../../api/aiSettings";
@@ -23,7 +22,6 @@ export function useAiSettings(
   const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
-  const [outputContinuation, setOutputContinuation] = useState<OutputContinuation>("2");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
   const [logFullPrompts, setLogFullPrompts] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -50,7 +48,6 @@ export function useAiSettings(
       if (loadGenerationRef.current !== generation) return;
       setModelSelection(savedSettings.model);
       setResponseMode(savedSettings.responseMode);
-      setOutputContinuation(savedSettings.outputContinuation);
       setResponseDelivery(savedSettings.responseDelivery);
       setLogFullPrompts(savedSettings.logFullPrompts);
       confirmedSettingsRef.current = savedSettings;
@@ -72,7 +69,6 @@ export function useAiSettings(
     const current = desiredSettingsRef.current ?? {
       model: modelSelection,
       responseMode,
-      outputContinuation,
       responseDelivery,
       logFullPrompts,
     };
@@ -91,7 +87,6 @@ export function useAiSettings(
           || (saved.model?.contextBudget ?? null) !== (next.model?.contextBudget ?? null)
           || (saved.model?.outputBudget ?? null) !== (next.model?.outputBudget ?? null)
           || saved.responseMode !== next.responseMode
-          || saved.outputContinuation !== next.outputContinuation
           || saved.responseDelivery !== next.responseDelivery) {
           throw new Error("ai_settings_response_mismatch");
         }
@@ -103,7 +98,6 @@ export function useAiSettings(
           desiredSettingsRef.current = saved;
           setModelSelection(saved.model);
           setResponseMode(saved.responseMode);
-          setOutputContinuation(saved.outputContinuation);
           setResponseDelivery(saved.responseDelivery);
           setLogFullPrompts(saved.logFullPrompts);
           setError(null);
@@ -122,7 +116,7 @@ export function useAiSettings(
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, [logFullPrompts, modelSelection, outputContinuation, responseDelivery, responseMode, t]);
+  }, [logFullPrompts, modelSelection, responseDelivery, responseMode, t]);
 
   const saveModelSelection = useCallback(
     (next: ModelSelection | null) => save((current) => ({ ...current, model: next })),
@@ -130,10 +124,6 @@ export function useAiSettings(
   );
   const saveResponseMode = useCallback(
     (next: ResponseMode) => save((current) => ({ ...current, responseMode: next })),
-    [save],
-  );
-  const saveOutputContinuation = useCallback(
-    (next: OutputContinuation) => save((current) => ({ ...current, outputContinuation: next })),
     [save],
   );
   const saveResponseDelivery = useCallback(
@@ -164,7 +154,6 @@ export function useAiSettings(
   return {
     modelSelection,
     responseMode,
-    outputContinuation,
     responseDelivery,
     logFullPrompts,
     loaded,
@@ -173,7 +162,6 @@ export function useAiSettings(
     reload,
     saveModelSelection,
     saveResponseMode,
-    saveOutputContinuation,
     saveResponseDelivery,
     saveLogFullPrompts,
   };

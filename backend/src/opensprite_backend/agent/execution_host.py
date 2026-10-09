@@ -1,4 +1,4 @@
-"""Run-local effects for API v4. Every inference is a single bounded operation."""
+"""Run-local effects for API v5. Every inference is a single bounded operation."""
 from __future__ import annotations
 
 import asyncio
@@ -19,13 +19,13 @@ from opensprite_backend.inference.models import (
     ModelRequest, ModelTextDelta, ModelUsage,
 )
 from opensprite_backend.prompt_logging import PromptLogError
-from .context import ConservativeTokenCounter, ContextAssembler, ContextLimitExceeded
-from .context.compactor import prepare_compaction_source
+from .context.counter import ConservativeTokenCounter
+from .summary_sources import summary_coverage
 from .context.receipt import ReceiptSources
 from .events import AGENT_LIMIT_ERROR, CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .plugin import (
-    CompactionResult, CompactionSpec, ContextResult, ContextSpec,
+    ContextReadRequest, ContextSnapshot, InputSource, SummarySource, SummaryWriteRequest,
     FinalOutput, RunContext, RunResult, StepRequest, StepResult,
 )
 from .request_trace import Attempt
@@ -54,11 +54,11 @@ class _StepDeltaBuffer:
 
 class LoopExecutionHost:
     def __init__(self, *, executor, run, cancellation_event, system_prompt,
-                 budget, limits, selection, provider_endpoint):
+                 model_limits, limits, selection, provider_endpoint):
         self._executor = executor
         self._repository = executor._repository
         self._run = deepcopy(run)
-        self._budget = deepcopy(budget)
+        self._model_limits = deepcopy(model_limits)
         self._limits = deepcopy(limits)
         self._selection = selection
         self._cancellation = cancellation_event
@@ -67,6 +67,8 @@ class LoopExecutionHost:
         self._deadline = monotonic() + limits.max_duration_seconds
         self._requests = self._compactions = self._generated_chars = self._operation_count = 0
         self._contexts = {}
+        self._summary_steps = {}
+        self._current_user = None
         self._steps = {}
         self._attempts = {}
         self._operations = set()
@@ -84,8 +86,9 @@ class LoopExecutionHost:
     @property
     def run(self):
         return RunContext(self._run.id, self._run.conversation_id, self._run.user_message_id,
-                          self._run.provider_id, self._run.model_id, self._run.output_continuation,
-                          deepcopy(self._budget), deepcopy(self._limits),
+                          self._run.provider_id, self._run.model_id,
+                          self._run.context_budget, self._run.output_budget,
+                          deepcopy(self._model_limits), self._system_prompt, deepcopy(self._limits),
                           self._selection.plugin_id, self._selection.plugin_version)
 
     @staticmethod
@@ -138,9 +141,9 @@ class LoopExecutionHost:
             if task is not None:
                 self._operations.discard(task)
 
-    def _context_sources(self, context):
-        stored = self._contexts.get(id(context))
-        if stored is None or stored[0] is not context or stored[1] != self._signature(context):
+    def _owned_snapshot(self, snapshot):
+        stored = self._contexts.get(id(snapshot))
+        if stored is None or stored[0] is not snapshot or stored[1] != self._signature(snapshot):
             raise ExecutionFailed(INTERNAL_ERROR)
         return stored[2]
 
@@ -150,91 +153,170 @@ class LoopExecutionHost:
             raise ExecutionFailed(INTERNAL_ERROR)
         return stored[2]
 
-    async def context(self, spec=ContextSpec()):
+    async def read_context(self, request=ContextReadRequest()):
         async with self._operation():
-            if (type(spec) is not ContextSpec or type(spec.recent_messages) is not int
-                    or not 1 <= spec.recent_messages <= 64 or type(spec.use_summary) is not bool
-                    or not isinstance(spec.summary_format, str)
-                    or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", spec.summary_format) is None
-                    or spec.selection_tokens is not None and (
-                        type(spec.selection_tokens) is not int or not 1 <= spec.selection_tokens <= self._budget.input_budget_tokens)
-                    or spec.history_ids is not None and (type(spec.history_ids) is not tuple or len(spec.history_ids) > 200
-                        or len(set(spec.history_ids)) != len(spec.history_ids))):
+            if (type(request) is not ContextReadRequest or type(request.limit) is not int
+                or not 1 <= request.limit <= 200
+                or request.before_sequence is not None and (type(request.before_sequence) is not int or request.before_sequence < 1)
+                or request.after_sequence is not None and (type(request.after_sequence) is not int or request.after_sequence < 0)
+                or request.before_sequence is not None and request.after_sequence is not None
+                or request.summary_format is not None and (not isinstance(request.summary_format, str)
+                    or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", request.summary_format) is None)):
                 raise ExecutionFailed(INTERNAL_ERROR)
-            page = await asyncio.to_thread(self._repository.list_messages, self._run.conversation_id,
-                                           limit=200, before_sequence=None)
-            # Freeze admission's history even if a future store allows a newer turn.
-            current = next((message for message in page.items if message.id == self._run.user_message_id), None)
-            if current is None:
+            if self._current_user is None:
+                self._current_user = await asyncio.to_thread(self._repository.get_message, self._run.user_message_id)
+            current = self._current_user
+            if current is None or current.conversation_id != self._run.conversation_id or current.run_id != self._run.id:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            summary = (await asyncio.to_thread(self._repository.get_latest_compaction,
-                       self._run.conversation_id, summary_format=spec.summary_format)) if spec.use_summary else None
-            coverage = 0 if summary is None else summary.covers_through_sequence
-            history = tuple(message for message in page.items if coverage < message.sequence <= current.sequence)
-            has_older = bool(page.next_before_sequence is not None and page.items
-                             and coverage < page.items[0].sequence - 1)
-            if spec.history_ids is not None:
-                allowed = {message.id for message in history}
-                if any(identifier not in allowed for identifier in spec.history_ids):
-                    raise ExecutionFailed(INTERNAL_ERROR)
-                chosen = set(spec.history_ids) | {current.id}
-                history = tuple(message for message in history if message.id in chosen)
-                has_older = False
-            floor = history[max(0, len(history) - spec.recent_messages):]
-            protected = floor[0].sequence if floor else current.sequence
-            candidates = await asyncio.to_thread(self._repository.list_messages_after, self._run.conversation_id,
-                                                after_sequence=coverage, limit=200)
-            candidates = tuple(message for message in candidates if message.sequence < protected)
-            error = None
-            try:
-                assembled = ContextAssembler(self._counter, recent_message_floor=spec.recent_messages).assemble(
-                    system_prompt=self._system_prompt, history=history, budget=self._budget,
-                    summary=summary, has_older_history=has_older,
-                    current_user_message_id=current.id, selection_tokens=spec.selection_tokens)
-                messages, needs, estimate = assembled.messages, assembled.needs_compaction, assembled.estimated_input_tokens
-            except ContextLimitExceeded:
-                messages, needs, estimate, error = (), False, 0, CONTEXT_LIMIT_ERROR
-            result = ContextResult(str(uuid4()), messages, deepcopy(self._budget), history,
-                                   summary, candidates, needs, estimate, error)
-            bindings = []
-            # Bind by position; repeated identical historical text has different IDs.
-            suffix = messages[-assembled.included_message_count:] if error is None and assembled.included_message_count else ()
-            for message, original in zip(suffix, history[-len(suffix):] if suffix else ()):
-                bindings.append((message, "currentUser" if original.id == current.id else "history",
-                                 original.id, original.sequence))
-            sources = ReceiptSources(bindings=tuple(bindings),
-                summary=None if summary is None else {"id": summary.id, "version": summary.summary_version,
-                    "sourceHash": summary.source_hash, "throughSequence": summary.covers_through_sequence},
-                workspace={"id": self._run.workspace_id, "revision": self._run.workspace_revision,
-                           "mountManifestHash": self._run.workspace_mount_manifest_hash},
-                context_limit=self._budget.context_limit_tokens, input_budget=self._budget.input_budget_tokens)
-            if summary is not None and messages and len(messages) > 1:
-                sources = replace(sources, bindings=sources.bindings + ((messages[1], "summary", summary.id, summary.covers_through_sequence),))
-            self._contexts[id(result)] = (result, self._signature(result), sources)
-            return result
+            before = after = None
+            if request.after_sequence is None:
+                page = await asyncio.to_thread(self._repository.list_messages, self._run.conversation_id,
+                    limit=request.limit, before_sequence=min(request.before_sequence or current.sequence, current.sequence))
+                history, before = page.items, page.next_before_sequence
+            else:
+                history = await asyncio.to_thread(self._repository.list_messages_after, self._run.conversation_id,
+                    after_sequence=request.after_sequence, limit=request.limit)
+                history = tuple(item for item in history if item.sequence < current.sequence)
+                if history and len(history) == request.limit and history[-1].sequence < current.sequence - 1:
+                    after = history[-1].sequence
+            summary = (None if request.summary_format is None else await asyncio.to_thread(
+                self._repository.get_latest_compaction, self._run.conversation_id,
+                summary_format=request.summary_format, before_sequence=current.sequence))
+            snapshot = ContextSnapshot(str(uuid4()), current, history, summary, before, after)
+            self._contexts[id(snapshot)] = (snapshot, self._signature(snapshot),
+                                           {item.id: item for item in (*history, current)})
+            return snapshot
+
+    @staticmethod
+    def _validate_messages(messages):
+        if (type(messages) is not tuple or not 1 <= len(messages) <= 256
+            or any(type(item) is not ModelMessage or item.role not in {"system", "user", "assistant"}
+                   or not isinstance(item.content, str) or not 1 <= len(item.content) <= 1048576 for item in messages)):
+            raise ExecutionFailed(INTERNAL_ERROR)
+
+    async def estimate_input(self, messages):
+        async with self._operation():
+            self._validate_messages(messages)
+            return self._counter.request(messages)
+
+    def _input_sources(self, request):
+        if type(request.sources) is not tuple or len(request.sources) > 256:
+            raise ExecutionFailed(INTERNAL_ERROR)
+        bindings, history_ids, step_ids, used_positions, summary_meta = [], [], [], set(), None
+        for source in request.sources:
+            if (type(source) is not InputSource or type(source.message_index) is not int
+                or not 0 <= source.message_index < len(request.messages) or source.message_index in used_positions
+                or type(source.message_ids) is not tuple or len(source.message_ids) > 200
+                or len(set(source.message_ids)) != len(source.message_ids)):
+                raise ExecutionFailed(INTERNAL_ERROR)
+            used_positions.add(source.message_index)
+            if source.snapshot is None and (source.message_ids or source.summary_id is not None):
+                raise ExecutionFailed(INTERNAL_ERROR)
+            kind, identifier, sequence = None, None, 0
+            if source.snapshot is not None:
+                owned = self._owned_snapshot(source.snapshot)
+                for identifier in source.message_ids:
+                    if identifier not in owned:
+                        raise ExecutionFailed(INTERNAL_ERROR)
+                    item = owned[identifier]
+                    history_ids.append(identifier)
+                    kind = "currentUser" if identifier == self._run.user_message_id else "history"
+                    sequence = item.sequence
+                if source.summary_id is not None:
+                    summary = source.snapshot.summary
+                    if summary is None or source.summary_id != summary.id:
+                        raise ExecutionFailed(INTERNAL_ERROR)
+                    kind, identifier, sequence = "summary", summary.id, summary.covers_through_sequence
+                    metadata = {"id": summary.id, "version": summary.summary_version,
+                                "sourceHash": summary.source_hash, "throughSequence": summary.covers_through_sequence}
+                    if summary_meta is not None and summary_meta != metadata:
+                        raise ExecutionFailed(INTERNAL_ERROR)
+                    summary_meta = metadata
+            if type(source.steps) is not tuple or len(source.steps) > 128:
+                raise ExecutionFailed(INTERNAL_ERROR)
+            for step in source.steps:
+                self._check_step(step)
+                step_ids.append(step.id)
+                kind, identifier = "assistant", step.id
+            if kind is None:
+                raise ExecutionFailed(INTERNAL_ERROR)
+            bindings.append((request.messages[source.message_index], kind, identifier, sequence))
+        if request.purpose != "compaction" and self._run.user_message_id not in history_ids:
+            raise ExecutionFailed(INTERNAL_ERROR)
+        return ReceiptSources(bindings=tuple(bindings), history_ids=tuple(dict.fromkeys(history_ids)),
+            step_ids=tuple(dict.fromkeys(step_ids)),
+            summary=summary_meta, workspace={"id": self._run.workspace_id, "revision": self._run.workspace_revision,
+                "mountManifestHash": self._run.workspace_mount_manifest_hash},
+            context_limit=self._model_limits.context_tokens,
+            input_budget=request.input_limit_tokens or self._model_limits.context_tokens - request.max_output_tokens)
+
+    async def _summary_details(self, source):
+        if (type(source) is not SummarySource or type(source.snapshots) is not tuple or not source.snapshots
+            or len(source.snapshots) > 200 or type(source.message_ids) is not tuple or not source.message_ids
+            or len(source.message_ids) > 200 or len(set(source.message_ids)) != len(source.message_ids)
+            or not isinstance(source.summary_format, str)
+            or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", source.summary_format) is None
+            or source.reason not in {"local_budget", "provider_context_limit"}
+            or type(source.estimated_before_tokens) is not int or not 0 <= source.estimated_before_tokens <= 2**53-1):
+            raise ExecutionFailed(INTERNAL_ERROR)
+        owned, previous = {}, None
+        for snapshot in source.snapshots:
+            owned.update(self._owned_snapshot(snapshot))
+            if snapshot.summary is not None and snapshot.summary.id == source.previous_summary_id:
+                previous = snapshot.summary
+        if source.previous_summary_id is not None and (previous is None or previous.summary_format != source.summary_format):
+            raise ExecutionFailed(INTERNAL_ERROR)
+        if any(identifier not in owned for identifier in source.message_ids):
+            raise ExecutionFailed(INTERNAL_ERROR)
+        messages = tuple(owned[identifier] for identifier in source.message_ids)
+        if any(item.sequence >= self._current_user.sequence for item in messages):
+            raise ExecutionFailed(INTERNAL_ERROR)
+        latest = await asyncio.to_thread(self._repository.get_latest_compaction, self._run.conversation_id,
+            summary_format=source.summary_format, before_sequence=self._current_user.sequence)
+        if latest != previous:
+            raise ExecutionFailed(INTERNAL_ERROR)
+        try:
+            coverage = summary_coverage(previous, messages)
+        except ValueError:
+            raise ExecutionFailed(INTERNAL_ERROR) from None
+        return {"coverage": coverage, "previous": deepcopy(previous), "format": source.summary_format,
+                "reason": source.reason, "estimate": source.estimated_before_tokens,
+                "id": str(uuid4()), "ended": False}
 
     async def infer(self, request):
         async with self._operation():
             if (type(request) is not StepRequest or request.channel not in {"draft", "answer"}
-                or request.purpose not in {"main", "continuation"} or type(request.messages) is not tuple
+                or request.purpose not in {"main", "continuation", "compaction"}
                 or not isinstance(request.label, str) or not 1 <= len(request.label) <= 64
-                or not isinstance(request.instruction, str) or len(request.instruction) > 65536
-                or any(type(message) is not ModelMessage or message.role not in {"user", "assistant"} for message in request.messages)):
+                or type(request.max_output_tokens) is not int or not 1 <= request.max_output_tokens <= self._model_limits.output_tokens
+                or request.input_limit_tokens is not None and (type(request.input_limit_tokens) is not int
+                    or not 1 <= request.input_limit_tokens <= self._model_limits.context_tokens - request.max_output_tokens)):
                 raise ExecutionFailed(INTERNAL_ERROR)
-            sources = self._context_sources(request.context)
-            if request.context.error is not None:
-                return await self._perform(request, (), sources, preflight_error=request.context.error)
-            messages = request.context.messages
-            if request.instruction:
-                messages = (ModelMessage("system", messages[0].content + "\n\nLoop instruction:\n" + request.instruction), *messages[1:])
-            messages = (*messages, *request.messages)
-            return await self._perform(request, messages, sources)
+            self._validate_messages(request.messages)
+            if request.messages[0].role != "system" or not request.messages[0].content.startswith(self._system_prompt):
+                raise ExecutionFailed(INTERNAL_ERROR)
+            if request.parent_request_id is not None and request.parent_request_id not in self._attempts:
+                raise ExecutionFailed(INTERNAL_ERROR)
+            sources = self._input_sources(request)
+            details = None
+            if request.purpose == "compaction":
+                if request.channel != "draft" or request.summary_source is None:
+                    raise ExecutionFailed(INTERNAL_ERROR)
+                details = await self._summary_details(request.summary_source)
+                if tuple(sources.history_ids) != request.summary_source.message_ids:
+                    raise ExecutionFailed(INTERNAL_ERROR)
+            elif request.summary_source is not None:
+                raise ExecutionFailed(INTERNAL_ERROR)
+            return await self._perform(request, request.messages, sources, summary_details=details,
+                parent_request_id=request.parent_request_id)
 
     async def _perform(self, spec, messages, sources, *, preflight_error=None,
-                       purpose=None, compaction_id=None, parent_request_id=None):
+                       purpose=None, summary_details=None, parent_request_id=None):
         purpose = purpose or spec.purpose
-        output_tokens = self._budget.output_reserve_tokens if spec.max_output_tokens is None else spec.max_output_tokens
-        if type(output_tokens) is not int or not 1 <= output_tokens <= self._budget.output_reserve_tokens:
+        output_tokens = spec.max_output_tokens
+        input_budget = spec.input_limit_tokens or self._model_limits.context_tokens - output_tokens
+        compaction_id = None if summary_details is None else summary_details["id"]
+        if type(output_tokens) is not int or not 1 <= output_tokens <= self._model_limits.output_tokens:
             raise ExecutionFailed(INTERNAL_ERROR)
         previous = None
         if spec.retry_of is not None:
@@ -244,21 +326,28 @@ class LoopExecutionHost:
             previous = self._attempts.get(spec.retry_of.id)
         if len(messages) > 256:
             raise ExecutionFailed(INTERNAL_ERROR)
-        if not messages or self._counter.request(messages) > self._budget.input_budget_tokens:
+        if not messages or self._counter.request(messages) > input_budget:
             preflight_error = preflight_error or CONTEXT_LIMIT_ERROR
         if preflight_error is None and self._requests >= self._limits.max_model_requests:
             raise ExecutionFailed(AGENT_LIMIT_ERROR)
-        if purpose == "continuation" and spec.retry_of is None and preflight_error is None:
-            configured = self._run.output_continuation
-            maximum = 64 if configured == "unlimited" else 0 if configured == "off" else int(configured)
-            if self._continuations >= maximum:
+        if summary_details is not None and preflight_error is None:
+            if self._compactions >= self._limits.max_compactions:
                 raise ExecutionFailed(AGENT_LIMIT_ERROR)
+            self._compactions += 1
+            coverage = summary_details["coverage"]
+            await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_STARTED,
+                {"schemaVersion": 1, "compactionId": compaction_id, "reason": summary_details["reason"],
+                 "fromSequence": coverage.first_sequence, "throughSequence": coverage.through_sequence,
+                 "estimatedBeforeTokens": summary_details["estimate"], "inputBudgetTokens": input_budget})
+        if purpose == "continuation" and spec.retry_of is None and preflight_error is None:
             self._continuations += 1
             await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.RESPONSE_CONTINUATION_STARTED,
-                {"attempt": self._continuations, "maxAttempts": None if configured == "unlimited" else maximum})
+                {"attempt": self._continuations, "maxAttempts": None})
         row = await asyncio.to_thread(self._repository.start_step, self._run.id,
                                       label=spec.label, channel=spec.channel,
                                       retry_of=None if spec.retry_of is None else spec.retry_of.id)
+        if summary_details is not None and preflight_error is None:
+            self._summary_steps[row.id] = summary_details
         buffer = _StepDeltaBuffer(self._repository, row.id)
         text = ""
         input_usage = output_usage = None
@@ -275,12 +364,12 @@ class LoopExecutionHost:
                 await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.MODEL_STARTED,
                     {"providerId": self._run.provider_id, "modelId": self._run.model_id, "responseMode": self._run.response_mode,
                      "maxOutputTokens": output_tokens, "contextTokens": self._counter.request(messages),
-                     "contextLimitTokens": self._budget.context_limit_tokens, "inputBudgetTokens": self._budget.input_budget_tokens})
+                     "contextLimitTokens": self._model_limits.context_tokens, "inputBudgetTokens": input_budget})
                 attempt = Attempt(self._run.id, row.id, purpose,
                     number=1 if previous is None else previous.number + 1,
                     retry_of=None if previous is None else previous.id,
                     cause=None if previous is None else ("provider_context_limit" if spec.retry_of.error.code == "context_limit_exceeded" else spec.retry_of.error.code),
-                    compaction_id=compaction_id or (spec.context.summary.id if spec.context.summary is not None and spec.context.summary.id in self._new_summaries else None),
+                    compaction_id=compaction_id or (sources.summary["id"] if sources.summary and sources.summary["id"] in self._new_summaries else None),
                     parent_request_id=parent_request_id, sources=sources)
                 self._attempts[row.id] = attempt
                 events = self._executor._with_cancellation(self._executor._gateway.stream(request, attempt=attempt), self._cancellation)
@@ -309,6 +398,8 @@ class LoopExecutionHost:
                 if completion not in {ModelFinishReason.FINAL, ModelFinishReason.OUTPUT_LIMIT} or not text.strip():
                     raise ExecutionFailed(INVALID_PROVIDER_RESPONSE)
             except ModelGatewayError as failure:
+                if summary_details is not None:
+                    summary_details["failure"] = "provider_failed"
                 error = inference_error(failure.failure)
                 if failure.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED:
                     error = replace(error, retryable=True)
@@ -318,6 +409,8 @@ class LoopExecutionHost:
                     await asyncio.to_thread(self._repository.finish_step, row.id, status="failed", error_code=error.code)
                     raise ExecutionFailed(error) from None
             except (RunCancelled, asyncio.CancelledError):
+                if summary_details is not None:
+                    summary_details["cancelled"] = self._cancellation.is_set() or monotonic() <= self._deadline
                 await buffer.flush()
                 await asyncio.to_thread(self._repository.finish_step, row.id, status="cancelled")
                 raise
@@ -352,70 +445,39 @@ class LoopExecutionHost:
                 logging.getLogger("opensprite.agent.context").warning("prompt logging unavailable run_id=%s", self._run.id)
                 raise ExecutionFailed(INTERNAL_ERROR) from None
 
-    async def compact(self, spec):
+    async def save_summary(self, request):
         async with self._operation():
-            if (type(spec) is not CompactionSpec or type(spec.messages) is not tuple or not spec.messages
-                or not isinstance(spec.instruction, str) or not 1 <= len(spec.instruction) <= 65536
-                or not isinstance(spec.summary_format, str)
-                or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", spec.summary_format) is None
-                or type(spec.max_output_tokens) is not int or not 1 <= spec.max_output_tokens <= 65536
-                or spec.reason not in {"local_budget", "provider_context_limit"}):
+            if (type(request) is not SummaryWriteRequest or not isinstance(request.text, str)
+                or not 1 <= len(request.text) <= 262144 or not request.text.strip()):
                 raise ExecutionFailed(INTERNAL_ERROR)
-            self._context_sources(spec.context)
-            if spec.parent_request_id is not None and spec.parent_request_id not in self._attempts:
+            self._check_step(request.step)
+            details = self._summary_steps.get(request.step.id)
+            if details is None or request.step.error is not None:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            latest = await asyncio.to_thread(self._repository.get_latest_compaction,
-                self._run.conversation_id, summary_format=spec.summary_format)
-            if latest != spec.context.summary:
-                raise ExecutionFailed(INTERNAL_ERROR)
-            if self._compactions >= self._limits.max_compactions:
-                raise ExecutionFailed(AGENT_LIMIT_ERROR)
-            allowed = {id(message): message for message in spec.context.compaction_candidates}
-            if any(id(message) not in allowed or allowed[id(message)] != message for message in spec.messages):
-                raise ExecutionFailed(INTERNAL_ERROR)
-            previous = spec.context.summary
-            if previous is not None and previous.summary_format != spec.summary_format:
-                raise ExecutionFailed(INTERNAL_ERROR)
-            source = prepare_compaction_source(previous, spec.messages)
-            self._compactions += 1
-            compaction_id = str(uuid4())
-            await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_STARTED,
-                {"schemaVersion": 1, "compactionId": compaction_id, "reason": spec.reason,
-                 "fromSequence": spec.messages[0].sequence, "throughSequence": spec.messages[-1].sequence,
-                 "estimatedBeforeTokens": spec.context.estimated_input_tokens, "inputBudgetTokens": self._budget.input_budget_tokens})
-            try:
-                messages = (ModelMessage("system", self._system_prompt + "\n\n" + spec.instruction),
-                            ModelMessage("user", source.prompt))
-                sources = ReceiptSources(history_ids=tuple(message.id for message in spec.messages),
-                    workspace={"id": self._run.workspace_id, "revision": self._run.workspace_revision,
-                               "mountManifestHash": self._run.workspace_mount_manifest_hash},
-                    context_limit=self._budget.context_limit_tokens, input_budget=self._budget.input_budget_tokens)
-                request = StepRequest(spec.context, label="summary", channel="draft", max_output_tokens=min(spec.max_output_tokens, self._budget.output_reserve_tokens))
-                step = await self._perform(request, messages, sources, purpose="compaction", compaction_id=compaction_id,
-                                           parent_request_id=spec.parent_request_id)
-                if step.error is not None or step.finish_reason is not ModelFinishReason.FINAL or len(step.text) > 262144:
-                    await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_FAILED,
-                        {"schemaVersion": 1, "compactionId": compaction_id, "errorCode": "provider_failed" if step.error else "preparation_failed"})
-                    return CompactionResult(step, None)
-                summary = await asyncio.to_thread(self._repository.append_compaction,
-                    conversation_id=self._run.conversation_id, covers_through_sequence=source.covers_through_sequence,
-                    summary=step.text, source_hash=source.source_hash, provider_id=self._run.provider_id, model_id=self._run.model_id,
-                    input_tokens=step.input_tokens or 0, output_tokens=step.output_tokens or 0,
-                    producer_plugin_id=self._selection.plugin_id, producer_plugin_version=self._selection.plugin_version,
-                    summary_format=spec.summary_format, compaction_id=compaction_id)
-                self._new_summaries.add(summary.id)
-                await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_COMPLETED,
-                    {"schemaVersion": 1, "compactionId": compaction_id, "throughSequence": summary.covers_through_sequence,
-                     "inputTokens": summary.input_tokens, "outputTokens": summary.output_tokens})
-                return CompactionResult(step, summary)
-            except (RunCancelled, asyncio.CancelledError):
-                await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_CANCELLED,
-                    {"schemaVersion": 1, "compactionId": compaction_id, "reason": "cancelled"})
-                raise
-            except Exception:
-                await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_FAILED,
-                    {"schemaVersion": 1, "compactionId": compaction_id, "errorCode": "preparation_failed"})
-                raise
+            coverage, previous = details["coverage"], details["previous"]
+            summary = await asyncio.to_thread(self._repository.append_compaction,
+                conversation_id=self._run.conversation_id, covers_through_sequence=coverage.through_sequence,
+                summary=request.text, source_hash=coverage.source_hash,
+                provider_id=self._run.provider_id, model_id=self._run.model_id,
+                input_tokens=request.step.input_tokens or 0, output_tokens=request.step.output_tokens or 0,
+                producer_plugin_id=self._selection.plugin_id, producer_plugin_version=self._selection.plugin_version,
+                summary_format=details["format"], compaction_id=details["id"],
+                source_step_id=request.step.id, source_first_sequence=coverage.first_sequence,
+                expected_previous_summary_id=None if previous is None else previous.id, run_id=self._run.id)
+            details["ended"] = True
+            self._new_summaries.add(summary.id)
+            return summary
+
+    async def _end_pending_summaries(self):
+        for details in self._summary_steps.values():
+            if details["ended"]:
+                continue
+            cancelled = self._cancellation.is_set() or details.get("cancelled", False)
+            event = RunEventType.CONTEXT_COMPACTION_CANCELLED if cancelled else RunEventType.CONTEXT_COMPACTION_FAILED
+            data = {"schemaVersion": 1, "compactionId": details["id"],
+                    **({"reason": "cancelled"} if cancelled else {"errorCode": details.get("failure", "preparation_failed")})}
+            await asyncio.to_thread(self._repository.append_run_event, self._run.id, event, data)
+            details["ended"] = True
 
     async def finish(self, output):
         async with self._operation():
@@ -428,18 +490,13 @@ class LoopExecutionHost:
                 error = {"context_limit_exceeded": CONTEXT_LIMIT_ERROR,
                          "context_preparation_failed": CONTEXT_PREPARATION_ERROR,
                          "loop_failed": INTERNAL_ERROR}.get(output.failure)
-                if error is None or output.error_step is not None or output.context_error is not None:
+                if error is None or output.error_step is not None:
                     raise ExecutionFailed(INTERNAL_ERROR)
             if output.error_step is not None:
                 self._check_step(output.error_step)
                 error = output.error_step.error
                 if error is None:
                     raise ExecutionFailed(INTERNAL_ERROR)
-            if output.context_error is not None:
-                self._context_sources(output.context_error)
-                if error is not None or output.context_error.error is None:
-                    raise ExecutionFailed(INTERNAL_ERROR)
-                error = output.context_error.error
             if error is None:
                 if not output.sources or not isinstance(output.text, str) or not output.text.strip() or len(output.text) > self._limits.max_text_chars:
                     raise ExecutionFailed(INTERNAL_ERROR)
@@ -474,3 +531,4 @@ class LoopExecutionHost:
             task.cancel()
         if operations:
             await asyncio.gather(*operations, return_exceptions=True)
+        await self._end_pending_summaries()

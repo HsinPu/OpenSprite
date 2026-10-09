@@ -12,7 +12,7 @@ from typing import Literal
 from .plugin import AgentLoopPlugin, AgentLoopPluginFactory
 
 PluginStatus = Literal["available", "incompatible", "unavailable"]
-API_VERSION = 4
+API_VERSION = 5
 _GROUP = re.compile(r"^opensprite_backend\.agent_loops\.v([1-9][0-9]*)$")
 _ID = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 

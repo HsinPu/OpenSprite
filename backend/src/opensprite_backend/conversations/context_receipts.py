@@ -27,7 +27,10 @@ def valid_context_receipt(data):
             "systemHash", "historyMessageIds", "summary", "workspace"}
     if not isinstance(data, dict):
         return False
-    if set(data) != keys or type(data["schemaVersion"]) is not int or data["schemaVersion"] != 2:
+    version = data.get("schemaVersion")
+    if version == 3:
+        keys.add("stepIds")
+    if set(data) != keys or type(version) is not int or version not in {2, 3}:
         return False
     if data["estimateMethod"] != "utf8-conservative-v1" or not all(_hash(data[key]) for key in ("requestHash", "systemHash")):
         return False
@@ -43,6 +46,10 @@ def valid_context_receipt(data):
     ids = data["historyMessageIds"]
     if not isinstance(ids, list) or len(ids) > 256 or not all(_id(value) for value in ids) or len(set(ids)) != len(ids):
         return False
+    if version == 3:
+        steps = data["stepIds"]
+        if not isinstance(steps, list) or len(steps) > 128 or not all(_id(value) for value in steps) or len(set(steps)) != len(steps):
+            return False
     summary = data["summary"]
     if summary is not None and (not isinstance(summary, dict) or set(summary) != {"id", "version", "sourceHash", "throughSequence"} or not _id(summary["id"]) or not _integer(summary["version"], 1) or not _hash(summary["sourceHash"]) or not _integer(summary["throughSequence"], 1)):
         return False

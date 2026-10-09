@@ -3,7 +3,7 @@ import { ExecutionSettingsApiError, executionSettingsErrorText, getExecutionSett
 import { createTranslator } from "../src/i18n/catalog";
 const settings: ExecutionSettings = {
   selection: { pluginId: "standard" }, revision: 0, migration: null,
-  plugins: [{ id: "standard", name: "Standard", description: "Default", version: "0.1.0", apiVersion: 4, status: "available" }],
+  plugins: [{ id: "standard", name: "Standard", description: "Default", version: "0.1.0", apiVersion: 5, status: "available" }],
 };
 const body = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const saved = { ...settings, selection: { pluginId: "external" }, revision: 1 };

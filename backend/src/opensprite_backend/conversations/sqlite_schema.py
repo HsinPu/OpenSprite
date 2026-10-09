@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 SCHEMA_SQL = """
 BEGIN IMMEDIATE;
 CREATE TABLE conversations (
@@ -46,7 +46,7 @@ CREATE TABLE runs (
     response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra')),
     context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
     output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
-    output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', '10', '20', '50', 'unlimited')),
+    output_continuation TEXT CHECK(output_continuation IN ('off', '1', '2', '3', '5', '10', '20', '50', 'unlimited')),
     log_full_prompts INTEGER NOT NULL CHECK(log_full_prompts IN (0, 1)),
     status TEXT NOT NULL CHECK(status IN (
         'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
@@ -80,6 +80,9 @@ CREATE TABLE conversation_compactions (
     producer_plugin_id TEXT NOT NULL DEFAULT 'legacy',
     producer_plugin_version TEXT NOT NULL DEFAULT 'unknown',
     summary_format TEXT NOT NULL DEFAULT 'opensprite.text.v1',
+    source_step_id TEXT REFERENCES run_steps(id),
+    source_first_sequence INTEGER CHECK(source_first_sequence IS NULL OR source_first_sequence >= 1),
+    previous_summary_id TEXT REFERENCES conversation_compactions(id),
     UNIQUE(conversation_id, summary_format, covers_through_sequence)
 ) STRICT;
 
@@ -115,7 +118,7 @@ CREATE INDEX active_runs_by_workspace
 ON runs(workspace_id)
 WHERE status IN ('queued', 'running', 'cancelling');
 ALTER TABLE runs ADD COLUMN reasoning_resolution_json TEXT CHECK(reasoning_resolution_json IS NULL OR length(reasoning_resolution_json) <= 512);
-PRAGMA user_version = 22;
+PRAGMA user_version = 23;
 COMMIT;
 
 """
@@ -140,12 +143,10 @@ CREATE TABLE run_steps (
 ) STRICT;
 CREATE INDEX steps_by_run_sequence ON run_steps(run_id, sequence);
 """
-SCHEMA_SQL = SCHEMA_SQL.replace("PRAGMA user_version = 22;", STEP_SCHEMA_SQL + "\nPRAGMA user_version = 22;")
+SCHEMA_SQL = SCHEMA_SQL.replace("PRAGMA user_version = 23;", STEP_SCHEMA_SQL + "\nPRAGMA user_version = 23;")
 
-def migrate_schema(connection: sqlite3.Connection) -> None:
+def _migrate_to_v22(connection: sqlite3.Connection) -> None:
     version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-    if version == SCHEMA_VERSION:
-        return
     if version not in {20, 21}:
         raise ValueError("Upgrade older data to OpenSprite 0.21.30 before using the clean core")
     required = {
@@ -159,7 +160,6 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
         actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if not columns.issubset(actual):
             raise ValueError("Incomplete core schema")
-    connection.execute("BEGIN IMMEDIATE")
     try:
         import re
         # Keep the original allowed historical event types and all original rows.
@@ -200,7 +200,51 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
             if statement.strip():
                 connection.execute(statement)
         connection.execute("PRAGMA user_version = 22")
+    except BaseException:
+        raise
+
+
+def migrate_schema(connection: sqlite3.Connection) -> None:
+    """One transaction upgrades v20/v21/v22, preserving every historical row."""
+    import re
+    version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if version == SCHEMA_VERSION:
+        return
+    if version not in {20, 21, 22}:
+        raise ValueError("Upgrade older data to OpenSprite 0.21.30 before using the clean core")
+    foreign_keys = int(connection.execute("PRAGMA foreign_keys").fetchone()[0])
+    connection.execute("PRAGMA foreign_keys = OFF")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        if version in {20, 21}:
+            _migrate_to_v22(connection)
+        required = {"run_steps": {"id", "run_id"}, "runs": {"output_continuation", "reasoning_resolution_json"},
+                    "conversation_compactions": {"summary_format", "producer_plugin_id"}}
+        for table, columns in required.items():
+            actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            if not columns.issubset(actual):
+                raise ValueError("Incomplete v22 schema")
+        sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='runs'").fetchone()[0]
+        new_sql = re.sub(r'(?i)(CREATE TABLE\s+)(?:"runs"|runs)', r'\1runs_v23', sql, count=1)
+        new_sql, count = re.subn(r'(?i)(output_continuation\s+TEXT)\s+NOT\s+NULL', r'\1', new_sql, count=1)
+        if count != 1:
+            raise ValueError("Unsupported continuation schema")
+        indexes = [row[0] for row in connection.execute("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='runs' AND sql IS NOT NULL")]
+        connection.execute(new_sql)
+        connection.execute("INSERT INTO runs_v23 SELECT * FROM runs")
+        connection.execute("DROP TABLE runs")
+        connection.execute("ALTER TABLE runs_v23 RENAME TO runs")
+        for index in indexes:
+            connection.execute(index)
+        connection.execute("ALTER TABLE conversation_compactions ADD COLUMN source_step_id TEXT REFERENCES run_steps(id)")
+        connection.execute("ALTER TABLE conversation_compactions ADD COLUMN source_first_sequence INTEGER CHECK(source_first_sequence IS NULL OR source_first_sequence >= 1)")
+        connection.execute("ALTER TABLE conversation_compactions ADD COLUMN previous_summary_id TEXT REFERENCES conversation_compactions(id)")
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise ValueError("Invalid historical relationships")
+        connection.execute("PRAGMA user_version = 23")
         connection.commit()
     except BaseException:
         connection.rollback()
         raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON" if foreign_keys else "PRAGMA foreign_keys = OFF")

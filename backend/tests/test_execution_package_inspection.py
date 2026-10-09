@@ -20,7 +20,7 @@ def test_valid_pure_python_wheel_is_inspected_without_importing_code():
     assert result.distributionName == "opensprite-stage2-fixture"
     assert result.version == "0.1.0"
     assert result.plugins[0].model_dump() == {
-        "id": "fixture_loop", "kind": "loop", "apiVersion": 4, "entryPoint": MODULE + ":factory",
+        "id": "fixture_loop", "kind": "loop", "apiVersion": 5, "entryPoint": MODULE + ":factory",
     }
     assert MODULE not in sys.modules
 

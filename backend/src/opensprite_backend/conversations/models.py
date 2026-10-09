@@ -128,7 +128,7 @@ class RunSnapshot:
     finished_at: datetime | None
     context_budget: ContextBudget = "auto"
     output_budget: OutputBudget = "auto"
-    output_continuation: OutputContinuation = "5"
+    output_continuation: OutputContinuation | None = None
     log_full_prompts: bool = False
     completion_reason: CompletionReason | None = None
     workspace_id: str = DEFAULT_WORKSPACE_ID
@@ -155,6 +155,9 @@ class ConversationCompaction:
     producer_plugin_id: str = "legacy"
     producer_plugin_version: str = "unknown"
     summary_format: str = "opensprite.text.v1"
+    source_step_id: str | None = None
+    source_first_sequence: int | None = None
+    previous_summary_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

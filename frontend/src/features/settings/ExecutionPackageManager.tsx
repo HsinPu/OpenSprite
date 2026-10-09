@@ -26,7 +26,7 @@ function errorText(error: unknown, t: Translator) {
   return t(errorKeys[error instanceof ExecutionPackageApiError ? error.code : "internal_error"]);
 }
 const sizeText = (size: number) => `${(size / 1024).toFixed(1)} KiB`;
-const compatibleApi = (item: ExecutionPackage) => item.plugins.every(plugin => plugin.apiVersion === 4 && plugin.kind === "loop");
+const compatibleApi = (item: ExecutionPackage) => item.plugins.every(plugin => plugin.apiVersion === 5 && plugin.kind === "loop");
 type Pending = { kind: "import" | "remove" | "download"; id?: string };
 
 export function ExecutionPackageManager({ active, catalogBusy, onRefreshCatalog, onGuide }: { active: boolean; catalogBusy: boolean; onRefreshCatalog: () => Promise<void>; onGuide: () => void }) {

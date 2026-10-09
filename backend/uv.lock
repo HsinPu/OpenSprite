@@ -242,7 +242,7 @@ wheels = [
 
 [[package]]
 name = "opensprite-backend"
-version = "0.21.34"
+version = "0.21.35"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -281,7 +281,7 @@ dev = [{ name = "pytest", specifier = "==8.4.1" }]
 
 [[package]]
 name = "opensprite-standard-loop"
-version = "0.1.0"
+version = "0.2.0"
 source = { directory = "loop_plugins/standard" }
 
 [[package]]

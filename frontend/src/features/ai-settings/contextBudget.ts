@@ -10,13 +10,7 @@ const fixedLimits: Readonly<Record<Exclude<ContextBudget, "auto" | "max">, numbe
 export const contextBudgetValues: ReadonlyArray<ContextBudget> = ["auto", "32k", "64k", "128k", "256k", "max"];
 
 export function contextBudgetLimit(budget: ContextBudget, modelMaximum: number): number {
-  if (budget === "max") return modelMaximum;
-  if (budget !== "auto") return Math.min(fixedLimits[budget], modelMaximum);
-  if (modelMaximum <= 32_768) return modelMaximum;
-  if (modelMaximum <= 65_536) return Math.min(49_152, modelMaximum);
-  if (modelMaximum <= 131_072) return Math.min(98_304, modelMaximum);
-  if (modelMaximum <= 262_144) return Math.min(196_608, modelMaximum);
-  return Math.min(262_144, modelMaximum);
+  return budget === "auto" || budget === "max" ? modelMaximum : Math.min(fixedLimits[budget], modelMaximum);
 }
 
 export function contextBudgetAvailable(budget: ContextBudget, modelMaximum: number): boolean {

@@ -132,7 +132,7 @@ def test_fresh_database_has_only_core_tables_and_no_action_or_schedule_columns(t
         columns = {row[1] for row in connection.execute("PRAGMA table_info(runs)")}
         assert tables == {"conversations", "messages", "runs", "run_events", "run_steps", "conversation_compactions"}
         assert not {"source", "occurrence_id"}.intersection(columns)
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 23
 
 
 def test_v20_upgrade_preserves_inert_tables_and_projects_only_core_events(tmp_path):
@@ -157,7 +157,7 @@ def test_v20_upgrade_preserves_inert_tables_and_projects_only_core_events(tmp_pa
         connection.executemany("INSERT INTO run_events VALUES (?, ?, ?, ?, ?)", rows)
         connection.commit()
         before = connection.execute("SELECT * FROM run_events ORDER BY sequence").fetchall()
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 23
         assert connection.execute("SELECT payload FROM preserved_fixture").fetchone()[0] == "opaque legacy state"
     page = repository.list_run_events(run.id, after_sequence=0, limit=1)
     assert page[0].sequence == 3 and "toolNames" not in page[0].data
@@ -182,10 +182,10 @@ def test_old_ai_settings_are_read_without_write_and_next_save_has_no_tool_policy
     before = path.read_bytes()
     store = JsonAiSettingsStore(path)
     settings = store.get()
-    assert settings.responseMode.value == "high" and path.read_bytes() == before
+    assert settings.responseMode.value == "high" and json.loads(path.read_bytes())["version"] == 12
     store.set(AiSettings(**settings.model_dump()))
     saved = json.loads(path.read_bytes())
-    assert saved["version"] == 11 and "providerToolPolicies" not in saved
+    assert saved["version"] == 12 and "providerToolPolicies" not in saved
     assert store.get() == settings
 
 

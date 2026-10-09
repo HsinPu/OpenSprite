@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from opensprite_backend.inference.capabilities import ModelCapability
-from opensprite_backend.models import ContextBudget, OutputBudget
+from opensprite_backend.agent.plugin import ModelLimits
+from opensprite_backend.agent.plugin import ContextBudget, OutputBudget
 
 _FIXED_LIMITS: Final = {
     "32k": 32_768,
@@ -47,15 +47,15 @@ def _automatic_limit(model_maximum: int) -> int:
 
 def resolve_context_budget(
     requested: ContextBudget,
-    capability: ModelCapability,
+    capability: ModelLimits,
     output_requested: OutputBudget = "auto",
 ) -> ContextBudgetPlan:
     if requested == "auto":
-        context_limit = _automatic_limit(capability.context_window_tokens)
+        context_limit = _automatic_limit(capability.context_tokens)
     elif requested == "max":
-        context_limit = capability.context_window_tokens
+        context_limit = capability.context_tokens
     else:
-        context_limit = min(_FIXED_LIMITS[requested], capability.context_window_tokens)
+        context_limit = min(_FIXED_LIMITS[requested], capability.context_tokens)
 
     safety_reserve = max(4_096, (context_limit + 9) // 10)
     minimum_input_reserve = max(1, (context_limit + 3) // 4)
@@ -69,12 +69,12 @@ def resolve_context_budget(
             max(8_192, context_limit // 4),
         )
     elif output_requested == "max":
-        output_target = capability.max_output_tokens
+        output_target = capability.output_tokens
     else:
         output_target = _FIXED_OUTPUT_LIMITS[output_requested]
     output_reserve = min(
         output_target,
-        capability.max_output_tokens,
+        capability.output_tokens,
         maximum_safe_output,
     )
     input_budget = context_limit - output_reserve - safety_reserve

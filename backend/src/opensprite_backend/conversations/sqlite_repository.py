@@ -25,7 +25,6 @@ from .models import (
     Message,
     MessagePage,
     OutputBudget,
-    OutputContinuation,
     MAX_ASSISTANT_CHARS,
     ProviderId,
     PublicRunError,
@@ -67,7 +66,6 @@ from opensprite_backend.response_modes import HISTORICAL_RESPONSE_MODES, Reasoni
 _RESPONSE_MODES = set(HISTORICAL_RESPONSE_MODES)
 _CONTEXT_BUDGETS = {"auto", "32k", "64k", "128k", "256k", "max"}
 _OUTPUT_BUDGETS = {"auto", "8k", "16k", "32k", "64k", "max"}
-_OUTPUT_CONTINUATIONS = {"off", "1", "2", "3", "5", "10", "20", "50", "unlimited"}
 _PUBLIC_ERROR_CODES = {
     "invalid_request",
     "idempotency_conflict",
@@ -264,10 +262,24 @@ class SqliteConversationRepository(SqliteRunSteps):
             finally:
                 connection.close()
 
+    def get_message(self, message_id: str) -> Message | None:
+        self._require_identifier(message_id)
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return None
+            try:
+                row = connection.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+                return None if row is None else self._message(row)
+            except (sqlite3.Error, TypeError, ValueError) as error:
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE) from error
+            finally:
+                connection.close()
+
     def get_latest_compaction(
         self,
         conversation_id: str,
-        *, summary_format: str = "opensprite.text.v1",
+        *, summary_format: str = "opensprite.text.v1", before_sequence: int | None = None,
     ) -> ConversationCompaction | None:
         self._require_identifier(conversation_id)
         with self._lock:
@@ -278,11 +290,11 @@ class SqliteConversationRepository(SqliteRunSteps):
                 row = connection.execute(
                     """
                     SELECT * FROM conversation_compactions
-                    WHERE conversation_id = ? AND summary_format = ?
+                    WHERE conversation_id = ? AND summary_format = ? AND (? IS NULL OR covers_through_sequence < ?)
                     ORDER BY covers_through_sequence DESC
                     LIMIT 1
                     """,
-                    (conversation_id, summary_format),
+                    (conversation_id, summary_format, before_sequence, before_sequence),
                 ).fetchone()
                 return None if row is None else self._compaction(row)
             except (sqlite3.Error, TypeError, ValueError) as error:
@@ -346,6 +358,10 @@ class SqliteConversationRepository(SqliteRunSteps):
         producer_plugin_version: str = "unknown",
         summary_format: str = "opensprite.text.v1",
         compaction_id: str | None = None,
+        source_step_id: str | None = None,
+        source_first_sequence: int | None = None,
+        expected_previous_summary_id: str | None = None,
+        run_id: str | None = None,
     ) -> ConversationCompaction:
         self._require_identifier(conversation_id)
         normalized_summary = self._require_text(summary, maximum=262_144)
@@ -388,6 +404,29 @@ class SqliteConversationRepository(SqliteRunSteps):
                 ).fetchone()
                 if conversation is None or covered_message is None:
                     raise ConversationStoreError(StoreFailure.NOT_FOUND)
+                if source_step_id is not None:
+                    self._require_identifier(source_step_id)
+                    self._require_identifier(run_id)
+                    step = connection.execute("SELECT * FROM run_steps WHERE id=?", (source_step_id,)).fetchone()
+                    run = self._require_run_row(connection, run_id)
+                    if (step is None or step["run_id"] != run_id or run["conversation_id"] != conversation_id
+                        or step["status"] != "completed" or run["status"] != "running"
+                        or type(source_first_sequence) is not int or not 1 <= source_first_sequence <= covers_through_sequence):
+                        raise ConversationStoreError(StoreFailure.INVALID_STATE)
+                    existing = connection.execute("SELECT * FROM conversation_compactions WHERE source_step_id=? AND summary_format=?",
+                        (source_step_id, summary_format)).fetchone()
+                    if existing is not None:
+                        if (existing["summary"], existing["source_hash"], existing["covers_through_sequence"], existing["source_first_sequence"]) != (
+                            normalized_summary, source_hash, covers_through_sequence, source_first_sequence):
+                            raise ConversationStoreError(StoreFailure.INVALID_STATE)
+                        connection.commit()
+                        return self._compaction(existing)
+                    previous = connection.execute("SELECT * FROM conversation_compactions WHERE conversation_id=? AND summary_format=? ORDER BY covers_through_sequence DESC LIMIT 1",
+                        (conversation_id, summary_format)).fetchone()
+                    if (None if previous is None else previous["id"]) != expected_previous_summary_id:
+                        raise ConversationStoreError(StoreFailure.REVISION_CONFLICT)
+                    if source_first_sequence != (1 if previous is None else previous["covers_through_sequence"]+1):
+                        raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
                 latest = connection.execute(
                     """
                     SELECT MAX(covers_through_sequence)
@@ -412,7 +451,8 @@ class SqliteConversationRepository(SqliteRunSteps):
                     created_at=self._now(),
                     producer_plugin_id=producer_plugin_id,
                     producer_plugin_version=producer_plugin_version,
-                    summary_format=summary_format,
+                    summary_format=summary_format, source_step_id=source_step_id,
+                    source_first_sequence=source_first_sequence, previous_summary_id=expected_previous_summary_id,
                 )
                 connection.execute(
                     """
@@ -420,8 +460,9 @@ class SqliteConversationRepository(SqliteRunSteps):
                         id, conversation_id, covers_through_sequence, summary,
                         summary_version, source_hash, provider_id, model_id,
                         input_tokens, output_tokens, created_at,
-                        producer_plugin_id, producer_plugin_version, summary_format
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        producer_plugin_id, producer_plugin_version, summary_format,
+                        source_step_id, source_first_sequence, previous_summary_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item.id,
@@ -437,10 +478,16 @@ class SqliteConversationRepository(SqliteRunSteps):
                         self._timestamp(item.created_at),
                         producer_plugin_id,
                         producer_plugin_version,
-                        summary_format,
+                        summary_format, source_step_id, source_first_sequence, expected_previous_summary_id,
                     ),
                 )
+                if source_step_id is not None:
+                    self._append_event(connection, run_id, conversation_id, RunEventType.CONTEXT_COMPACTION_COMPLETED,
+                        {"schemaVersion": 1, "compactionId": item.id, "throughSequence": covers_through_sequence,
+                         "inputTokens": input_tokens, "outputTokens": output_tokens}, self._now())
                 connection.commit()
+                if source_step_id is not None:
+                    self._signal_run_event(run_id)
                 return item
             except ConversationStoreError:
                 connection.rollback()
@@ -519,7 +566,6 @@ class SqliteConversationRepository(SqliteRunSteps):
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
-        output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
         workspace_revision: int = 1,
@@ -540,8 +586,6 @@ class SqliteConversationRepository(SqliteRunSteps):
         if context_budget not in _CONTEXT_BUDGETS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if output_budget not in _OUTPUT_BUDGETS:
-            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if output_continuation not in _OUTPUT_CONTINUATIONS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if not isinstance(log_full_prompts, bool):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
@@ -698,7 +742,7 @@ class SqliteConversationRepository(SqliteRunSteps):
                         response_mode,
                         context_budget,
                         output_budget,
-                        output_continuation,
+                        None,
                         int(log_full_prompts),
                         now_text,
                     ),
@@ -726,7 +770,7 @@ class SqliteConversationRepository(SqliteRunSteps):
                 if conversation_row is None or run_row is None:
                     raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
                 if execution_profile is not None:
-                    if execution_profile.get("apiVersion") != 4:
+                    if execution_profile.get("apiVersion") != 5:
                         raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
                     self._append_event(connection, run_id, resolved_conversation_id,
                                        RunEventType.EXECUTION_SELECTED, execution_profile, now)
@@ -1665,7 +1709,8 @@ class SqliteConversationRepository(SqliteRunSteps):
             ),
             producer_plugin_id=row["producer_plugin_id"],
             producer_plugin_version=row["producer_plugin_version"],
-            summary_format=row["summary_format"],
+            summary_format=row["summary_format"], source_step_id=row["source_step_id"],
+            source_first_sequence=row["source_first_sequence"], previous_summary_id=row["previous_summary_id"],
         )
 
     @staticmethod
@@ -1737,14 +1782,14 @@ class SqliteConversationRepository(SqliteRunSteps):
         event_type = RunEventType(row["type"])
         if event_type is RunEventType.MODEL_STARTED:
             data.pop("toolNames", None)
-        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") not in {2, 3, 4}:
+        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") not in {2, 3, 4, 5}:
             return None
         if event_type is RunEventType.MODEL_ATTEMPT:
             # v1 receipts and action attempts remain stored, but are not current diagnostics.
             context = data.get("context")
             if context is not None and not isinstance(context, dict):
                 raise ValueError("Invalid persisted model context")
-            if (context is not None and context.get("schemaVersion") != 2) or data.get("purpose") not in {"main", "continuation", "compaction"} or data.get("finishReason") == "tool_calls":
+            if (context is not None and context.get("schemaVersion") not in {2, 3}) or data.get("purpose") not in {"main", "continuation", "compaction"} or data.get("finishReason") == "tool_calls":
                 return None
         if event_type in {RunEventType.RUN_FAILED, RunEventType.RUN_INTERRUPTED}:
             error = data.get("error")
@@ -1915,10 +1960,10 @@ class SqliteConversationRepository(SqliteRunSteps):
         keys = set(data)
         if event_type is RunEventType.EXECUTION_SELECTED:
             api = data.get("apiVersion")
-            if type(api) is not int or api not in {2, 3, 4}:
+            if type(api) is not int or api not in {2, 3, 4, 5}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            identifiers = ("pluginId",) if api in {3, 4} else ("loopId", "policyId")
-            versions = ("pluginVersion",) if api in {3, 4} else ("loopVersion", "policyVersion")
+            identifiers = ("pluginId",) if api in {3, 4, 5} else ("loopId", "policyId")
+            versions = ("pluginVersion",) if api in {3, 4, 5} else ("loopVersion", "policyVersion")
             if keys != {"apiVersion", *identifiers, *versions}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             for key in identifiers:
@@ -2053,7 +2098,7 @@ class SqliteConversationRepository(SqliteRunSteps):
             if (
                 not isinstance(attempt, int)
                 or isinstance(attempt, bool)
-                or not 1 <= attempt <= 64
+                or not 1 <= attempt <= 128
                 or (
                     maximum is not None
                     and (

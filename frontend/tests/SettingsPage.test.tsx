@@ -131,28 +131,27 @@ function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("medium");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
-  const [outputContinuation, setOutputContinuation] = useState<"off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited">("5");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
 }
 
 function GuardedDialogHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="medium" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="medium" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing", contextBudget: "auto", outputBudget: "auto" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="medium" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="medium" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
 }
 
 function GeneralSettingsPageHarness({ saving = false, section = "general" }: { saving?: boolean; section?: SettingsSection }) {
   const providerCatalog = useProviderCatalog();
-  return <SettingsPage section={section} onSectionChange={() => undefined} modelSelection={null} responseMode="medium" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
+  return <SettingsPage section={section} onSectionChange={() => undefined} modelSelection={null} responseMode="medium" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
 }
 
 function LocalizedModels({ locale }: { locale: Locale }) {
@@ -210,7 +209,7 @@ describe("provider settings", () => {
     render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k", outputBudget: "auto" }} />);
 
     expect(await screen.findByText("模型支援上限：1.05M · 目前使用上限：128K")).toBeTruthy();
-    expect(screen.getByText("模型輸出上限：125K · 本次最高：32K")).toBeTruthy();
+    expect(screen.getByText("模型輸出上限：125K · 每次輸出預算由目前 Loop 決定")).toBeTruthy();
     const contextSelect = screen.getByLabelText("對話內容上限");
     fireEvent.mouseDown(contextSelect);
     const option = await screen.findByText("256K");
@@ -228,7 +227,7 @@ describe("provider settings", () => {
     fireEvent.mouseDown(contextSelect);
     fireEvent.click((await screen.findByText("32K")).closest(".ant-select-item-option")!);
 
-    await waitFor(() => expect(screen.getByText("模型輸出上限：125K · 本次最高：8K")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("模型輸出上限：125K · 每次輸出預算由目前 Loop 決定")).toBeTruthy());
   });
 
   it("returns to auto when refreshed model capability lowers the output maximum", async () => {
@@ -239,7 +238,7 @@ describe("provider settings", () => {
     render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast", contextBudget: "128k", outputBudget: "64k" }} />);
 
     await waitFor(() => expect(screen.getByTestId("selected-output").textContent).toBe("auto"));
-    expect(screen.getByText("模型輸出上限：8K · 本次最高：8K")).toBeTruthy();
+    expect(screen.getByText("模型輸出上限：8K · 每次輸出預算由目前 Loop 決定")).toBeTruthy();
   });
 
   beforeEach(() => {
@@ -272,7 +271,6 @@ describe("provider settings", () => {
     const responseModes = screen.getByRole("combobox", { name: "回應模式" });
     expect((responseModes as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
-    expect(screen.getByRole("combobox", { name: "自動續接過長回覆" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "進階與除錯" }));
     expect(screen.getByRole("switch", { name: "記錄完整送出 Prompt" }).classList.contains("ant-switch-disabled")).toBe(true);
   });
@@ -291,20 +289,10 @@ describe("provider settings", () => {
     expect(screen.getByText("等待本次回答完成後一次顯示")).toBeTruthy();
   });
 
-  it("selects bounded or unlimited output continuation", async () => {
+  it("leaves automatic continuation to the selected Loop", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
     render(<SettingsHarness />);
-
-    const select = await screen.findByRole("combobox", { name: "自動續接過長回覆" });
-    fireEvent.mouseDown(select);
-    expect((await screen.findAllByText("5 次（預設）")).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("10 次")).toBeTruthy();
-    expect(screen.getByText("20 次")).toBeTruthy();
-    expect(screen.getByText("50 次")).toBeTruthy();
-    fireEvent.click(screen.getByText("不限制").closest(".ant-select-item-option")!);
-
-    await waitFor(() => expect(screen.getByTestId("output-continuation").textContent).toBe("unlimited"));
-    expect(screen.getByText("持續續接直到完成；仍受 Context、字數與安全上限保護")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "自動續接過長回覆" })).toBeNull();
   });
 
   it("shows speculative model preferences as non-interactive future items", async () => {

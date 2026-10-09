@@ -24,6 +24,7 @@ class ReceiptSources:
     context_limit: int | None = None
     input_budget: int | None = None
     history_ids: tuple[str, ...] = ()
+    step_ids: tuple[str, ...] = ()
 
 
 def request_receipt(request: ModelRequest, sources: ReceiptSources | None, purpose: str) -> dict[str, object]:
@@ -52,12 +53,12 @@ def request_receipt(request: ModelRequest, sources: ReceiptSources | None, purpo
         "messages": [asdict(message) for message in request.messages],
     }
     return {
-        "schemaVersion": 2, "requestHash": content_hash(normalized),
+        "schemaVersion": 3, "requestHash": content_hash(normalized),
         "estimateMethod": "utf8-conservative-v1", "estimatedInputTokens": sum(components.values()),
         "components": components, "contextLimitTokens": sources.context_limit,
         "inputBudgetTokens": sources.input_budget, "outputReserveTokens": request.max_output_tokens,
         "messageCount": len(request.messages),
         "systemHash": content_hash([asdict(message) for message in request.messages if message.role == "system"]),
-        "historyMessageIds": history_ids, "summary": sources.summary,
+        "historyMessageIds": list(dict.fromkeys(history_ids)), "stepIds": list(sources.step_ids), "summary": sources.summary,
         "workspace": sources.workspace,
     }

@@ -13,11 +13,12 @@ from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, DefaultWorkspaceResolver
-from .context import ModelCapabilityNotFound, ModelCapabilityProviderError, resolve_context_budget
+from .context import ModelCapabilityNotFound, ModelCapabilityProviderError
 from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT_ERROR, AGENT_LIMIT_ERROR, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .execution_host import LoopExecutionHost
 from .plugin import ExecutionLimits
+from .context.limits import resolve_model_limits
 from .plugin_catalog import ExecutionPluginCatalog, ExecutionPluginSelection
 from .prompt import StaticSystemPromptProvider
 from .request_trace import TracedGateway
@@ -89,9 +90,9 @@ class RunExecutor:
             if run.reasoning_resolution is None:
                 run = await asyncio.to_thread(self._repository.set_reasoning_resolution, run.id,
                                               resolve_response_mode(run.response_mode, capability.reasoning_efforts))
-            budget = resolve_context_budget(run.context_budget, capability, run.output_budget)
+            model_limits = resolve_model_limits(run.context_budget, capability, run.output_budget)
             host = LoopExecutionHost(executor=self, run=run, cancellation_event=cancellation_event,
-                                     system_prompt=system_prompt, budget=budget,
+                                     system_prompt=system_prompt, model_limits=model_limits,
                                      limits=deepcopy(self._limits), selection=execution_plugin,
                                      provider_endpoint=provider_endpoint)
             host._deadline = deadline

@@ -47,7 +47,6 @@ def start(
     message: str = "整理今天的工作",
     context_budget: str = "auto",
     output_budget: str = "auto",
-    output_continuation: OutputContinuation = "5",
     workspace_id: str = DEFAULT_WORKSPACE_ID,
     workspace_revision: int = 1,
     workspace_name: str = "Default workspace",
@@ -62,7 +61,6 @@ def start(
         response_mode="default",
         context_budget=context_budget,
         output_budget=output_budget,
-        output_continuation=output_continuation,
         workspace_id=workspace_id,
         workspace_revision=workspace_revision,
         workspace_name_snapshot=workspace_name,
@@ -143,7 +141,7 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert accepted.run.response_mode == "default"
     assert accepted.run.context_budget == "auto"
     assert accepted.run.output_budget == "auto"
-    assert accepted.run.output_continuation == "5"
+    assert accepted.run.output_continuation is None
     assert accepted.run.partial_text == ""
     conversation = store.get_conversation(accepted.conversation.id)
     assert conversation is not None
@@ -163,15 +161,15 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert not paths.conversations_dir.exists()
 
 
-def test_start_snapshots_output_continuation_policy(tmp_path: Path) -> None:
+def test_new_run_has_no_global_continuation_policy(tmp_path: Path) -> None:
     store = repository(tmp_path)
 
-    accepted = start(store, output_continuation="unlimited")
+    accepted = start(store)
 
-    assert accepted.run.output_continuation == "unlimited"
+    assert accepted.run.output_continuation is None
     persisted = store.get_run(accepted.run.id)
     assert persisted is not None
-    assert persisted.output_continuation == "unlimited"
+    assert persisted.output_continuation is None
 
 
 def test_client_request_id_replays_exact_request_without_duplicates(

@@ -79,8 +79,8 @@ def test_ai_settings_schema_persists_model_response_continuation_and_delivery() 
     assert selection["properties"]["modelId"]["maxLength"] == 256
     settings = schemas["AiSettings"]
     assert settings["additionalProperties"] is False
-    assert settings["required"] == ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"]
-    assert set(settings["properties"]) == {"model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"}
+    assert settings["required"] == ["model", "responseMode", "responseDelivery", "logFullPrompts"]
+    assert set(settings["properties"]) == {"model", "responseMode", "responseDelivery", "logFullPrompts"}
     assert schemas["OutputContinuation"]["enum"] == ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
     assert schemas["ResponseDelivery"]["enum"] == ["stream", "complete"]
     assert settings["properties"]["logFullPrompts"]["type"] == "boolean"

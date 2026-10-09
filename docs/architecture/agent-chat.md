@@ -2,7 +2,7 @@
 
 ## Accepted task
 
-`AgentChatService` validates one text message and client request UUID, checks an existing accepted request before reading mutable settings, and snapshots the selected model, output/context settings, reasoning decision, Workspace, Provider endpoint and API v4 execution plugin.
+`AgentChatService` validates one text message and client request UUID, checks an existing accepted request before reading mutable settings, and snapshots the selected model, output/context settings, reasoning decision, Workspace, Provider endpoint and API v5 execution plugin.
 Acceptance is durable and idempotent. The same request identity returns the existing Run; different content using that identity is rejected.
 A Workspace mutation gate serializes acceptance against catalog/provider changes; one active Run per conversation is enforced by SQLite.
 

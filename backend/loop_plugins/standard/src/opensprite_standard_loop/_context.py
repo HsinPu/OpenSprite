@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from opensprite_backend.conversations.models import ConversationCompaction, Message
-from opensprite_backend.inference.models import ModelMessage
+from opensprite_backend.agent.plugin import ConversationCompaction, Message
+from opensprite_backend.agent.plugin import ModelMessage
 
-from .budget import ContextBudgetPlan
-from .counter import ConservativeTokenCounter
+from ._budget import ContextBudgetPlan
+from ._counter import ConservativeTokenCounter
 
 _HISTORICAL_CONTEXT_POLICY = (
     "Context policy: only the unmarked user message in this request is the "
