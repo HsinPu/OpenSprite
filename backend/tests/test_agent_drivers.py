@@ -234,7 +234,7 @@ async def test_host_hard_limits_stop_custom_loops(tmp_path, bound):
     bounds = {"max_model_requests":1} if bound == "requests" else {"max_duration_seconds":.01} if bound == "duration" else {"max_assistant_chars":3}
     loop, _ = executor(repository, ScriptedGateway([completed(), completed()]), excess, **bounds)
     result = await loop.execute(accepted_run(repository).id, asyncio.Event())
-    assert result.status is RunStatus.FAILED and result.error.code == "agent_limit_reached"
+    assert result.status is RunStatus.FAILED and result.error.code == {"requests": "model_request_limit_reached", "duration": "run_deadline_exceeded", "text": "generated_text_limit_reached"}[bound]
 
 
 @async_test

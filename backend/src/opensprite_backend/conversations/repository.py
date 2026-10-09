@@ -11,6 +11,7 @@ from opensprite_backend.workspaces import (
     WorkspaceAvailability,
 )
 
+from .run_limits import RunLimitEvidence
 from .models import (
     CompletedRun,
     CompletionReason,
@@ -163,7 +164,7 @@ class ConversationRepository(Protocol):
         completion_reason: CompletionReason = CompletionReason.STOP,
     ) -> CompletedRun: ...
 
-    def fail_run(self, run_id: str, error: PublicRunError) -> RunSnapshot: ...
+    def fail_run(self, run_id: str, error: PublicRunError, *, limit: RunLimitEvidence | None = None) -> RunSnapshot: ...
 
     def request_cancel(self, run_id: str) -> RunSnapshot: ...
 

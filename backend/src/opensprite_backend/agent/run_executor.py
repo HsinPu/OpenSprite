@@ -14,7 +14,7 @@ from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, DefaultWorkspaceResolver
 from .context import ModelCapabilityNotFound, ModelCapabilityProviderError
-from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT_ERROR, AGENT_LIMIT_ERROR, inference_error
+from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT_ERROR, limit_failure, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .execution_host import LoopExecutionHost
 from .plugin import ExecutionLimits
@@ -65,6 +65,9 @@ class RunExecutor:
             workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         host = None
         deadline = monotonic() + self._limits.max_duration_seconds
+        def deadline_failure():
+            used = max(0, monotonic() - deadline + self._limits.max_duration_seconds)
+            return limit_failure("duration_seconds", self._limits.max_duration_seconds, round(used, 6))
         try:
             if (workspace.id, workspace.revision, workspace.name, workspace.root_hash,
                 workspace.mount_manifest_hash) != (
@@ -81,7 +84,7 @@ class RunExecutor:
                        "accessMode": mount.access_mode.value, "enabled": mount.enabled,
                        "availability": mount.availability.value} for mount in workspace.mounts))
             if deadline <= monotonic():
-                raise ExecutionFailed(AGENT_LIMIT_ERROR)
+                raise deadline_failure()
             async with asyncio.timeout(max(0, deadline - monotonic())):
                 system_prompt = await self._await_with_cancellation(
                     self._system_prompt_provider.build(run_id=run_id, workspace=workspace), cancellation_event)
@@ -102,7 +105,7 @@ class RunExecutor:
                     result = await self._await_with_cancellation(plugin.execute(host), cancellation_event)
                 await host._validate_result(result)
             except TimeoutError:
-                raise ExecutionFailed(AGENT_LIMIT_ERROR if execution_timeout.expired() else INTERNAL_ERROR) from None
+                raise (deadline_failure() if execution_timeout.expired() else ExecutionFailed(INTERNAL_ERROR)) from None
             except Exception as error:
                 if cancellation_event.is_set():
                     raise RunCancelled() from None
@@ -126,7 +129,7 @@ class RunExecutor:
         except RunCancelled:
             return await self._cancel(run_id)
         except ExecutionFailed as error:
-            return await self._fail(run_id, error.error)
+            return await self._fail(run_id, error.error, limit=error.limit)
         except (ModelGatewayError, ModelCapabilityProviderError) as error:
             return await self._fail(run_id, inference_error(error.failure))
         except ModelCapabilityNotFound:
@@ -134,7 +137,8 @@ class RunExecutor:
         except ConversationStoreError:
             raise
         except TimeoutError:
-            return await self._fail(run_id, AGENT_LIMIT_ERROR)
+            failure = deadline_failure()
+            return await self._fail(run_id, failure.error, limit=failure.limit)
         except asyncio.CancelledError:
             if asyncio.current_task().cancelling():
                 raise
@@ -152,11 +156,11 @@ class RunExecutor:
             raise ModelCapabilityNotFound
         return await self._capability_resolver.resolve(run.provider_id, run.model_id)
 
-    async def _fail(self, run_id, error):
+    async def _fail(self, run_id, error, *, limit=None):
         current = await asyncio.to_thread(self._repository.get_run, run_id)
         if current and current.status in {RunStatus.CANCELLING, RunStatus.CANCELLED}:
             return await self._cancel(run_id)
-        return await asyncio.to_thread(self._repository.fail_run, run_id, error)
+        return await asyncio.to_thread(self._repository.fail_run, run_id, error, limit=limit)
 
     async def _cancel(self, run_id):
         return await asyncio.to_thread(self._repository.mark_run_cancelled, run_id)

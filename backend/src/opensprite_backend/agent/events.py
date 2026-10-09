@@ -84,3 +84,20 @@ def inference_error(failure: InferenceFailure) -> PublicRunError:
     if failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED:
         return CONTEXT_LIMIT_ERROR
     return _INFERENCE_ERRORS[failure]
+
+
+_LIMIT_MESSAGES = {
+    "duration_seconds": "本次執行已達時間上限。",
+    "model_requests": "本次執行已達模型請求上限。",
+    "summary_requests": "本次執行已達摘要請求上限。",
+    "generated_chars": "本次執行已達生成文字上限。",
+    "host_operations": "本次執行已達核心操作上限。",
+}
+
+
+def limit_failure(kind, maximum, used):
+    from opensprite_backend.conversations.run_limits import LIMIT_ERROR_CODES, RunLimitEvidence
+    from .execution_errors import ExecutionFailed
+    evidence = RunLimitEvidence(kind, maximum, used)
+    evidence.as_data()
+    return ExecutionFailed(PublicRunError(LIMIT_ERROR_CODES[kind], _LIMIT_MESSAGES[kind], False), limit=evidence)

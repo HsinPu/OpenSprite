@@ -839,7 +839,12 @@
           "workspace_not_found",
           "workspace_mismatch",
           "workspace_store_unavailable",
-          "revision_conflict"
+          "revision_conflict",
+          "run_deadline_exceeded",
+          "model_request_limit_reached",
+          "summary_request_limit_reached",
+          "generated_text_limit_reached",
+          "host_operation_limit_reached"
         ]
       },
       "ErrorDetail": {
@@ -1892,6 +1897,9 @@
         "properties": {
           "error": {
             "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "limit": {
+            "$ref": "#/components/schemas/RunLimitEvidence"
           }
         }
       },
@@ -2628,6 +2636,38 @@
           }
         },
         "description": "API v5 actual input receipt, schema 3. Source IDs record provenance, not semantic equivalence."
+      },
+      "RunLimitEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "maximum",
+          "used"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "duration_seconds",
+              "model_requests",
+              "summary_requests",
+              "generated_chars",
+              "host_operations"
+            ]
+          },
+          "maximum": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "used": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "description": "Core evidence stored atomically with run.failed. Duration uses seconds; other kinds use integer counts. Used excludes rejected operations and text deltas. Older events have no limit evidence."
       }
     },
     "responses": {

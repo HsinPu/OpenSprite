@@ -1,10 +1,11 @@
 """Bounded public step events; outputs are read separately from step storage."""
 from uuid import UUID
+from .run_limits import LIMIT_ERROR_CODES
 
 STEP_ERROR_CODES = frozenset({"provider_not_connected", "invalid_credentials",
     "provider_rate_limited", "provider_timeout", "provider_unreachable",
     "context_limit_exceeded", "context_preparation_failed", "credential_store_unavailable",
-    "invalid_provider_response", "internal_error", "agent_limit_reached"})
+    "invalid_provider_response", "internal_error", "agent_limit_reached", *LIMIT_ERROR_CODES.values()})
 
 
 def valid_step_payload(event_type, data):

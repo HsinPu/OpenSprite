@@ -122,3 +122,16 @@ distribution. Keep one writer and back up the entire sensitive .opensprite
 directory before upgrading actual user data.
 
 See execution-plugin-authoring.md for complete source, tests and installation.
+
+## Core stop evidence (0.21.36)
+
+Limits are enforcement mechanisms. A terminal `run.failed` can include a
+`limit` object (`kind`, `maximum`, `used`), committed with the failed Run.
+Kinds are `duration_seconds`, `model_requests`, `summary_requests`,
+`generated_chars`, and `host_operations`; each has its own public error code.
+Duration is elapsed seconds from the original Run deadline. Other kinds are
+accepted counts and exclude the rejected operation or complete text delta.
+Retries, summaries and continuations consume the same Run budget. The
+workbench diagnostics display and export this evidence. Legacy
+`agent_limit_reached` events remain readable without invented measurements.
+`PublicRunError`, factory entry points and Host API v5 shapes stay unchanged.

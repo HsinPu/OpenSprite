@@ -22,7 +22,7 @@ from opensprite_backend.prompt_logging import PromptLogError
 from .context.counter import ConservativeTokenCounter
 from .summary_sources import summary_coverage
 from .context.receipt import ReceiptSources
-from .events import AGENT_LIMIT_ERROR, CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
+from .events import limit_failure, CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .plugin import (
     ContextReadRequest, ContextSnapshot, InputSource, SummarySource, SummaryWriteRequest,
@@ -96,23 +96,29 @@ class LoopExecutionHost:
         return json.dumps(asdict(value), ensure_ascii=False, sort_keys=True, default=str, allow_nan=False)
 
     def _record_error(self, error):
+        if any(owned is error for owned, _ in self._errors):
+            return
         self._fatal = error
         self._errors.append((error, (type(error), error.args,
-                             self._signature(error.error) if isinstance(error, ExecutionFailed) else None)))
+                             (self._signature(error.error), None if error.limit is None else self._signature(error.limit)) if isinstance(error, ExecutionFailed) else None)))
 
     def _owns_exception(self, error):
         try:
             signature = (type(error), error.args,
-                         self._signature(error.error) if isinstance(error, ExecutionFailed) else None)
+                         (self._signature(error.error), None if error.limit is None else self._signature(error.limit)) if isinstance(error, ExecutionFailed) else None)
             return any(owned is error and saved == signature for owned, saved in self._errors)
         except Exception:
             return False
+
+    def _deadline_failure(self):
+        used = max(0, monotonic() - self._deadline + self._limits.max_duration_seconds)
+        return limit_failure("duration_seconds", self._limits.max_duration_seconds, round(used, 6))
 
     async def checkpoint(self):
         try:
             self._executor._raise_if_cancelled(self._cancellation)
             if monotonic() > self._deadline:
-                raise ExecutionFailed(AGENT_LIMIT_ERROR)
+                raise self._deadline_failure()
             if self._closed or self._result is not None or self._fatal is not None:
                 raise self._fatal or ExecutionFailed(INTERNAL_ERROR)
             await asyncio.sleep(0)
@@ -128,9 +134,9 @@ class LoopExecutionHost:
             await self.checkpoint()
             if self._operations:
                 raise ExecutionFailed(INTERNAL_ERROR)
+            if self._operation_count >= 2048:
+                raise limit_failure("host_operations", 2048, self._operation_count)
             self._operation_count += 1
-            if self._operation_count > 2048:
-                raise ExecutionFailed(AGENT_LIMIT_ERROR)
             task = asyncio.current_task()
             self._operations.add(task)
             yield
@@ -329,10 +335,10 @@ class LoopExecutionHost:
         if not messages or self._counter.request(messages) > input_budget:
             preflight_error = preflight_error or CONTEXT_LIMIT_ERROR
         if preflight_error is None and self._requests >= self._limits.max_model_requests:
-            raise ExecutionFailed(AGENT_LIMIT_ERROR)
+            raise limit_failure("model_requests", self._limits.max_model_requests, self._requests)
         if summary_details is not None and preflight_error is None:
             if self._compactions >= self._limits.max_compactions:
-                raise ExecutionFailed(AGENT_LIMIT_ERROR)
+                raise limit_failure("summary_requests", self._limits.max_compactions, self._compactions)
             self._compactions += 1
             coverage = summary_details["coverage"]
             await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_STARTED,
@@ -381,7 +387,7 @@ class LoopExecutionHost:
                             if not event.text or len(event.text) > 16384:
                                 raise ExecutionFailed(INVALID_PROVIDER_RESPONSE)
                             if self._generated_chars + len(event.text) > self._limits.max_text_chars:
-                                raise ExecutionFailed(AGENT_LIMIT_ERROR)
+                                raise limit_failure("generated_chars", self._limits.max_text_chars, self._generated_chars)
                             self._generated_chars += len(event.text)
                             text += event.text
                             if spec.channel == "answer":
@@ -515,7 +521,7 @@ class LoopExecutionHost:
     async def _validate_result(self, result):
         self._executor._raise_if_cancelled(self._cancellation)
         if monotonic() > self._deadline:
-            error = ExecutionFailed(AGENT_LIMIT_ERROR)
+            error = self._deadline_failure()
             self._record_error(error)
             raise error
         if (self._fatal is not None or self._operations

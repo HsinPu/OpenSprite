@@ -744,6 +744,17 @@ export const zhTWMessages = {
   "general.reload": "重新讀取",
   "general.conversationErrorScope": "對話偏好與執行面板設定發生問題",
   "general.planned": "規劃中功能",
+  "error.chat.deadlineLimit": "本次執行已達時間上限。",
+  "error.chat.modelRequestLimit": "本次執行已達模型請求上限。",
+  "error.chat.summaryRequestLimit": "本次執行已達摘要請求上限。",
+  "error.chat.generatedTextLimit": "本次執行已達生成文字上限。",
+  "error.chat.hostOperationLimit": "本次執行已達核心操作上限。",
+  "diagnostics.coreStop": "核心停止原因",
+  "diagnostics.limitUsed": "已用量",
+  "diagnostics.limitMaximum": "有效上限",
+  "diagnostics.seconds": "秒",
+  "diagnostics.characters": "字元",
+  "diagnostics.count": "次",
 } as const;
 
 export type MessageKey = keyof typeof zhTWMessages;

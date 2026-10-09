@@ -507,7 +507,7 @@ async def test_automatic_continuation_obeys_shared_model_request_cap(tmp_path):
         for index in range(130)])
     result = await RunExecutor(repository=repository, gateway=gateway,
         capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
-    assert result.status is RunStatus.FAILED and result.error.code == "agent_limit_reached"
+    assert result.status is RunStatus.FAILED and result.error.code == "model_request_limit_reached"
     assert len(gateway.requests) == 128 and result.partial_text.endswith("part 127|")
 
 
@@ -619,7 +619,7 @@ async def test_assistant_output_limit_fails_run_before_repository_overflow(
 
     assert result.status is RunStatus.FAILED
     assert result.error is not None
-    assert result.error.code == "agent_limit_reached"
+    assert result.error.code == "generated_text_limit_reached"
 
 
 @async_test

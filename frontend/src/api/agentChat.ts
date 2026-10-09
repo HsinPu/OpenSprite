@@ -11,11 +11,12 @@ const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed1
 
 import { validCompactionPayload } from "./compactionEvents";
 import { validAttemptPayload } from "./attemptEvents";
+import { limitErrorCodes, validRunLimit } from "./runLimits";
 
 export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "step.started", "step.completed", "response.continuation.started", "assistant.delta", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict"] as const;
+export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", ...Object.values(limitErrorCodes), "context_limit_exceeded", "context_preparation_failed", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
 export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
 
@@ -376,8 +377,11 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   }
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId", "completionReason"]) || !isIdentifier(data.assistantMessageId) || !completionReasons.includes(data.completionReason as CompletionReason))) throw new AgentChatApiError("malformed_response");
-  if (["run.failed", "run.interrupted"].includes(expectedType) && (!exactKeys(data, ["error"]) || !record(data.error))) throw new AgentChatApiError("malformed_response");
-  if (["run.failed", "run.interrupted"].includes(expectedType)) runError(data.error);
+  if (["run.failed", "run.interrupted"].includes(expectedType)) {
+    if (!exactKeys(data, ["error"]) && !(expectedType === "run.failed" && exactKeys(data, ["error", "limit"]))) throw new AgentChatApiError("malformed_response");
+    const error = runError(data.error);
+    if ("limit" in data && (!validRunLimit(data.limit, error.code) || error.retryable)) throw new AgentChatApiError("malformed_response");
+  }
   return { ...value, data } as RunEvent;
 }
 
@@ -433,6 +437,11 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     settings_store_unavailable: "error.chat.settingsStore",
     database_unavailable: "error.chat.database",
     agent_limit_reached: "error.chat.agentLimit",
+    run_deadline_exceeded: "error.chat.deadlineLimit",
+    model_request_limit_reached: "error.chat.modelRequestLimit",
+    summary_request_limit_reached: "error.chat.summaryRequestLimit",
+    generated_text_limit_reached: "error.chat.generatedTextLimit",
+    host_operation_limit_reached: "error.chat.hostOperationLimit",
     context_limit_exceeded: "error.chat.contextLimit",
     context_preparation_failed: "error.chat.contextPreparation",
 

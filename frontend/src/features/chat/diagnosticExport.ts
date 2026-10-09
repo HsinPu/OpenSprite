@@ -1,9 +1,11 @@
 import type { RunEvent } from "../../api/agentChat";
 import { validAttemptPayload } from "../../api/attemptEvents";
 import { validCompactionPayload } from "../../api/compactionEvents";
+import { validRunLimit } from "../../api/runLimits";
 
 export function diagnosticEvents(events: RunEvent[]): RunEvent[] {
   return events.filter(event => event.type === "model.attempt" ? validAttemptPayload(event.data)
+    : event.type === "run.failed" ? validLimitFailure(event.data)
     : event.type.startsWith("context.compaction.") && validCompactionPayload(event.type, event.data));
 }
 
@@ -16,4 +18,12 @@ export function diagnosticExport(runId: string, events: RunEvent[], afterSequenc
       sequence: event.sequence, type: event.type, createdAt: event.createdAt, data: event.data,
     })),
   }, null, 2);
+}
+
+function validLimitFailure(data: Record<string, unknown>): boolean {
+  const error = data.error as Record<string, unknown> | null;
+  return Object.keys(data).sort().join(",") === "error,limit" && !!error && typeof error === "object"
+    && Object.keys(error).sort().join(",") === "code,message,retryable" && error.retryable === false
+    && typeof error.message === "string" && error.message.length > 0 && error.message.length <= 512
+    && validRunLimit(data.limit, error.code);
 }

@@ -36,6 +36,7 @@ from .models import (
     StartRunResult,
     StoreFailure,
 )
+from .run_limits import RunLimitEvidence, LIMIT_ERROR_CODES, valid_limit_data
 from .repository import ConversationStoreError
 from .sqlite_schema import SCHEMA_SQL, SCHEMA_VERSION, migrate_schema
 from .event_notifier import RunEventNotifier
@@ -82,6 +83,7 @@ _PUBLIC_ERROR_CODES = {
     "settings_store_unavailable",
     "database_unavailable",
     "agent_limit_reached",
+    *LIMIT_ERROR_CODES.values(),
     "context_limit_exceeded",
     "context_preparation_failed",
     "invalid_provider_response",
@@ -1235,12 +1237,13 @@ class SqliteConversationRepository(SqliteRunSteps):
             finally:
                 connection.close()
 
-    def fail_run(self, run_id: str, error: PublicRunError) -> RunSnapshot:
+    def fail_run(self, run_id: str, error: PublicRunError, *, limit: RunLimitEvidence | None = None) -> RunSnapshot:
         return self._terminal_error_transition(
             run_id,
             RunStatus.FAILED,
             RunEventType.RUN_FAILED,
             error,
+            limit=limit,
         )
 
     def request_cancel(self, run_id: str) -> RunSnapshot:
@@ -1461,9 +1464,18 @@ class SqliteConversationRepository(SqliteRunSteps):
         status: RunStatus,
         event_type: RunEventType,
         error: PublicRunError,
+        *, limit: RunLimitEvidence | None = None,
     ) -> RunSnapshot:
         self._require_identifier(run_id)
         self._validate_public_error(error)
+        payload = {"error": self._error_data(error)}
+        if limit is not None:
+            try:
+                payload["limit"] = limit.as_data()
+            except (ValueError, TypeError, AttributeError):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST) from None
+            if event_type is not RunEventType.RUN_FAILED or error.retryable or not valid_limit_data(payload["limit"], error.code):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         with self._lock:
             connection = self._open_write()
             try:
@@ -1493,7 +1505,7 @@ class SqliteConversationRepository(SqliteRunSteps):
                     run_id,
                     row["conversation_id"],
                     event_type,
-                    {"error": self._error_data(error)},
+                    payload,
                     now,
                 )
                 result = self._require_run_row(connection, run_id)
@@ -2132,9 +2144,11 @@ class SqliteConversationRepository(SqliteRunSteps):
             RunEventType.RUN_FAILED,
             RunEventType.RUN_INTERRUPTED,
         }:
-            if keys != {"error"}:
+            if keys != {"error"} and not (event_type is RunEventType.RUN_FAILED and keys == {"error", "limit"}):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             SqliteConversationRepository._validate_error_mapping(data["error"])
+            if "limit" in data and (data["error"]["retryable"] or not valid_limit_data(data["limit"], data["error"]["code"])):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
 

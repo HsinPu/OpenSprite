@@ -14,6 +14,21 @@ const snapshot = (status: RunSnapshot["status"]): RunSnapshot => ({ id: runId, c
   providerId: "openai", modelId: "test", responseMode: "medium", status, completionReason: null,
   error: null, partialText: "", createdAt: event(1).createdAt, startedAt: event(1).createdAt, finishedAt: null });
 
+it("shows the persisted core stop reason with accepted usage and the effective limit", async () => {
+  const failure = { ...event(3), type: "run.failed" as const, data: {
+    error: { code: "model_request_limit_reached", message: "Limit", retryable: false },
+    limit: { kind: "model_requests", maximum: 7, used: 7 },
+  } };
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ events: [failure], nextAfterSequence: null }))));
+  render(<RunDiagnostics runId={runId} conversationId={conversationId} run={snapshot("failed")} />);
+  fireEvent.click(screen.getByRole("button", { name: "開啟診斷明細" }));
+  fireEvent.click(await screen.findByRole("button", { name: /核心停止原因/ }));
+  expect(screen.getByText("本次執行已達模型請求上限。")).toBeTruthy();
+  expect(screen.getByText("已用量")).toBeTruthy();
+  expect(screen.getByText("7 次")).toBeTruthy();
+  expect(screen.getByText("有效上限")).toBeTruthy();
+});
+
 it.each(["completed", "failed", "cancelled", "interrupted"] as const)("synchronizes after a running snapshot becomes %s and preserves expansion", async status => {
   const start = { ...event(1), data: { schemaVersion: 1, compactionId: runId, reason: "local_budget", fromSequence: 1, throughSequence: 4, estimatedBeforeTokens: 100, inputBudgetTokens: 200 } };
   const end = { ...event(2), type: "context.compaction.completed" as const, data: { schemaVersion: 1, compactionId: runId, throughSequence: 4, inputTokens: 100, outputTokens: 20 } };

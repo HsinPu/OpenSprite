@@ -8,6 +8,7 @@ import { diagnosticOperations, type DiagnosticOperation } from "./diagnosticOper
 import "./RunDiagnostics.css";
 import { PanelResizeHandle } from "../../ui/PanelResizeHandle";
 import { RunSteps } from "./RunSteps";
+import { validRunLimit } from "../../api/runLimits";
 
 type Props = { runId: string; conversationId: string; run?: RunSnapshot; modelName?: string };
 const badgeStatus = (status: string) => status === "completed" ? "success" : status === "failed" || status === "interrupted" ? "error" : status === "started" || status === "running" ? "processing" : "default";
@@ -90,6 +91,7 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
 
   const rows = diagnosticOperations(page?.events ?? [], run?.status, page?.nextAfterSequence != null || awaitingSync || !!error || loading);
   const stageLabel = (event: RunEvent) => {
+    if (event.type === "run.failed") return t("diagnostics.coreStop");
     const purpose = event.data.purpose;
     return event.type === "model.attempt" && (purpose === "main" || purpose === "continuation" || purpose === "compaction")
       ? `${t(`diagnostics.${purpose}`)} · ${t("diagnostics.attempt", { number: String(event.data.attemptNumber) })}` : t("diagnostics.operation");
@@ -136,7 +138,16 @@ function DiagnosticDetails({ operation, hideError }: { operation: DiagnosticOper
   const context = (start?.data.context ?? event.data.context) as Record<string, unknown> | undefined;
   const components = context?.components as Record<string, number> | undefined;
   const format = (value: unknown) => typeof value === "number" ? value.toLocaleString(locale) : t("diagnostics.unreported");
+  const failure = event.data.error as { code: ConstructorParameters<typeof AgentChatApiError>[0] } | undefined;
+  const limit = validRunLimit(event.data.limit, failure?.code) ? event.data.limit : null;
   return <div className="run-diagnostics__details">
+    {limit && failure ? <section>
+      <Typography.Text>{agentChatErrorText(new AgentChatApiError(failure.code), t)}</Typography.Text>
+      <dl className="run-diagnostics__numbers">
+        <div><dt>{t("diagnostics.limitUsed")}</dt><dd>{format(limit.used)} {limit.kind === "duration_seconds" ? t("diagnostics.seconds") : limit.kind === "generated_chars" ? t("diagnostics.characters") : t("diagnostics.count")}</dd></div>
+        <div><dt>{t("diagnostics.limitMaximum")}</dt><dd>{format(limit.maximum)}</dd></div>
+      </dl>
+    </section> : null}
     {!start && event.type === "model.attempt" ? <Typography.Text type="secondary">{t("diagnostics.missingStart")}</Typography.Text> : null}
     {!hideError && typeof event.data.errorCode === "string" ? <Typography.Text>{agentChatErrorText(new AgentChatApiError(event.data.errorCode as ConstructorParameters<typeof AgentChatApiError>[0]), t)}</Typography.Text> : null}
     {event.data.retryCause ? <Typography.Text>{t("diagnostics.retryCause")}</Typography.Text> : null}
