@@ -13,6 +13,7 @@ from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT
 from .execution_errors import ExecutionFailed, RunCancelled
 from .execution_host import LoopExecutionHost
 from .plugin import ExecutionLimits
+from . import plugin_conversion as convert
 from .run_control import RunControl
 from .context.limits import resolve_model_limits
 from .plugin_catalog import ExecutionPluginCatalog, ExecutionPluginSelection
@@ -97,11 +98,11 @@ class RunExecutor:
             finally:
                 await host._close()
             if result.error is not None:
-                return await self._fail(run_id, result.error)
+                return await self._fail(run_id, convert.stored_error(result.error))
             control.check()
             try:
                 return (await asyncio.to_thread(self._repository.complete_run, run_id,
-                                               result.text, result.completion_reason)).run
+                                               result.text, convert.completion_reason(result.completion_reason))).run
             except ConversationStoreError as error:
                 if error.failure is StoreFailure.INVALID_STATE:
                     current = await asyncio.to_thread(self._repository.get_run, run_id)

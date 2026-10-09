@@ -148,3 +148,18 @@ Only an expired core deadline produces deadline evidence; a raw TimeoutError
 from a plugin or setup dependency is an internal error. RunControl cancels
 and drains its pending await/stream tasks, without scheduling recovery or
 renewing any budget. Trusted Python still requires cooperative awaits.
+
+## Stable v5 SDK data (0.21.38)
+
+The only supported author import remains `opensprite_backend.agent.plugin`.
+The pinned `contracts/agent-loop-v5.sdk.json` records the v5 field order,
+logical types, defaults, enum values, factory and Host signatures captured
+before this refactor. Patch releases must pass this contract and an
+unchanged prebuilt wheel; incompatible changes require a separately approved
+new API. SDK data is independent of conversation storage and inference DTOs.
+The Host explicitly copies stored messages, summaries and errors into public
+frozen records and converts full model inputs to transport records once,
+preserving receipt object bindings. Executor converts public errors and
+completion reasons before storage. Authors must import public enum/record
+types from the SDK, without assuming internal transport/storage class identity.
+Entry points, factories and the official/example wheel versions are unchanged.

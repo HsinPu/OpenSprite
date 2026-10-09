@@ -19,6 +19,7 @@ SOURCES = (
     "examples/execution-plugin/src/opensprite_execution_example/__init__.py",
     "examples/execution-plugin/src/opensprite_execution_example/plugin.py",
     "examples/execution-plugin/tests/test_plugin.py",
+    "contracts/agent-loop-v5.sdk.json",
     "docs/architecture/agent-execution-plugins.md",
     "docs/architecture/execution-plugin-authoring.md",
     "scripts/verify_execution_plugin_wheel.py",

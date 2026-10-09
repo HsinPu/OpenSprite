@@ -6,7 +6,7 @@ import pytest
 from opensprite_standard_loop._summary import (
     prepare_compaction_source,
 )
-from opensprite_backend.conversations.models import ConversationCompaction, Message
+from opensprite_backend.agent.plugin import ConversationCompaction, Message
 
 
 NOW = datetime(2026, 8, 29, tzinfo=UTC)

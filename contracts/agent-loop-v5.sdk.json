@@ -1,0 +1,999 @@
+{
+  "apiVersion": 5,
+  "entryPoint": "opensprite_backend.agent_loops.v5",
+  "records": {
+    "ExecutionLimits": {
+      "frozen": true,
+      "slots": [
+        "max_model_requests",
+        "max_compactions",
+        "max_duration_seconds",
+        "max_text_chars"
+      ],
+      "fields": [
+        {
+          "name": "max_model_requests",
+          "type": "int",
+          "default": 128
+        },
+        {
+          "name": "max_compactions",
+          "type": "int",
+          "default": 32
+        },
+        {
+          "name": "max_duration_seconds",
+          "type": "float",
+          "default": 600
+        },
+        {
+          "name": "max_text_chars",
+          "type": "int",
+          "default": 1048576
+        }
+      ]
+    },
+    "ModelLimits": {
+      "frozen": true,
+      "slots": [
+        "context_tokens",
+        "output_tokens"
+      ],
+      "fields": [
+        {
+          "name": "context_tokens",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "output_tokens",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    },
+    "RunContext": {
+      "frozen": true,
+      "slots": [
+        "run_id",
+        "conversation_id",
+        "user_message_id",
+        "provider_id",
+        "model_id",
+        "context_budget",
+        "output_budget",
+        "model_limits",
+        "system_prompt",
+        "limits",
+        "plugin_id",
+        "plugin_version"
+      ],
+      "fields": [
+        {
+          "name": "run_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "conversation_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "user_message_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "provider_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "model_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "context_budget",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "output_budget",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "model_limits",
+          "type": "ModelLimits",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "system_prompt",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "limits",
+          "type": "ExecutionLimits",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "plugin_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "plugin_version",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    },
+    "ContextReadRequest": {
+      "frozen": true,
+      "slots": [
+        "before_sequence",
+        "after_sequence",
+        "limit",
+        "summary_format"
+      ],
+      "fields": [
+        {
+          "name": "before_sequence",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "after_sequence",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "limit",
+          "type": "int",
+          "default": 100
+        },
+        {
+          "name": "summary_format",
+          "type": "str | None",
+          "default": "opensprite.text.v1"
+        }
+      ]
+    },
+    "ContextSnapshot": {
+      "frozen": true,
+      "slots": [
+        "id",
+        "current_user",
+        "history",
+        "summary",
+        "next_before_sequence",
+        "next_after_sequence"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "Message",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "history",
+          "type": "tuple[Message,...]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "summary",
+          "type": "ConversationCompaction | None",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "next_before_sequence",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "next_after_sequence",
+          "type": "int | None",
+          "default": null
+        }
+      ]
+    },
+    "InputSource": {
+      "frozen": true,
+      "slots": [
+        "message_index",
+        "snapshot",
+        "message_ids",
+        "summary_id",
+        "steps"
+      ],
+      "fields": [
+        {
+          "name": "message_index",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "snapshot",
+          "type": "ContextSnapshot | None",
+          "default": null
+        },
+        {
+          "name": "message_ids",
+          "type": "tuple[str,...]",
+          "default": []
+        },
+        {
+          "name": "summary_id",
+          "type": "str | None",
+          "default": null
+        },
+        {
+          "name": "steps",
+          "type": "tuple[StepResult,...]",
+          "default": []
+        }
+      ]
+    },
+    "SummarySource": {
+      "frozen": true,
+      "slots": [
+        "snapshots",
+        "message_ids",
+        "summary_format",
+        "previous_summary_id",
+        "reason",
+        "estimated_before_tokens"
+      ],
+      "fields": [
+        {
+          "name": "snapshots",
+          "type": "tuple[ContextSnapshot,...]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "message_ids",
+          "type": "tuple[str,...]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "summary_format",
+          "type": "str",
+          "default": "opensprite.text.v1"
+        },
+        {
+          "name": "previous_summary_id",
+          "type": "str | None",
+          "default": null
+        },
+        {
+          "name": "reason",
+          "type": "Literal[\"local_budget\",\"provider_context_limit\"]",
+          "default": "local_budget"
+        },
+        {
+          "name": "estimated_before_tokens",
+          "type": "int",
+          "default": 0
+        }
+      ]
+    },
+    "StepRequest": {
+      "frozen": true,
+      "slots": [
+        "messages",
+        "max_output_tokens",
+        "sources",
+        "label",
+        "channel",
+        "purpose",
+        "retry_of",
+        "input_limit_tokens",
+        "summary_source",
+        "parent_request_id"
+      ],
+      "fields": [
+        {
+          "name": "messages",
+          "type": "tuple[ModelMessage,...]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "max_output_tokens",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "sources",
+          "type": "tuple[InputSource,...]",
+          "default": []
+        },
+        {
+          "name": "label",
+          "type": "str",
+          "default": "answer"
+        },
+        {
+          "name": "channel",
+          "type": "Literal[\"draft\",\"answer\"]",
+          "default": "answer"
+        },
+        {
+          "name": "purpose",
+          "type": "Literal[\"main\",\"continuation\",\"compaction\"]",
+          "default": "main"
+        },
+        {
+          "name": "retry_of",
+          "type": "StepResult | None",
+          "default": null
+        },
+        {
+          "name": "input_limit_tokens",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "summary_source",
+          "type": "SummarySource | None",
+          "default": null
+        },
+        {
+          "name": "parent_request_id",
+          "type": "str | None",
+          "default": null
+        }
+      ]
+    },
+    "StepResult": {
+      "frozen": true,
+      "slots": [
+        "id",
+        "text",
+        "finish_reason",
+        "input_tokens",
+        "output_tokens",
+        "error"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "text",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "finish_reason",
+          "type": "ModelFinishReason | None",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "input_tokens",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "output_tokens",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "PublicRunError | None",
+          "default": null
+        }
+      ]
+    },
+    "SummaryWriteRequest": {
+      "frozen": true,
+      "slots": [
+        "step",
+        "text"
+      ],
+      "fields": [
+        {
+          "name": "step",
+          "type": "StepResult",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "text",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    },
+    "FinalOutput": {
+      "frozen": true,
+      "slots": [
+        "text",
+        "sources",
+        "completion_reason",
+        "error_step",
+        "failure"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "str",
+          "default": ""
+        },
+        {
+          "name": "sources",
+          "type": "tuple[StepResult,...]",
+          "default": []
+        },
+        {
+          "name": "completion_reason",
+          "type": "CompletionReason",
+          "default": {
+            "enum": "CompletionReason",
+            "value": "stop"
+          }
+        },
+        {
+          "name": "error_step",
+          "type": "StepResult | None",
+          "default": null
+        },
+        {
+          "name": "failure",
+          "type": "Literal[\"context_limit_exceeded\",\"context_preparation_failed\",\"loop_failed\"] | None",
+          "default": null
+        }
+      ]
+    },
+    "RunResult": {
+      "frozen": true,
+      "slots": [
+        "text",
+        "completion_reason",
+        "error"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "completion_reason",
+          "type": "CompletionReason",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "error",
+          "type": "PublicRunError | None",
+          "default": null
+        }
+      ]
+    },
+    "Message": {
+      "frozen": true,
+      "slots": [
+        "id",
+        "conversation_id",
+        "run_id",
+        "role",
+        "content",
+        "sequence",
+        "created_at"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "conversation_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "run_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "role",
+          "type": "Literal[\"user\",\"assistant\"]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "content",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "sequence",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    },
+    "ConversationCompaction": {
+      "frozen": true,
+      "slots": [
+        "id",
+        "conversation_id",
+        "covers_through_sequence",
+        "summary",
+        "summary_version",
+        "source_hash",
+        "provider_id",
+        "model_id",
+        "input_tokens",
+        "output_tokens",
+        "created_at",
+        "producer_plugin_id",
+        "producer_plugin_version",
+        "summary_format",
+        "source_step_id",
+        "source_first_sequence",
+        "previous_summary_id"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "conversation_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "covers_through_sequence",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "summary",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "summary_version",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "source_hash",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "provider_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "model_id",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "input_tokens",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "output_tokens",
+          "type": "int",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "producer_plugin_id",
+          "type": "str",
+          "default": "legacy"
+        },
+        {
+          "name": "producer_plugin_version",
+          "type": "str",
+          "default": "unknown"
+        },
+        {
+          "name": "summary_format",
+          "type": "str",
+          "default": "opensprite.text.v1"
+        },
+        {
+          "name": "source_step_id",
+          "type": "str | None",
+          "default": null
+        },
+        {
+          "name": "source_first_sequence",
+          "type": "int | None",
+          "default": null
+        },
+        {
+          "name": "previous_summary_id",
+          "type": "str | None",
+          "default": null
+        }
+      ]
+    },
+    "PublicRunError": {
+      "frozen": true,
+      "slots": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "fields": [
+        {
+          "name": "code",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "message",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "retryable",
+          "type": "bool",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    },
+    "ModelMessage": {
+      "frozen": true,
+      "slots": [
+        "role",
+        "content"
+      ],
+      "fields": [
+        {
+          "name": "role",
+          "type": "Literal[\"system\",\"user\",\"assistant\"]",
+          "default": {
+            "required": true
+          }
+        },
+        {
+          "name": "content",
+          "type": "str",
+          "default": {
+            "required": true
+          }
+        }
+      ]
+    }
+  },
+  "enums": {
+    "CompletionReason": {
+      "STOP": "stop",
+      "OUTPUT_LIMIT": "output_limit",
+      "CONTEXT_LIMIT": "context_limit"
+    },
+    "ModelFinishReason": {
+      "FINAL": "final",
+      "OUTPUT_LIMIT": "output_limit"
+    }
+  },
+  "protocols": {
+    "ExecutionHost": {
+      "run": {
+        "property": true,
+        "async": false,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "RunContext"
+      },
+      "checkpoint": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "None"
+      },
+      "read_context": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "request",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "ContextReadRequest",
+            "default": {
+              "dataclass": "ContextReadRequest",
+              "fields": {
+                "before_sequence": null,
+                "after_sequence": null,
+                "limit": 100,
+                "summary_format": "opensprite.text.v1"
+              }
+            }
+          }
+        ],
+        "return": "ContextSnapshot"
+      },
+      "estimate_input": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "messages",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "tuple[ModelMessage,...]",
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "int"
+      },
+      "infer": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "request",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "StepRequest",
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "StepResult"
+      },
+      "save_summary": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "request",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "SummaryWriteRequest",
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "ConversationCompaction"
+      },
+      "finish": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "output",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "FinalOutput",
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "RunResult"
+      }
+    },
+    "AgentLoopPlugin": {
+      "execute": {
+        "property": false,
+        "async": true,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          },
+          {
+            "name": "host",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": "ExecutionHost",
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "RunResult"
+      }
+    },
+    "AgentLoopPluginFactory": {
+      "create": {
+        "property": false,
+        "async": false,
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "type": null,
+            "default": {
+              "required": true
+            }
+          }
+        ],
+        "return": "AgentLoopPlugin"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 
-from opensprite_backend.inference.models import ModelMessage
+from opensprite_backend.agent.plugin import ModelMessage
 from datetime import UTC, datetime
 
 import pytest
@@ -8,8 +8,8 @@ from opensprite_standard_loop._counter import ConservativeTokenCounter
 from opensprite_standard_loop._context import ContextAssembler, ContextLimitExceeded
 from opensprite_standard_loop._budget import ContextBudgetPlan, resolve_context_budget
 from opensprite_backend.agent.plugin import ModelLimits
-from opensprite_backend.conversations.models import Message
-from opensprite_backend.conversations.models import ConversationCompaction
+from opensprite_backend.agent.plugin import Message
+from opensprite_backend.agent.plugin import ConversationCompaction
 from opensprite_backend.inference.capabilities import ModelCapability
 
 

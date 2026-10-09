@@ -8,11 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from opensprite_backend.conversations.models import (
+from .plugin_data import (
     CompletionReason, ConversationCompaction, Message, ContextBudget, OutputBudget,
-    PublicRunError,
+    PublicRunError, ModelFinishReason, ModelMessage,
 )
-from opensprite_backend.inference.models import ModelFinishReason, ModelMessage
 
 
 @dataclass(frozen=True, slots=True)

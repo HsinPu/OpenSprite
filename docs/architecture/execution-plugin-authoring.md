@@ -1,6 +1,6 @@
 # 撰寫 Agent Loop 插件（Host API v5）
 
-OpenSprite 0.21.35 的 Loop 負責完整模型輸入、摘要生成、重試與續寫。
+OpenSprite 0.21.38 的 Loop 負責完整模型輸入、摘要生成、重試與續寫。
 examples/execution-plugin 是可建置的 0.5.0 範例，插件 ID example_review。
 工作臺開發說明與下載 ZIP 使用相同來源。
 
@@ -138,3 +138,12 @@ uv pip check 後重啟單一後端；工作臺確認 metadata 與實際檔案相
 API v1..v4 必須重新撰寫與建置，不提供舊接口執行別名。升級真實資料前停止服務，
 備份整個敏感 .opensprite（包含 auth.json 與 config/credential.key）。
 SQLite 23 無法由舊 backend 寫入；回退需舊程式與升級前備份配對。
+
+## v5 穩定資料契約
+
+作者一律從 `opensprite_backend.agent.plugin` 匯入型別與 enum。公開欄位、
+順序、預設值、方法與 factory 由 `contracts/agent-loop-v5.sdk.json` 固定；
+Host 會將內部儲存／供應商資料轉成獨立的 frozen SDK 物件。不要依賴
+`conversations.models` 或 `inference.models` 的 class 身分，也不要取得 Host
+私有依賴。核心 patch 升級須通過未重建 wheel 的相容性驗證。SDK v5
+的相容起點仍為 0.21.35，範例依賴範圍保持 `>=0.21.35,<0.22`。

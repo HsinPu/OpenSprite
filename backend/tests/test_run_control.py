@@ -11,6 +11,7 @@ from test_host_v5 import accept, make_executor
 from opensprite_backend.agent.execution_errors import ExecutionFailed, RunCancelled
 from opensprite_backend.agent.execution_host import LoopExecutionHost
 from opensprite_backend.agent.plugin import ExecutionLimits, ModelLimits, FinalOutput
+from opensprite_backend.agent.plugin_conversion import completion_reason
 from opensprite_backend.agent.request_trace import TracedGateway
 from opensprite_backend.agent.run_control import RunControl
 from opensprite_backend.agent.run_executor import RunExecutor
@@ -33,7 +34,7 @@ async def test_host_runs_without_executor_or_private_dependency_access(tmp_path)
     result = await host.finish(FinalOutput(step.text, (step,)))
     await host._validate_result(result)
     await host._close()
-    repository.complete_run(run.id, result.text, result.completion_reason)
+    repository.complete_run(run.id, result.text, completion_reason(result.completion_reason))
     assert repository.get_run(run.id).partial_text == marker
     assert not hasattr(host, "_executor")
 

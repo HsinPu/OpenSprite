@@ -12,17 +12,18 @@ from datetime import UTC, datetime
 from time import monotonic
 from uuid import uuid4
 
-from opensprite_backend.conversations.models import CompletionReason, RunEventType, RunSnapshot
+from opensprite_backend.conversations.models import RunEventType, RunSnapshot
 from opensprite_backend.conversations.repository import ConversationRepository
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.inference.models import (
-    InferenceFailure, ModelCompleted, ModelFinishReason, ModelMessage,
+    InferenceFailure, ModelCompleted, ModelFinishReason,
     ModelRequest, ModelTextDelta, ModelUsage,
 )
 from opensprite_backend.prompt_logging import PromptLogError, PromptLogWriter
 from .context.counter import ConservativeTokenCounter
 from .summary_sources import summary_coverage
+from . import plugin_conversion as convert
 from .context.receipt import ReceiptSources
 from .events import CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
@@ -30,7 +31,7 @@ from .run_control import RunControl
 from .plugin_catalog import ExecutionPluginSelection
 from .plugin import (
     ContextReadRequest, ContextSnapshot, InputSource, SummarySource, SummaryWriteRequest,
-    FinalOutput, RunContext, RunResult, StepRequest, StepResult, ModelLimits,
+    FinalOutput, RunContext, RunResult, StepRequest, StepResult, ModelLimits, CompletionReason, ModelMessage,
 )
 from .request_trace import Attempt, TracedGateway
 
@@ -184,9 +185,9 @@ class LoopExecutionHost:
             summary = (None if request.summary_format is None else await asyncio.to_thread(
                 self._repository.get_latest_compaction, self._run.conversation_id,
                 summary_format=request.summary_format, before_sequence=current.sequence))
-            snapshot = ContextSnapshot(str(uuid4()), current, history, summary, before, after)
+            snapshot = ContextSnapshot(str(uuid4()), convert.message(current), tuple(convert.message(item) for item in history), convert.summary(summary), before, after)
             self._contexts[id(snapshot)] = (snapshot, self._signature(snapshot),
-                                           {item.id: item for item in (*history, current)})
+                                           {item.id: item for item in (*snapshot.history, snapshot.current_user)})
             return snapshot
 
     @staticmethod
@@ -201,7 +202,7 @@ class LoopExecutionHost:
             self._validate_messages(messages)
             return self._counter.request(messages)
 
-    def _input_sources(self, request):
+    def _input_sources(self, request, messages):
         if type(request.sources) is not tuple or len(request.sources) > 256:
             raise ExecutionFailed(INTERNAL_ERROR)
         bindings, history_ids, step_ids, used_positions, summary_meta = [], [], [], set(), None
@@ -242,7 +243,7 @@ class LoopExecutionHost:
                 kind, identifier = "assistant", step.id
             if kind is None:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            bindings.append((request.messages[source.message_index], kind, identifier, sequence))
+            bindings.append((messages[source.message_index], kind, identifier, sequence))
         if request.purpose != "compaction" and self._run.user_message_id not in history_ids:
             raise ExecutionFailed(INTERNAL_ERROR)
         return ReceiptSources(bindings=tuple(bindings), history_ids=tuple(dict.fromkeys(history_ids)),
@@ -275,7 +276,7 @@ class LoopExecutionHost:
             raise ExecutionFailed(INTERNAL_ERROR)
         latest = await asyncio.to_thread(self._repository.get_latest_compaction, self._run.conversation_id,
             summary_format=source.summary_format, before_sequence=self._current_user.sequence)
-        if latest != previous:
+        if convert.summary(latest) != previous:
             raise ExecutionFailed(INTERNAL_ERROR)
         try:
             coverage = summary_coverage(previous, messages)
@@ -299,7 +300,8 @@ class LoopExecutionHost:
                 raise ExecutionFailed(INTERNAL_ERROR)
             if request.parent_request_id is not None and request.parent_request_id not in self._attempts:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            sources = self._input_sources(request)
+            messages = convert.model_messages(request.messages)
+            sources = self._input_sources(request, messages)
             details = None
             if request.purpose == "compaction":
                 if request.channel != "draft" or request.summary_source is None:
@@ -309,7 +311,7 @@ class LoopExecutionHost:
                     raise ExecutionFailed(INTERNAL_ERROR)
             elif request.summary_source is not None:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            return await self._perform(request, request.messages, sources, summary_details=details,
+            return await self._perform(request, messages, sources, summary_details=details,
                 parent_request_id=request.parent_request_id)
 
     async def _perform(self, spec, messages, sources, *, preflight_error=None,
@@ -424,7 +426,7 @@ class LoopExecutionHost:
             status="failed" if error else "completed",
             finish_reason=None if completion is None else completion.value,
             error_code=None if error is None else error.code, input_tokens=input_usage, output_tokens=output_usage)
-        result = StepResult(row.id, text, completion, input_usage, output_usage, error)
+        result = StepResult(row.id, text, convert.finish_reason(completion), input_usage, output_usage, convert.error(error))
         self._steps[id(result)] = (result, self._signature(result), spec.channel)
         await self.checkpoint()
         return result
@@ -463,7 +465,7 @@ class LoopExecutionHost:
                 expected_previous_summary_id=None if previous is None else previous.id, run_id=self._run.id)
             details["ended"] = True
             self._new_summaries.add(summary.id)
-            return summary
+            return convert.summary(summary)
 
     async def _end_pending_summaries(self):
         for details in self._summary_steps.values():
@@ -491,7 +493,7 @@ class LoopExecutionHost:
                     raise ExecutionFailed(INTERNAL_ERROR)
             if output.error_step is not None:
                 self._check_step(output.error_step)
-                error = output.error_step.error
+                error = convert.stored_error(output.error_step.error) if output.error_step.error else None
                 if error is None:
                     raise ExecutionFailed(INTERNAL_ERROR)
             if error is None:
@@ -505,7 +507,7 @@ class LoopExecutionHost:
                     self._control.check()
                     await asyncio.to_thread(self._repository.append_assistant_delta, self._run.id, remaining[index:index+4096])
                 self._public_text = output.text
-            self._result = RunResult(self._public_text, output.completion_reason, error)
+            self._result = RunResult(self._public_text, output.completion_reason, convert.error(error))
             self._result_signature = self._signature(self._result)
             return self._result
 

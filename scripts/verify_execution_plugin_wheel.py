@@ -31,8 +31,7 @@ import sys
 target = Path(os.environ["OPENSPRITE_PLUGIN_VERIFY_TARGET"]).resolve()
 sys.path.insert(0, str(target))
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
-from opensprite_backend.conversations.models import CompletionReason
-from opensprite_backend.inference.models import ModelFinishReason
+from opensprite_backend.agent.plugin import CompletionReason, ModelFinishReason
 import opensprite_execution_example.plugin as example
 
 distribution = metadata.distribution("opensprite-execution-example")
