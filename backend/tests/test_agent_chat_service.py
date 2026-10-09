@@ -142,6 +142,7 @@ def service(
     model: bool = True,
     connected: bool = True,
     with_notifier: bool = False,
+    gateway=None,
 ):
     event_notifier = RunEventNotifier() if with_notifier else None
     paths = build_app_paths(tmp_path / ".opensprite")
@@ -176,7 +177,7 @@ def service(
     )
     loop = RunExecutor(
         repository=repository,
-        gateway=FinalGateway(),
+        gateway=gateway or FinalGateway(),
 
         capability_resolver=TestCapabilityResolver(),
     )

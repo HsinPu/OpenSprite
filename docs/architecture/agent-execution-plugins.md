@@ -135,3 +135,16 @@ Retries, summaries and continuations consume the same Run budget. The
 workbench diagnostics display and export this evidence. Legacy
 `agent_limit_reached` events remain readable without invented measurements.
 `PublicRunError`, factory entry points and Host API v5 shapes stay unchanged.
+
+## Run enforcement composition (0.21.37)
+
+`RunManager` owns live tasks, cancellation and shutdown. `RunExecutor` owns
+setup and the terminal transaction. `LoopExecutionHost` receives its
+repository, traced gateway, prompt writer and one `RunControl` explicitly;
+it never reads executor private fields. RunControl starts before factory
+creation and shares one absolute deadline, cancellation signal and accepted
+request/summary/text/operation counters across setup and every Host call.
+Only an expired core deadline produces deadline evidence; a raw TimeoutError
+from a plugin or setup dependency is an internal error. RunControl cancels
+and drains its pending await/stream tasks, without scheduling recovery or
+renewing any budget. Trusted Python still requires cooperative awaits.

@@ -2,11 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable
-from contextlib import suppress
-from copy import deepcopy
-from time import monotonic
-from typing import TypeVar
 
 from opensprite_backend.conversations.models import MAX_ASSISTANT_CHARS, RunStatus, StoreFailure
 from opensprite_backend.conversations.repository import ConversationStoreError
@@ -14,17 +9,15 @@ from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.response_modes import resolve_response_mode
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, DefaultWorkspaceResolver
 from .context import ModelCapabilityNotFound, ModelCapabilityProviderError
-from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT_ERROR, limit_failure, inference_error
+from .events import INTERNAL_ERROR, CONTEXT_PREPARATION_ERROR, WORKSPACE_CONTEXT_ERROR, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .execution_host import LoopExecutionHost
 from .plugin import ExecutionLimits
+from .run_control import RunControl
 from .context.limits import resolve_model_limits
 from .plugin_catalog import ExecutionPluginCatalog, ExecutionPluginSelection
 from .prompt import StaticSystemPromptProvider
 from .request_trace import TracedGateway
-
-_T = TypeVar("_T")
-
 
 class RunExecutor:
     def __init__(self, *, repository, gateway, capability_resolver,
@@ -64,10 +57,7 @@ class RunExecutor:
                 return await self._fail(run_id, WORKSPACE_CONTEXT_ERROR)
             workspace = DefaultWorkspaceResolver().execution_context(run.workspace_id)
         host = None
-        deadline = monotonic() + self._limits.max_duration_seconds
-        def deadline_failure():
-            used = max(0, monotonic() - deadline + self._limits.max_duration_seconds)
-            return limit_failure("duration_seconds", self._limits.max_duration_seconds, round(used, 6))
+        control = RunControl(cancellation_event, self._limits)
         try:
             if (workspace.id, workspace.revision, workspace.name, workspace.root_hash,
                 workspace.mount_manifest_hash) != (
@@ -83,32 +73,24 @@ class RunExecutor:
                 tuple({"id": mount.id, "alias": mount.alias, "rootHash": mount.root_hash,
                        "accessMode": mount.access_mode.value, "enabled": mount.enabled,
                        "availability": mount.availability.value} for mount in workspace.mounts))
-            if deadline <= monotonic():
-                raise deadline_failure()
-            async with asyncio.timeout(max(0, deadline - monotonic())):
-                system_prompt = await self._await_with_cancellation(
-                    self._system_prompt_provider.build(run_id=run_id, workspace=workspace), cancellation_event)
-                capability = await self._await_with_cancellation(
-                    self._resolve_capability(run, provider_endpoint), cancellation_event)
+            control.check()
+            system_prompt = await control.wait(self._system_prompt_provider.build(run_id=run_id, workspace=workspace))
+            capability = await control.wait(self._resolve_capability(run, provider_endpoint))
             if run.reasoning_resolution is None:
                 run = await asyncio.to_thread(self._repository.set_reasoning_resolution, run.id,
                                               resolve_response_mode(run.response_mode, capability.reasoning_efforts))
             model_limits = resolve_model_limits(run.context_budget, capability, run.output_budget)
-            host = LoopExecutionHost(executor=self, run=run, cancellation_event=cancellation_event,
-                                     system_prompt=system_prompt, model_limits=model_limits,
-                                     limits=deepcopy(self._limits), selection=execution_plugin,
-                                     provider_endpoint=provider_endpoint)
-            host._deadline = deadline
-            execution_timeout = asyncio.timeout(max(0, deadline - monotonic()))
+            host = LoopExecutionHost(repository=self._repository, gateway=self._gateway, control=control,
+                                     run=run, system_prompt=system_prompt, model_limits=model_limits,
+                                     selection=execution_plugin, provider_endpoint=provider_endpoint,
+                                     prompt_log_writer=self._prompt_log_writer)
             try:
-                async with execution_timeout:
-                    result = await self._await_with_cancellation(plugin.execute(host), cancellation_event)
+                result = await control.wait(plugin.execute(host))
                 await host._validate_result(result)
-            except TimeoutError:
-                raise (deadline_failure() if execution_timeout.expired() else ExecutionFailed(INTERNAL_ERROR)) from None
             except Exception as error:
                 if cancellation_event.is_set():
                     raise RunCancelled() from None
+                control.check()
                 if host._owns_exception(error):
                     raise
                 raise ExecutionFailed(INTERNAL_ERROR) from None
@@ -116,7 +98,7 @@ class RunExecutor:
                 await host._close()
             if result.error is not None:
                 return await self._fail(run_id, result.error)
-            self._raise_if_cancelled(cancellation_event)
+            control.check()
             try:
                 return (await asyncio.to_thread(self._repository.complete_run, run_id,
                                                result.text, result.completion_reason)).run
@@ -136,9 +118,6 @@ class RunExecutor:
             return await self._fail(run_id, CONTEXT_PREPARATION_ERROR)
         except ConversationStoreError:
             raise
-        except TimeoutError:
-            failure = deadline_failure()
-            return await self._fail(run_id, failure.error, limit=failure.limit)
         except asyncio.CancelledError:
             if asyncio.current_task().cancelling():
                 raise
@@ -164,60 +143,3 @@ class RunExecutor:
 
     async def _cancel(self, run_id):
         return await asyncio.to_thread(self._repository.mark_run_cancelled, run_id)
-
-    @staticmethod
-    def _raise_if_cancelled(event):
-        if event.is_set():
-            raise RunCancelled()
-
-    @staticmethod
-    async def _with_cancellation(iterator: AsyncIterator[_T], event) -> AsyncIterator[_T]:
-        try:
-            while True:
-                next_event = asyncio.create_task(anext(iterator))
-                cancelled = asyncio.create_task(event.wait())
-                try:
-                    done, _ = await asyncio.wait({next_event, cancelled}, return_when=asyncio.FIRST_COMPLETED)
-                except BaseException:
-                    next_event.cancel()
-                    cancelled.cancel()
-                    await asyncio.gather(next_event, cancelled, return_exceptions=True)
-                    raise
-                if cancelled in done and cancelled.result():
-                    next_event.cancel()
-                    with suppress(asyncio.CancelledError, StopAsyncIteration):
-                        await next_event
-                    raise RunCancelled()
-                cancelled.cancel()
-                with suppress(asyncio.CancelledError):
-                    await cancelled
-                try:
-                    yield next_event.result()
-                except StopAsyncIteration:
-                    return
-        finally:
-            close = getattr(iterator, "aclose", None)
-            if close is not None:
-                with suppress(Exception):
-                    await close()
-
-    @staticmethod
-    async def _await_with_cancellation(awaitable: Awaitable[_T], event) -> _T:
-        operation = asyncio.ensure_future(awaitable)
-        cancelled = asyncio.create_task(event.wait())
-        try:
-            done, _ = await asyncio.wait({operation, cancelled}, return_when=asyncio.FIRST_COMPLETED)
-        except BaseException:
-            operation.cancel()
-            cancelled.cancel()
-            await asyncio.gather(operation, cancelled, return_exceptions=True)
-            raise
-        if cancelled in done and cancelled.result():
-            operation.cancel()
-            with suppress(asyncio.CancelledError):
-                await operation
-            raise RunCancelled()
-        cancelled.cancel()
-        with suppress(asyncio.CancelledError):
-            await cancelled
-        return operation.result()

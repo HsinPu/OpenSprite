@@ -12,23 +12,27 @@ from datetime import UTC, datetime
 from time import monotonic
 from uuid import uuid4
 
-from opensprite_backend.conversations.models import CompletionReason, RunEventType
+from opensprite_backend.conversations.models import CompletionReason, RunEventType, RunSnapshot
+from opensprite_backend.conversations.repository import ConversationRepository
+from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.inference.models import (
     InferenceFailure, ModelCompleted, ModelFinishReason, ModelMessage,
     ModelRequest, ModelTextDelta, ModelUsage,
 )
-from opensprite_backend.prompt_logging import PromptLogError
+from opensprite_backend.prompt_logging import PromptLogError, PromptLogWriter
 from .context.counter import ConservativeTokenCounter
 from .summary_sources import summary_coverage
 from .context.receipt import ReceiptSources
-from .events import limit_failure, CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
+from .events import CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
+from .run_control import RunControl
+from .plugin_catalog import ExecutionPluginSelection
 from .plugin import (
     ContextReadRequest, ContextSnapshot, InputSource, SummarySource, SummaryWriteRequest,
-    FinalOutput, RunContext, RunResult, StepRequest, StepResult,
+    FinalOutput, RunContext, RunResult, StepRequest, StepResult, ModelLimits,
 )
-from .request_trace import Attempt
+from .request_trace import Attempt, TracedGateway
 
 
 class _StepDeltaBuffer:
@@ -53,19 +57,21 @@ class _StepDeltaBuffer:
 
 
 class LoopExecutionHost:
-    def __init__(self, *, executor, run, cancellation_event, system_prompt,
-                 model_limits, limits, selection, provider_endpoint):
-        self._executor = executor
-        self._repository = executor._repository
+    def __init__(self, *, repository: ConversationRepository, gateway: TracedGateway,
+                 control: RunControl, run: RunSnapshot, system_prompt: str,
+                 model_limits: ModelLimits, selection: ExecutionPluginSelection,
+                 provider_endpoint: ProviderEndpointSnapshot | None,
+                 prompt_log_writer: PromptLogWriter | None = None):
+        self._repository = repository
+        self._gateway = gateway
+        self._control = control
+        self._prompt_log_writer = prompt_log_writer
         self._run = deepcopy(run)
         self._model_limits = deepcopy(model_limits)
-        self._limits = deepcopy(limits)
+        self._limits = control.limits
         self._selection = selection
-        self._cancellation = cancellation_event
         self._system_prompt = system_prompt
         self._endpoint = provider_endpoint
-        self._deadline = monotonic() + limits.max_duration_seconds
-        self._requests = self._compactions = self._generated_chars = self._operation_count = 0
         self._contexts = {}
         self._summary_steps = {}
         self._current_user = None
@@ -110,19 +116,11 @@ class LoopExecutionHost:
         except Exception:
             return False
 
-    def _deadline_failure(self):
-        used = max(0, monotonic() - self._deadline + self._limits.max_duration_seconds)
-        return limit_failure("duration_seconds", self._limits.max_duration_seconds, round(used, 6))
-
     async def checkpoint(self):
         try:
-            self._executor._raise_if_cancelled(self._cancellation)
-            if monotonic() > self._deadline:
-                raise self._deadline_failure()
+            await self._control.checkpoint()
             if self._closed or self._result is not None or self._fatal is not None:
                 raise self._fatal or ExecutionFailed(INTERNAL_ERROR)
-            await asyncio.sleep(0)
-            self._executor._raise_if_cancelled(self._cancellation)
         except Exception as error:
             self._record_error(error)
             raise
@@ -134,9 +132,7 @@ class LoopExecutionHost:
             await self.checkpoint()
             if self._operations:
                 raise ExecutionFailed(INTERNAL_ERROR)
-            if self._operation_count >= 2048:
-                raise limit_failure("host_operations", 2048, self._operation_count)
-            self._operation_count += 1
+            self._control.consume_operation()
             task = asyncio.current_task()
             self._operations.add(task)
             yield
@@ -334,12 +330,9 @@ class LoopExecutionHost:
             raise ExecutionFailed(INTERNAL_ERROR)
         if not messages or self._counter.request(messages) > input_budget:
             preflight_error = preflight_error or CONTEXT_LIMIT_ERROR
-        if preflight_error is None and self._requests >= self._limits.max_model_requests:
-            raise limit_failure("model_requests", self._limits.max_model_requests, self._requests)
+        if preflight_error is None:
+            self._control.check_request(summary=summary_details is not None)
         if summary_details is not None and preflight_error is None:
-            if self._compactions >= self._limits.max_compactions:
-                raise limit_failure("summary_requests", self._limits.max_compactions, self._compactions)
-            self._compactions += 1
             coverage = summary_details["coverage"]
             await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.CONTEXT_COMPACTION_STARTED,
                 {"schemaVersion": 1, "compactionId": compaction_id, "reason": summary_details["reason"],
@@ -360,7 +353,6 @@ class LoopExecutionHost:
         completion = None
         error = preflight_error
         if error is None:
-            self._requests += 1
             request = ModelRequest(provider_id=self._run.provider_id, model_id=self._run.model_id,
                 provider_endpoint=self._endpoint, response_mode=self._run.response_mode,
                 reasoning_resolution=self._run.reasoning_resolution,
@@ -378,7 +370,8 @@ class LoopExecutionHost:
                     compaction_id=compaction_id or (sources.summary["id"] if sources.summary and sources.summary["id"] in self._new_summaries else None),
                     parent_request_id=parent_request_id, sources=sources)
                 self._attempts[row.id] = attempt
-                events = self._executor._with_cancellation(self._executor._gateway.stream(request, attempt=attempt), self._cancellation)
+                self._control.consume_request(summary=summary_details is not None)
+                events = self._control.stream(self._gateway.stream(request, attempt=attempt))
                 try:
                     async for event in events:
                         if completion is not None:
@@ -386,9 +379,7 @@ class LoopExecutionHost:
                         if isinstance(event, ModelTextDelta):
                             if not event.text or len(event.text) > 16384:
                                 raise ExecutionFailed(INVALID_PROVIDER_RESPONSE)
-                            if self._generated_chars + len(event.text) > self._limits.max_text_chars:
-                                raise limit_failure("generated_chars", self._limits.max_text_chars, self._generated_chars)
-                            self._generated_chars += len(event.text)
+                            self._control.consume_text(len(event.text))
                             text += event.text
                             if spec.channel == "answer":
                                 self._public_text += event.text
@@ -416,7 +407,7 @@ class LoopExecutionHost:
                     raise ExecutionFailed(error) from None
             except (RunCancelled, asyncio.CancelledError):
                 if summary_details is not None:
-                    summary_details["cancelled"] = self._cancellation.is_set() or monotonic() <= self._deadline
+                    summary_details["cancelled"] = self._control.cancellation_requested or not self._control.expired
                 await buffer.flush()
                 await asyncio.to_thread(self._repository.finish_step, row.id, status="cancelled")
                 raise
@@ -439,9 +430,9 @@ class LoopExecutionHost:
         return result
 
     def _write_prompt(self, request, sequence):
-        if self._run.log_full_prompts and self._executor._prompt_log_writer is not None:
+        if self._run.log_full_prompts and self._prompt_log_writer is not None:
             try:
-                self._executor._prompt_log_writer.write(
+                self._prompt_log_writer.write(
                     run_id=self._run.id, created_at=datetime.now(UTC), request_sequence=sequence,
                     request_kind=f"step-{sequence:03d}", provider_id=request.provider_id,
                     model_id=request.model_id, response_mode=request.response_mode,
@@ -478,7 +469,7 @@ class LoopExecutionHost:
         for details in self._summary_steps.values():
             if details["ended"]:
                 continue
-            cancelled = self._cancellation.is_set() or details.get("cancelled", False)
+            cancelled = self._control.cancellation_requested or details.get("cancelled", False)
             event = RunEventType.CONTEXT_COMPACTION_CANCELLED if cancelled else RunEventType.CONTEXT_COMPACTION_FAILED
             data = {"schemaVersion": 1, "compactionId": details["id"],
                     **({"reason": "cancelled"} if cancelled else {"errorCode": details.get("failure", "preparation_failed")})}
@@ -511,7 +502,7 @@ class LoopExecutionHost:
                     raise ExecutionFailed(INTERNAL_ERROR)
                 remaining = output.text[len(self._public_text):]
                 for index in range(0, len(remaining), 4096):
-                    self._executor._raise_if_cancelled(self._cancellation)
+                    self._control.check()
                     await asyncio.to_thread(self._repository.append_assistant_delta, self._run.id, remaining[index:index+4096])
                 self._public_text = output.text
             self._result = RunResult(self._public_text, output.completion_reason, error)
@@ -519,11 +510,11 @@ class LoopExecutionHost:
             return self._result
 
     async def _validate_result(self, result):
-        self._executor._raise_if_cancelled(self._cancellation)
-        if monotonic() > self._deadline:
-            error = self._deadline_failure()
+        try:
+            self._control.check()
+        except Exception as error:
             self._record_error(error)
-            raise error
+            raise
         if (self._fatal is not None or self._operations
             or self._result is None or result is not self._result or self._signature(result) != self._result_signature):
             error = self._fatal or ExecutionFailed(INTERNAL_ERROR)

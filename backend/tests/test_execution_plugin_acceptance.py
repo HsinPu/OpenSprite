@@ -25,13 +25,6 @@ def selected_profile(repository, run_id):
 
 
 def test_setting_change_affects_next_run_and_replay_does_not_read_current_settings(tmp_path):
-    chat, repository, manager, _ = service(tmp_path)
-    paths = build_app_paths(tmp_path / ".opensprite")
-    catalog = ExecutionPluginCatalog()
-    settings = ExecutionSettingsService(paths, catalog)
-    chat._execution_settings = settings
-    chat._execution_plugins = catalog
-
     async def scenario():
         started, release = asyncio.Event(), asyncio.Event()
 
@@ -56,7 +49,12 @@ def test_setting_change_affects_next_run_and_replay_does_not_read_current_settin
                     raise AssertionError("The no_recovery policy continued output.")
 
         gateway = Gateway()
-        manager._executor._gateway = gateway
+        chat, repository, manager, _ = service(tmp_path, gateway=gateway)
+        paths = build_app_paths(tmp_path / ".opensprite")
+        catalog = ExecutionPluginCatalog()
+        settings = ExecutionSettingsService(paths, catalog)
+        chat._execution_settings = settings
+        chat._execution_plugins = catalog
         request_id = str(uuid4())
         try:
             first = await chat.start_run(conversation_id=None, workspace_id=DEFAULT_WORKSPACE_ID,
