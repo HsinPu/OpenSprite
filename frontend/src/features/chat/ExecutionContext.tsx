@@ -52,11 +52,13 @@ function durationText(run: RunSnapshot | null): string {
 function eventLabel(event: RunEvent, t: Translator): string | null {
   switch (event.type) {
     case "run.started": return t("execution.event.runStarted");
-    case "execution.selected": return event.data.apiVersion === 3 ? t("execution.event.loopSelected", { plugin: `${event.data.pluginId} ${event.data.pluginVersion}` }) : t("execution.event.executionSelected", { loop: `${event.data.loopId} ${event.data.loopVersion}`, policy: `${event.data.policyId} ${event.data.policyVersion}` });
+    case "execution.selected": return Number(event.data.apiVersion) >= 3 ? t("execution.event.loopSelected", { plugin: `${event.data.pluginId} ${event.data.pluginVersion}` }) : t("execution.event.executionSelected", { loop: `${event.data.loopId} ${event.data.loopVersion}`, policy: `${event.data.policyId} ${event.data.policyVersion}` });
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "context.compaction.completed": return t("execution.event.contextCompactionCompleted");
     case "context.compaction.failed": return t("execution.event.contextCompactionFailed");
     case "context.compaction.cancelled": return t("execution.event.contextCompactionCancelled");
+    case "step.started": return t("execution.event.stepStarted", { label: String(event.data.label) });
+    case "step.completed": return null;
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
@@ -78,8 +80,22 @@ function processEvents(events: RunEvent[], t: Translator, locale: string, timeZo
   const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" | "unknown" }> = [];
   let addedTextStep = false;
   const compactions = new Map<string, number>();
+  const modelSteps = new Map<string, number>();
+  const hasSteps = events.some(event => event.type === "step.started");
   const terminal = (runStatus !== undefined && ["completed", "failed", "cancelled", "interrupted"].includes(runStatus)) || events.some((event) => ["run.completed", "run.failed", "run.cancelled", "run.interrupted"].includes(event.type));
   for (const event of events) {
+    if (event.type === "model.started" && hasSteps) continue;
+    if (event.type === "step.started") {
+      const id = String(event.data.stepId);
+      modelSteps.set(id, steps.length);
+      steps.push({ key: `step-${id}`, label: `${event.data.label} · ${t(event.data.channel === "draft" ? "diagnostics.draft" : "diagnostics.answer")}`, time: formatTime(event.createdAt, locale, timeZone), state: terminal ? "unknown" : "active" });
+      continue;
+    }
+    if (event.type === "step.completed") {
+      const index = modelSteps.get(String(event.data.stepId));
+      if (index !== undefined) steps[index] = { ...steps[index]!, state: event.data.status === "completed" ? "complete" : event.data.status === "failed" ? "error" : "unknown" };
+      continue;
+    }
     if (event.type === "assistant.delta") {
       if (!addedTextStep) {
         addedTextStep = true;
@@ -209,7 +225,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <div><dt>{t("execution.startTime")}</dt><dd>{formatTime(run.startedAt, locale, timeZone)}</dd></div>
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
-                {executionProfile ? <div><dt>{t("diagnostics.executionPlugins")}</dt><dd>{executionProfile.apiVersion === 3 ? `${executionProfile.pluginId} ${executionProfile.pluginVersion}` : `${executionProfile.loopId} ${executionProfile.loopVersion} / ${executionProfile.policyId} ${executionProfile.policyVersion}`}</dd></div> : null}
+                {executionProfile ? <div><dt>{t("diagnostics.executionPlugins")}</dt><dd>{Number(executionProfile.apiVersion) >= 3 ? `${executionProfile.pluginId} ${executionProfile.pluginVersion}` : `${executionProfile.loopId} ${executionProfile.loopVersion} / ${executionProfile.policyId} ${executionProfile.policyVersion}`}</dd></div> : null}
                 {maxOutputTokens !== null ? <div><dt>{t("execution.maxOutputTokens")}</dt><dd>{formatTokenLimit(maxOutputTokens)}</dd></div> : null}
                 {workspaceAvailability ? <div><dt>{t("execution.workspaceAvailability")}</dt><dd>{t(workspaceAvailability === "available" ? "workspaces.available" : workspaceAvailability === "unavailable" ? "workspaces.unavailable" : "workspaces.noRoot")}</dd></div> : null}
                 <div><dt>{t("execution.source")}</dt><dd>{t(historical ? "execution.history" : "execution.currentConversation")}</dd></div>

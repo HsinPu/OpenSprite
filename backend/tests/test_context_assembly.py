@@ -33,8 +33,6 @@ def plan(*, input_budget: int, trigger: int) -> ContextBudgetPlan:
         output_reserve_tokens=8_192,
         safety_reserve_tokens=1_808,
         input_budget_tokens=input_budget,
-        compaction_trigger_tokens=trigger,
-        compaction_target_tokens=max(1, trigger // 2),
     )
 
 
@@ -73,8 +71,6 @@ def test_budget_resolves_user_choices_with_output_and_safety_reserves(
     assert result.output_reserve_tokens <= 32_768
     assert result.safety_reserve_tokens >= 4_096
     assert result.input_budget_tokens > 0
-    assert result.compaction_target_tokens < result.compaction_trigger_tokens
-    assert result.compaction_trigger_tokens < result.input_budget_tokens
 
 
 @pytest.mark.parametrize(
@@ -209,10 +205,8 @@ def test_existing_summary_uses_compaction_target_and_stays_historical_user_data(
             output_reserve_tokens=100,
             safety_reserve_tokens=100,
             input_budget_tokens=800,
-            compaction_trigger_tokens=600,
-            compaction_target_tokens=300,
         ),
-        summary=summary,
+        summary=summary, selection_tokens=300,
     )
 
     assert result.messages[1].role == "user"

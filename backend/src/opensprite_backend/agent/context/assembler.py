@@ -37,7 +37,7 @@ class ContextAssembler:
         self,
         counter: ConservativeTokenCounter | None = None,
         *,
-        recent_message_floor: int = 12,
+        recent_message_floor: int = 1,
         max_model_messages: int = 256,
     ) -> None:
         if not 1 <= recent_message_floor <= 64:
@@ -57,6 +57,7 @@ class ContextAssembler:
         summary: ConversationCompaction | None = None,
         has_older_history: bool = False,
         current_user_message_id: str | None = None,
+        selection_tokens: int | None = None,
     ) -> AssembledContext:
         if not system_prompt:
             raise ValueError("system prompt must not be empty")
@@ -110,11 +111,7 @@ class ContextAssembler:
         selected_start = floor_start
         selected = list(required)
         estimated = required_tokens
-        selection_limit = (
-            budget.compaction_trigger_tokens
-            if summary is None
-            else budget.compaction_target_tokens
-        )
+        selection_limit = budget.input_budget_tokens if selection_tokens is None else selection_tokens
         while selected_start > 0 and len(selected) + 1 < self._max_model_messages:
             candidate = converted[selected_start - 1]
             candidate_tokens = self._counter.message(candidate)

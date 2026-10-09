@@ -221,7 +221,7 @@ def inspect_wheel(data: bytes, file_name: str, *, validate_environment=True,
             if match is None:
                 _invalid()
             api_version = int(match[2])
-            if not (match[1] == "agent_loops" and api_version == 3) and not (allow_retired_api and api_version in {1, 2}):
+            if not (match[1] == "agent_loops" and api_version == 4) and not (allow_retired_api and api_version in {1, 2, 3}):
                 raise ExecutionPackageError("incompatible_package")
             kind = "loop" if match[1] == "agent_loops" else "policy"
             for identifier, entry in parser.items(group, raw=True):

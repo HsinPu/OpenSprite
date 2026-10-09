@@ -13,7 +13,7 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.app_paths import build_app_paths
@@ -83,7 +83,7 @@ async def test_manager_owns_one_task_per_run_and_waits_for_completion(
 
     manager = RunManager(
         repository,
-        AgentLoop(
+        RunExecutor(
             repository=repository,
             gateway=FinalGateway(),
 
@@ -119,7 +119,7 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
 
     manager = RunManager(
         repository,
-        AgentLoop(
+        RunExecutor(
             repository=repository,
             gateway=BlockingGateway(),
 
@@ -159,7 +159,7 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
 
     manager = RunManager(
         repository,
-        AgentLoop(
+        RunExecutor(
             repository=repository,
             gateway=PartialGateway(),
 
@@ -167,7 +167,7 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
         ),
     )
     try:
-        with patch("opensprite_backend.agent.loop.monotonic", return_value=0.0):
+        with patch("opensprite_backend.agent.execution_host.monotonic", return_value=0.0):
             assert await manager.start(run.id, DEFAULT_WORKSPACE) is True
             await asyncio.wait_for(buffered.wait(), timeout=1)
         before_cancel = repository.get_run(run.id)
@@ -184,11 +184,9 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
         assert result.partial_text == "visible partial response"
         assert result.assistant_message_id is None
         events = repository.list_run_events(run.id, after_sequence=0, limit=100)
-        assert [event.type for event in events][-2:] == [
-            RunEventType.ASSISTANT_DELTA,
-            RunEventType.RUN_CANCELLED,
-        ]
-        assert events[-2].data == {"text": "partial response"}
+        assert events[-1].type is RunEventType.RUN_CANCELLED
+        assert [e.data for e in events if e.type is RunEventType.ASSISTANT_DELTA][-1] == {"text": "partial response"}
+        assert [e.data["status"] for e in events if e.type is RunEventType.STEP_COMPLETED] == ["cancelled"]
         assert all(event.type is not RunEventType.RUN_FAILED for event in events)
     finally:
         await manager.close()
@@ -206,11 +204,11 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
             self._wrapped = wrapped
             self._failed = False
 
-        def append_assistant_delta(self, run_id: str, text: str):
+        def append_step_delta(self, step_id: str, text: str):
             if not self._failed:
                 self._failed = True
                 raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
-            return self._wrapped.append_assistant_delta(run_id, text)
+            return self._wrapped.append_step_delta(step_id, text)
 
         def __getattr__(self, name: str):
             return getattr(self._wrapped, name)
@@ -228,7 +226,7 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
 
     manager = RunManager(
         failing_repository,  # type: ignore[arg-type]
-        AgentLoop(
+        RunExecutor(
             repository=failing_repository,  # type: ignore[arg-type]
             gateway=FinalGateway(),
 

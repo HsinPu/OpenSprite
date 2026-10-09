@@ -20,7 +20,7 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.api.chat_models import run_response
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.prompt_logging import FilePromptLogWriter
@@ -139,142 +139,26 @@ def seed_completed_turns(
     return conversation_id
 
 
-class PagedContextRepository:
-    def __init__(self, count: int) -> None:
-        conversation_id = "22222222-2222-4222-8222-222222222222"
-        self.messages = tuple(
-            Message(
-                id=str(uuid4()),
-                conversation_id=conversation_id,
-                run_id=str(uuid4()),
-                role="user",
-                content=f"message {sequence}",
-                sequence=sequence,
-                created_at=datetime(2026, 8, 29, tzinfo=UTC),
-            )
-            for sequence in range(1, count + 1)
-        )
-        self.event_count = 0
-        self.events: list[tuple[RunEventType, dict[str, object]]] = []
-
-    def list_messages(
-        self,
-        conversation_id: str,
-        *,
-        limit: int,
-        before_sequence: int | None,
-    ) -> MessagePage:
-        assert conversation_id == self.messages[0].conversation_id
-        assert before_sequence is None
-        selected = self.messages[-limit:]
-        return MessagePage(
-            items=selected,
-            next_before_sequence=(
-                selected[0].sequence if len(self.messages) > limit else None
-            ),
-        )
-
-    def list_messages_after(
-        self,
-        conversation_id: str,
-        *,
-        after_sequence: int,
-        limit: int,
-    ) -> tuple[Message, ...]:
-        assert conversation_id == self.messages[0].conversation_id
-        return tuple(
-            message
-            for message in self.messages
-            if message.sequence > after_sequence
-        )[:limit]
-
-    def get_latest_compaction(self, conversation_id: str) -> None:
-        assert conversation_id == self.messages[0].conversation_id
-        return None
-
-    def append_run_event(
-        self,
-        run_id: str,
-        event_type: RunEventType,
-        data: dict[str, object],
-    ) -> None:
-        del run_id
-        self.events.append((event_type, data))
-        self.event_count += 1
-
-
-class AdvancingCompactionService:
-    def __init__(self) -> None:
-        self.coverages: list[int] = []
-
-    async def compact(self, **kwargs: object) -> ConversationCompaction:
-        messages = kwargs["messages"]
-        assert isinstance(messages, tuple)
-        last = messages[-1]
-        assert isinstance(last, Message)
-        coverage = last.sequence
-        self.coverages.append(coverage)
-        return ConversationCompaction(
-            id=str(uuid4()),
-            conversation_id=str(kwargs["conversation_id"]),
-            covers_through_sequence=coverage,
-            summary=f"Summary through {coverage}",
-            summary_version=1,
-            source_hash="a" * 64,
-            provider_id="openrouter",
-            model_id="openrouter/auto",
-            input_tokens=1,
-            output_tokens=1,
-            created_at=datetime(2026, 8, 29, tzinfo=UTC),
-        )
-
-
 @async_test
-async def test_context_compaction_pages_until_recent_history_is_covered() -> None:
-    repository = PagedContextRepository(4_001)
-    current = repository.messages[-1]
-    run = RunSnapshot(
-        id=str(uuid4()),
-        conversation_id=current.conversation_id,
-        user_message_id=current.id,
-        assistant_message_id=None,
-        provider_id="openrouter",
-        model_id="openrouter/auto",
-        response_mode="default",
-        status=RunStatus.RUNNING,
-        error=None,
-        partial_text="",
-        created_at=current.created_at,
-        started_at=current.created_at,
-        finished_at=None,
-    )
-    loop = AgentLoop(
-        repository=repository,  # type: ignore[arg-type]
-        gateway=ScriptedGateway([]),
-
-        capability_resolver=TestCapabilityResolver(),
-    )
-    compaction = AdvancingCompactionService()
-    loop._compaction_service = compaction  # type: ignore[assignment]
-
-    prepared = await loop._prepare_context(
-        run=run,
-        system_prompt="System",
-        cancellation_event=asyncio.Event(),
-        current_user_message_id=current.id,
-    )
-
-    assert compaction.coverages == [*range(200, 3_801, 200), 3_989]
-    assert repository.event_count == 2 * len(compaction.coverages)
-    identifiers = set()
-    for started, completed in zip(repository.events[::2], repository.events[1::2]):
-        assert started[0] is RunEventType.CONTEXT_COMPACTION_STARTED
-        assert completed[0] is RunEventType.CONTEXT_COMPACTION_COMPLETED
-        assert started[1]["compactionId"] == completed[1]["compactionId"]
-        identifiers.add(started[1]["compactionId"])
-    assert len(identifiers) == len(compaction.coverages)
-    assert "Summary through 3989" in prepared.messages[1].content
-    assert prepared.messages[-1].content == "message 4001"
+async def test_context_compaction_pages_until_recent_history_is_covered(tmp_path):
+    repository = store(tmp_path)
+    conversation = seed_completed_turns(repository, 201, assistant_size=20)
+    run = repository.start_run(conversation_id=conversation, client_request_id=str(uuid4()),
+        message="current", provider_id="openrouter", model_id="openrouter/auto",
+        response_mode="default").run
+    gateway = ScriptedGateway([
+        [ModelTextDelta("summary-one"), ModelCompleted(ModelFinishReason.FINAL)],
+        [ModelTextDelta("summary-two"), ModelCompleted(ModelFinishReason.FINAL)],
+        [ModelTextDelta("answer"), ModelCompleted(ModelFinishReason.FINAL)]])
+    result = await RunExecutor(repository=repository, gateway=gateway,
+        capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
+    assert result.status is RunStatus.COMPLETED
+    assert len(gateway.requests) == 3
+    assert repository.get_latest_compaction(conversation).covers_through_sequence == 391
+    assert gateway.requests[-1].messages[-1].content == "current"
+    assert len(repository.list_messages_after(conversation, after_sequence=0, limit=200)) == 200
+    steps = repository.list_run_steps(run.id, after_sequence=0, limit=100)
+    assert [s.channel for s in steps] == ["draft", "draft", "answer"]
 
 
 @async_test
@@ -291,7 +175,7 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
             ]
         ]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -327,8 +211,10 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
         if event.type is not RunEventType.MODEL_ATTEMPT
     ] == [
         RunEventType.RUN_STARTED,
+        RunEventType.STEP_STARTED,
         RunEventType.MODEL_STARTED,
         RunEventType.ASSISTANT_DELTA,
+        RunEventType.STEP_COMPLETED,
         RunEventType.RUN_COMPLETED,
     ]
 
@@ -361,7 +247,7 @@ async def test_agent_loop_separates_earlier_instruction_from_current_request(
     )
 
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -408,7 +294,7 @@ async def test_run_uses_its_snapshotted_output_budget(
     gateway = ScriptedGateway(
         [[ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)]]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -444,7 +330,7 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
             ]
         ]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -488,7 +374,7 @@ async def test_enabled_prompt_logging_records_the_exact_model_messages(
         response_mode="default",
         log_full_prompts=True,
     ).run
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=ScriptedGateway([[ModelTextDelta("收到"), ModelCompleted(ModelFinishReason.FINAL)]]),
 
@@ -525,7 +411,7 @@ async def test_output_limit_continues_twice_into_one_visible_answer(
             [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
         ]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -577,7 +463,7 @@ async def test_output_limit_stops_after_two_continuations(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -609,7 +495,7 @@ async def test_output_limit_uses_the_snapshotted_continuation_limit(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -651,7 +537,7 @@ async def test_unlimited_continuation_runs_until_the_model_finishes(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -685,7 +571,7 @@ async def test_unlimited_continuation_stops_at_the_backend_safety_cap(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -717,7 +603,7 @@ async def test_continuation_context_rejection_preserves_existing_text(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -765,7 +651,7 @@ async def test_continuation_context_rejection_compacts_once_then_retries(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -802,7 +688,7 @@ async def test_assistant_output_limit_fails_run_before_repository_overflow(
             yield ModelTextDelta("56")
             yield ModelCompleted(ModelFinishReason.FINAL)
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=OversizedGateway(),
 
@@ -822,7 +708,7 @@ async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
     gateway = ScriptedGateway(
         [[ModelGatewayError(InferenceFailure.PROVIDER_TIMEOUT)]]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -875,7 +761,7 @@ async def test_long_history_is_compacted_without_deleting_raw_messages(
             ],
         ]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -938,7 +824,7 @@ async def test_required_recent_history_overflow_fails_without_model_request(
         context_budget="auto",
     ).run
     gateway = ScriptedGateway([])
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -985,12 +871,12 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
         capability_resolver=TestCapabilityResolver(),
-        max_model_rounds=1,
+        max_model_requests=3,
     ).execute(current.id, asyncio.Event())
 
     assert result.status is RunStatus.COMPLETED
@@ -1010,7 +896,7 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
         assert data["context"]["estimatedInputTokens"] == ConservativeTokenCounter().request(request.messages)
     assert compact["context"]["historyMessageIds"]
     assert retry["context"]["summary"]["id"] == repository.get_latest_compaction(conversation_id).id
-    assert first["requestId"] == retry["requestId"]
+    assert first["requestId"] != retry["requestId"]
     assert retry["attemptNumber"] == 2
     assert retry["retryOfAttemptId"] == first["attemptId"]
     assert retry["retryCause"] == "provider_context_limit"
@@ -1026,10 +912,11 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
             limit=100,
         )
     ]
-    assert [kind for kind in event_types if kind is not RunEventType.MODEL_ATTEMPT] == [
+    assert [kind for kind in event_types if kind not in {RunEventType.MODEL_ATTEMPT, RunEventType.STEP_STARTED, RunEventType.STEP_COMPLETED}] == [
         RunEventType.RUN_STARTED,
         RunEventType.MODEL_STARTED,
         RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.MODEL_STARTED,
         RunEventType.CONTEXT_COMPACTION_COMPLETED,
         RunEventType.MODEL_STARTED,
         RunEventType.ASSISTANT_DELTA,
@@ -1056,7 +943,7 @@ async def test_context_rejection_after_partial_output_is_not_retried(
         ]]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -1100,7 +987,7 @@ async def test_second_context_rejection_stops_after_one_compaction_retry(
         ]
     )
 
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -1123,7 +1010,7 @@ async def test_prompt_log_failure_stops_before_any_model_request(
     gateway = ScriptedGateway(
         [[ModelTextDelta("must not run"), ModelCompleted(ModelFinishReason.FINAL)]]
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -1144,8 +1031,8 @@ async def test_prompt_log_failure_stops_before_any_model_request(
         if record.name == "opensprite.agent.context"
         and record.getMessage() == f"agent run failed run_id={run.id}"
     ]
-    assert len(records) == 1
-    assert records[0].exc_info is not None
+    assert records == []
+    assert "prompt log failed" not in caplog.text
 
 
 @async_test
@@ -1165,7 +1052,7 @@ async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) ->
             if False:
                 yield ModelCompleted(ModelFinishReason.FINAL)
 
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=BlockingGateway(),
 
@@ -1218,7 +1105,7 @@ async def test_cancellation_interrupts_context_compaction_request(
 
     cancellation = asyncio.Event()
     task = asyncio.create_task(
-        AgentLoop(
+        RunExecutor(
             repository=repository,
             gateway=BlockingSummaryGateway(),
 
@@ -1243,6 +1130,9 @@ async def test_cancellation_interrupts_context_compaction_request(
     ] == [
         RunEventType.RUN_STARTED,
         RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.STEP_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.STEP_COMPLETED,
         RunEventType.CONTEXT_COMPACTION_CANCELLED,
         RunEventType.RUN_CANCELLED,
     ]
@@ -1258,7 +1148,7 @@ async def test_failed_compaction_has_one_safe_terminal_event(tmp_path: Path) -> 
         response_mode="default", context_budget="auto",
     ).run
     gateway = ScriptedGateway([[ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]])
-    result = await AgentLoop(
+    result = await RunExecutor(
         repository=repository, gateway=gateway,
 
         capability_resolver=TestCapabilityResolver(),
@@ -1282,7 +1172,7 @@ async def test_fast_text_deltas_are_coalesced_before_persistence(
     run = accepted_run(repository)
     chunks = [ModelTextDelta("a" * 1_000) for _ in range(8)]
     gateway = ScriptedGateway([[*chunks, ModelCompleted(ModelFinishReason.FINAL)]])
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -1291,14 +1181,14 @@ async def test_fast_text_deltas_are_coalesced_before_persistence(
 
     with patch.object(
         repository,
-        "append_assistant_delta",
-        wraps=repository.append_assistant_delta,
-    ) as append_delta, patch("opensprite_backend.agent.loop.monotonic", return_value=0.0):
+        "append_step_delta",
+        wraps=repository.append_step_delta,
+    ) as append_delta, patch("opensprite_backend.agent.execution_host.monotonic", return_value=0.0):
         result = await loop.execute(run.id, asyncio.Event())
 
     assert result.status is RunStatus.COMPLETED
     assert result.partial_text == "a" * 8_000
-    assert [len(call.args[1]) for call in append_delta.call_args_list] == [1_000, 5_000, 2_000]
+    assert [len(call.args[1]) for call in append_delta.call_args_list] == [1_000, 4_096, 904, 2_000]
 
 
 @async_test
@@ -1318,7 +1208,7 @@ async def test_first_short_chunk_is_persisted_before_the_model_finishes(tmp_path
             yield ModelTextDelta(final)
             yield ModelCompleted(ModelFinishReason.FINAL)
 
-    task = asyncio.create_task(AgentLoop(
+    task = asyncio.create_task(RunExecutor(
         repository=repository, gateway=PausedGateway(), capability_resolver=TestCapabilityResolver(),
     ).execute(run.id, asyncio.Event()))
     try:
@@ -1334,15 +1224,16 @@ async def test_first_short_chunk_is_persisted_before_the_model_finishes(tmp_path
 
 @async_test
 async def test_slow_short_chunks_flush_on_elapsed_time(tmp_path: Path) -> None:
-    from opensprite_backend.agent.loop import _AssistantDeltaBuffer
+    from opensprite_backend.agent.execution_host import _StepDeltaBuffer
 
     repository = store(tmp_path)
     run = accepted_run(repository)
     repository.mark_run_started(run.id)
     tick = [0.0]
     chunks = [uuid4().hex for _ in range(3)]
-    buffer = _AssistantDeltaBuffer(repository, run.id)
-    with patch("opensprite_backend.agent.loop.monotonic", side_effect=lambda: tick[0]):
+    step = repository.start_step(run.id, label="test", channel="answer")
+    with patch("opensprite_backend.agent.execution_host.monotonic", side_effect=lambda: tick[0]):
+        buffer = _StepDeltaBuffer(repository, step.id)
         await buffer.append(chunks[0])
         tick[0] = 0.05
         await buffer.append(chunks[1])

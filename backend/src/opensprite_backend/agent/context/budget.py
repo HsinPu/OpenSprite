@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import floor
 from typing import Final
 
 from opensprite_backend.inference.capabilities import ModelCapability
@@ -31,8 +30,6 @@ class ContextBudgetPlan:
     output_reserve_tokens: int
     safety_reserve_tokens: int
     input_budget_tokens: int
-    compaction_trigger_tokens: int
-    compaction_target_tokens: int
     output_requested: OutputBudget = "auto"
 
 
@@ -89,7 +86,5 @@ def resolve_context_budget(
         output_reserve_tokens=output_reserve,
         safety_reserve_tokens=safety_reserve,
         input_budget_tokens=input_budget,
-        compaction_trigger_tokens=max(1, floor(input_budget * 0.75)),
-        compaction_target_tokens=max(1, floor(input_budget * 0.55)),
         output_requested=output_requested,
     )

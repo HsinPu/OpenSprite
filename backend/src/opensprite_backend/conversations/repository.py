@@ -28,6 +28,7 @@ from .models import (
     RunEvent,
     RunEventType,
     RunSnapshot,
+    RunStep,
     StartRunResult,
     StoreFailure,
     DEFAULT_WORKSPACE_ID,
@@ -112,6 +113,7 @@ class ConversationRepository(Protocol):
     def get_latest_compaction(
         self,
         conversation_id: str,
+        *, summary_format: str = "opensprite.text.v1",
     ) -> ConversationCompaction | None: ...
 
     def append_compaction(
@@ -125,6 +127,10 @@ class ConversationRepository(Protocol):
         model_id: str,
         input_tokens: int,
         output_tokens: int,
+        producer_plugin_id: str = "legacy",
+        producer_plugin_version: str = "unknown",
+        summary_format: str = "opensprite.text.v1",
+        compaction_id: str | None = None,
     ) -> ConversationCompaction: ...
 
     def set_reasoning_resolution(self, run_id: str, resolution: ReasoningResolution) -> RunSnapshot: ...
@@ -167,3 +173,13 @@ class ConversationRepository(Protocol):
         after_sequence: int,
         limit: int,
     ) -> tuple[RunEvent, ...]: ...
+
+    def start_step(self, run_id: str, *, label: str, channel: str, retry_of: str | None = None) -> RunStep: ...
+
+    def append_step_delta(self, step_id: str, text: str) -> None: ...
+
+    def finish_step(self, step_id: str, *, status: str, finish_reason: str | None = None,
+                    error_code: str | None = None, input_tokens: int | None = None,
+                    output_tokens: int | None = None) -> RunStep: ...
+
+    def list_run_steps(self, run_id: str, *, after_sequence: int = 0, limit: int = 100) -> tuple[RunStep, ...]: ...

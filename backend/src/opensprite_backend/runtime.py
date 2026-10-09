@@ -11,7 +11,7 @@ from typing import Protocol
 
 from fastapi import FastAPI
 
-from .agent import AgentLoop, RunManager
+from .agent import RunExecutor, RunManager
 from .agent.plugin_catalog import ExecutionPluginCatalog
 from .execution_settings import ExecutionSettingsOperations, ExecutionSettingsService, UnavailableExecutionSettings
 from .execution_plugins.service import ExecutionPackageOperations, ExecutionPackageService, UnavailableExecutionPackages
@@ -173,7 +173,7 @@ def create_system_runtime(
         operation_locks=provider_runtime.operation_locks,
         custom_providers=provider_runtime.custom_providers,
     )
-    agent_loop = AgentLoop(
+    run_executor = RunExecutor(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         capability_resolver=capability_resolver,
@@ -183,7 +183,7 @@ def create_system_runtime(
         ),
         prompt_log_writer=FilePromptLogWriter(paths),
     )
-    run_manager = RunManager(repository, agent_loop)
+    run_manager = RunManager(repository, run_executor)
     agent_chat = AgentChatService(
         repository,
         ai_settings,

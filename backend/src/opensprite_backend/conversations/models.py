@@ -48,6 +48,8 @@ class RunEventType(str, Enum):
     CONTEXT_COMPACTION_CANCELLED = "context.compaction.cancelled"
     MODEL_ATTEMPT = "model.attempt"
     MODEL_STARTED = "model.started"
+    STEP_STARTED = "step.started"
+    STEP_COMPLETED = "step.completed"
     RESPONSE_CONTINUATION_STARTED = "response.continuation.started"
     ASSISTANT_DELTA = "assistant.delta"
     RUN_COMPLETED = "run.completed"
@@ -150,6 +152,27 @@ class ConversationCompaction:
     input_tokens: int
     output_tokens: int
     created_at: datetime
+    producer_plugin_id: str = "legacy"
+    producer_plugin_version: str = "unknown"
+    summary_format: str = "opensprite.text.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class RunStep:
+    id: str
+    run_id: str
+    sequence: int
+    label: str
+    channel: Literal["draft", "answer"]
+    status: Literal["running", "completed", "failed", "cancelled", "interrupted"]
+    text: str
+    finish_reason: str | None
+    error_code: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    retry_of: str | None
+    created_at: datetime
+    finished_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,35 +1,36 @@
-# OpenSprite execution example 0.3.0
+# OpenSprite execution example 0.4.0
 
-This pure-Python package targets OpenSprite >=0.21.33,<0.22 and Host API v3.
-`example_main_retry_only` checks cancellation around a text model turn, returns the exact Host result, permits eligible main-provider context retry and vetoes output continuation on the same instance.
-The factory returns a fresh plugin for each Run. There is no persistence, credential access or direct Provider connection in this example.
-
-## Build and test
+Pure Python, OpenSprite >=0.21.34,<0.22, Host API v4. The example_review
+Loop performs three actual requests: private draft, private review and published
+final answer. Review receives draft text; final receives draft plus critique.
+Only final text becomes the conversation answer. Each Run gets a fresh instance.
 
 From the OpenSprite repository root:
 
 ```bash
 uv sync --project backend --dev
 uv run --project backend python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
-uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin
+uv build --wheel --out-dir tmp/v4-wheels examples/execution-plugin
 ```
 
-PowerShell installed-wheel verification:
+PowerShell installed-wheel check:
 
 ```powershell
-$env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/execution-plugin-wheel/opensprite_execution_example-0.3.0-py3-none-any.whl).Path
+$env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/v4-wheels/opensprite_execution_example-0.4.0-py3-none-any.whl).Path
 uv run --project backend python scripts/verify_execution_plugin_wheel.py
 ```
 
-For the downloaded ZIP, run the same commands from its root: it contains `examples/`, `docs/` and `scripts/`; a compatible backend environment is required.
-Source-only unit tests verify coordination. The wheel verifier installs into a temporary target and exercises the installed implementation through a real AgentLoop/SQLite/native adapter with variable protocol-fixture output.
-This does not prove a paid Provider or arbitrary task outcome.
+Source tests check decisions. The separate verifier installs the actual wheel
+offline in a temporary target and isolated Python process, then tests real Host,
+SQLite, native adapter, variable protocol output and cancellation. It is not a
+paid Provider test.
 
-## Install
+The downloaded ZIP includes examples/, docs/ and scripts/. Use a compatible
+backend environment. Import in Settings → Execution, build/restart with the
+deployment bundle, verify deployment, then apply the installed Loop.
+Import alone stores a reviewed package; it does not install or select it.
+Keep the current .opensprite and one writer. Review trusted code before installation.
+Old API v1/v2/v3 wheels must be rewritten; there is no compatibility wrapper.
 
-Import the reviewed wheel in Settings → Execution, download its deployment bundle, follow the bundle README to build/restart the existing Docker project, refresh deployment status, then apply the discovered Agent Loop to future tasks.
-Import only stores and statically checks a package. It neither runs code nor modifies the running Python environment.
-For desktop installation, stop the backend and install into its actual Python environment before restarting.
-Keep the existing user-data root and one writer. API v1 wheels are incompatible and must be rewritten for text Host v2.
-
-See [authoring](../../docs/architecture/execution-plugin-authoring.md) and [execution architecture](../../docs/architecture/agent-execution-plugins.md).
+See [authoring](../../docs/architecture/execution-plugin-authoring.md)
+and [architecture](../../docs/architecture/agent-execution-plugins.md).

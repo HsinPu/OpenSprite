@@ -21,6 +21,7 @@ PY
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/install.sh" --source-root "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" --test-root "$ROOT" --access-mode trusted_local
 [[ -f "$ROOT/app/frontend/dist/index.html" ]]
 [[ -f "$ROOT/app/backend/.venv/bin/uvicorn" ]]
+"$ROOT/app/backend/.venv/bin/python" -c "from importlib.metadata import distribution; from opensprite_standard_loop import create_standard_factory; assert distribution('opensprite-standard-loop').version == '0.1.0'; assert create_standard_factory().api_version == 4"
 systemd-analyze --user verify "$ROOT/systemd/opensprite.service"
 [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["mode"])' "$ROOT/.opensprite/config/access-policy.json")" == "trusted_local" ]]
 echo "Linux installer build, access helper and systemd unit checks passed."

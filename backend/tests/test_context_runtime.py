@@ -4,7 +4,6 @@ from collections.abc import AsyncIterator
 import pytest
 
 from opensprite_backend.agent.context import (
-    GatewaySummaryGenerator,
     ModelCapabilityNotFound,
 )
 from opensprite_backend.model_capability_resolver import ProviderModelCapabilityResolver
@@ -115,35 +114,5 @@ def test_capability_resolver_invalidates_after_provider_generation_changes() -> 
 
         assert refreshed.context_window_tokens == 262_144
         assert connections.calls == 2
-
-    asyncio.run(scenario())
-
-
-class SummaryGateway:
-    def __init__(self) -> None:
-        self.requests: list[ModelRequest] = []
-
-    async def stream(self, request: ModelRequest) -> AsyncIterator[ModelStreamEvent]:
-        self.requests.append(request)
-        yield ModelTextDelta("Goals and constraints\nKeep context.")
-        yield ModelUsage(120, 20)
-        yield ModelCompleted(ModelFinishReason.FINAL)
-
-
-def test_summary_generator_is_bounded_and_never_exposes_tools() -> None:
-    async def scenario() -> None:
-        gateway = SummaryGateway()
-        result = await GatewaySummaryGenerator(gateway).generate(
-            provider_id="openai",
-            model_id="gpt-5.6",
-            prompt="historical data",
-        )
-
-        assert result.summary.startswith("Goals and constraints")
-        assert result.input_tokens == 120
-        assert result.output_tokens == 20
-        assert not hasattr(gateway.requests[0], "tools")
-        assert gateway.requests[0].max_output_tokens == 2_048
-        assert gateway.requests[0].response_mode == "default"
 
     asyncio.run(scenario())

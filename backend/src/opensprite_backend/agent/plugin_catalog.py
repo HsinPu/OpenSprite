@@ -9,11 +9,10 @@ import re
 from threading import RLock
 from typing import Literal
 
-from .builtin_plugins import BuiltinLoopFactory
 from .plugin import AgentLoopPlugin, AgentLoopPluginFactory
 
 PluginStatus = Literal["available", "incompatible", "unavailable"]
-API_VERSION = 3
+API_VERSION = 4
 _GROUP = re.compile(r"^opensprite_backend\.agent_loops\.v([1-9][0-9]*)$")
 _ID = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 
@@ -47,16 +46,14 @@ class ExecutionPluginSelection:
 
     def create(self) -> AgentLoopPlugin:
         try:
+            if type(getattr(self.factory, "api_version", None)) is not int or self.factory.api_version != API_VERSION:
+                raise ValueError("invalid factory API")
             plugin = self.factory.create()
             if inspect.iscoroutine(plugin):
                 plugin.close()
                 raise ValueError("create must return a plugin synchronously")
             if not inspect.iscoroutinefunction(getattr(plugin, "execute", None)):
                 raise ValueError("execute must be async")
-            for method in ("allow_context_retry", "allow_output_continuation"):
-                callback = getattr(plugin, method, None)
-                if not callable(callback) or inspect.iscoroutinefunction(callback):
-                    raise ValueError("decisions must be synchronous")
             return plugin
         except (Exception, asyncio.CancelledError):
             raise ExecutionPluginError("plugin_unavailable") from None
@@ -71,12 +68,6 @@ class ExecutionPluginCatalog:
         self._load_lock = RLock()
         self._descriptors: dict[str, PluginDescriptor] = {}
         self._sources: dict[str, object] = {}
-        for descriptor, factory in (
-            (PluginDescriptor("standard", "Standard Loop", "Text execution with bounded recovery and configured continuation.", "3.0.0", API_VERSION), BuiltinLoopFactory()),
-            (PluginDescriptor("no_recovery", "No automatic recovery", "Text execution without context retry or output continuation.", "3.0.0", API_VERSION), BuiltinLoopFactory(True)),
-        ):
-            self._descriptors[descriptor.id] = descriptor
-            self._sources[descriptor.id] = factory
         if discovered is None:
             all_points = entry_points()
             discovered = tuple(point for group in all_points.groups
@@ -96,6 +87,8 @@ class ExecutionPluginCatalog:
             metadata_available = True
             try:
                 distribution = point.dist
+                if identifier in {"standard", "no_recovery"} and distribution is None:
+                    raise ValueError("official distribution metadata required")
                 if distribution is not None:
                     metadata = distribution.metadata
                     raw_version = metadata.get("Version")
@@ -106,11 +99,14 @@ class ExecutionPluginCatalog:
                     if not isinstance(raw_description, str):
                         raise ValueError("invalid plugin summary metadata")
                     description = raw_description[:256]
+                    if identifier in {"standard", "no_recovery"} and metadata.get("Name") != "opensprite-standard-loop":
+                        raise ValueError("reserved official plugin ID")
             except Exception:
                 metadata_available = False
             status: PluginStatus = ("unavailable" if not metadata_available else
                                     "available" if api_version == API_VERSION else "incompatible")
-            self._descriptors[identifier] = PluginDescriptor(identifier, identifier, description,
+            name = {"standard": "Standard Loop", "no_recovery": "No automatic recovery"}.get(identifier, identifier)
+            self._descriptors[identifier] = PluginDescriptor(identifier, name, description,
                                                            version, api_version, status)
             self._sources[identifier] = _EntryPointSource(point)
 

@@ -30,35 +30,29 @@ import sys
 
 target = Path(os.environ["OPENSPRITE_PLUGIN_VERIFY_TARGET"]).resolve()
 sys.path.insert(0, str(target))
-from opensprite_backend.agent.plugin import DriverResult, ModelTurn
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
-from opensprite_backend.agent.plugin import CompletionState, ContextRetryState
 from opensprite_backend.conversations.models import CompletionReason
 from opensprite_backend.inference.models import ModelFinishReason
 import opensprite_execution_example.plugin as example
 
 distribution = metadata.distribution("opensprite-execution-example")
-assert distribution.version == "0.3.0"
+assert distribution.version == "0.4.0"
 assert Path(example.__file__).resolve().is_relative_to(target)
 assert Path(distribution.locate_file("opensprite_execution_example/plugin.py")).resolve() == Path(example.__file__).resolve()
-assert any("opensprite-backend" in requirement and ">=0.21.33" in requirement and "<0.22" in requirement
+assert any("opensprite-backend" in requirement and ">=0.21.34" in requirement and "<0.22" in requirement
            for requirement in distribution.requires or ())
 points = {(point.group, point.name): point for point in distribution.entry_points}
-assert set(points) == {("opensprite_backend.agent_loops.v3", "example_main_retry_only")}
+assert set(points) == {("opensprite_backend.agent_loops.v4", "example_review")}
 catalog = ExecutionPluginCatalog()
-selection = catalog.resolve("example_main_retry_only")
-assert selection.plugin_version == "0.3.0"
+selection = catalog.resolve("example_review")
+assert selection.plugin_version == "0.4.0"
 plugin = selection.create()
-assert type(plugin) is example.MainRetryOnlyLoop
+assert type(plugin) is example.ReviewLoop
 assert plugin is not selection.create()
-assert plugin.allow_context_retry(ContextRetryState("main", "provider_context_limit")) is True
-assert plugin.allow_context_retry(ContextRetryState("continuation", "provider_context_limit")) is False
-assert plugin.allow_output_continuation(CompletionState(ModelFinishReason.OUTPUT_LIMIT, "2")) is False
-
 # Exercise the installed plugin through the actual core and provider adapter.
 from uuid import uuid4
 import httpx
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.conversations.models import RunEventType, RunStatus
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
 from opensprite_backend.inference.native_gateway import NativeModelGateway
@@ -77,10 +71,11 @@ class Credentials:
 def wire(request):
     body = json.loads(request.content)
     captured.append(body)
-    assert body["messages"][-1]["content"] == nonce
+    assert any(message["content"] == nonce for message in body["messages"])
+    stage = ["draft", "review", "final"][len(captured)-1]
     assert "tools" not in body and "tool_choice" not in body
     frames = [
-        {"choices": [{"index": 0, "delta": {"content": "echo " + body["messages"][-1]["content"]}, "finish_reason": None}]},
+        {"choices": [{"index": 0, "delta": {"content": stage + ":" + nonce}, "finish_reason": None}]},
         {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
     ]
     data = "".join("data: " + json.dumps(frame) + "\n\n" for frame in frames) + "data: [DONE]\n\n"
@@ -90,37 +85,46 @@ async def execute():
     accepted = repository.start_run(conversation_id=None, client_request_id=str(uuid4()), message=nonce,
                                     provider_id="openrouter", model_id="fixture/model", response_mode="default", execution_profile=selection.profile())
     async with httpx.AsyncClient(transport=httpx.MockTransport(wire)) as client:
-        loop = AgentLoop(repository=repository, gateway=NativeModelGateway(Credentials(), client, ProviderOperationLocks()),
+        loop = RunExecutor(repository=repository, gateway=NativeModelGateway(Credentials(), client, ProviderOperationLocks()),
                          capability_resolver=Capabilities())
         await loop.execute(accepted.run.id, asyncio.Event(), execution_plugin=selection)
     result = repository.get_run(accepted.run.id)
-    assert result.status is RunStatus.COMPLETED and result.partial_text == "echo " + nonce
+    assert result.status is RunStatus.COMPLETED and result.partial_text == "final:" + nonce
     events = repository.list_run_events(result.id, after_sequence=0, limit=200)
     assert next(event.data for event in events if event.type is RunEventType.EXECUTION_SELECTED) == selection.profile()
     assert any(event.type is RunEventType.ASSISTANT_DELTA for event in events)
+    steps = repository.list_run_steps(result.id, after_sequence=0, limit=100)
+    assert [step.text for step in steps] == [stage + ":" + nonce for stage in ("draft", "review", "final")]
+    assert [step.channel for step in steps] == ["draft", "draft", "answer"]
+    assert len(captured) == 3
+    messages = repository.list_messages(result.conversation_id, limit=100, before_sequence=None).items
+    assert [message.content for message in messages] == [nonce, "final:" + nonce]
+    assert captured[1]["messages"][-1]["content"] == "draft:" + nonce
+    assert captured[2]["messages"][-1]["content"] == "Draft review:\nreview:" + nonce
 asyncio.run(execute())
 
-@dataclass
-class CancelledHost:
-    checkpoints: int = 0
-    finished: bool = False
-    async def checkpoint(self):
-        self.checkpoints += 1
-        if self.checkpoints == 2:
-            raise asyncio.CancelledError
-    async def next_turn(self):
-        return ModelTurn(nonce, ModelFinishReason.FINAL)
-    async def finish(self, turn):
-        self.finished = True
-        raise AssertionError("cancelled driver called finish")
-host = CancelledHost()
-try:
-    asyncio.run(selection.create().execute(host))
-except asyncio.CancelledError:
-    pass
-else:
-    raise AssertionError("driver swallowed cancellation")
-assert not host.finished
+# A real Host cancellation must preserve the private step and stop requests.
+async def cancel_execute():
+    repository = SqliteConversationRepository(Path("verification-cancel.sqlite"))
+    run = repository.start_run(conversation_id=None, client_request_id=str(uuid4()), message=nonce,
+        provider_id="openrouter", model_id="fixture/model", response_mode="default").run
+    cancellation, started = asyncio.Event(), asyncio.Event()
+    class BlockedGateway:
+        async def stream(self, request):
+            from opensprite_backend.inference.models import ModelTextDelta
+            yield ModelTextDelta("private-" + nonce)
+            started.set()
+            await asyncio.Event().wait()
+    loop = RunExecutor(repository=repository, gateway=BlockedGateway(), capability_resolver=Capabilities())
+    task = asyncio.create_task(loop.execute(run.id, cancellation, execution_plugin=selection))
+    await asyncio.wait_for(started.wait(), 5)
+    repository.request_cancel(run.id)
+    cancellation.set()
+    result = await asyncio.wait_for(task, 5)
+    assert result.status is RunStatus.CANCELLED and result.partial_text == ""
+    steps = repository.list_run_steps(run.id, after_sequence=0, limit=100)
+    assert len(steps) == 1 and steps[0].status == "cancelled" and steps[0].text == "private-" + nonce
+asyncio.run(cancel_execute())
 print(json.dumps({"installedDistribution": distribution.metadata["Name"],
                   "version": distribution.version, "entryPointCount": len(points),
                   "profile": selection.profile(), "installedPathVerified": True,
@@ -138,11 +142,11 @@ def main() -> None:
     if not supplied.is_absolute():
         raise SystemExit("OPENSPRITE_PLUGIN_WHEEL must be absolute.")
     wheel = supplied.resolve(strict=True)
-    if wheel.name != "opensprite_execution_example-0.3.0-py3-none-any.whl":
-        raise SystemExit("This verifier accepts only the repository's 0.3.0 pure-Python example wheel.")
+    if wheel.name != "opensprite_execution_example-0.4.0-py3-none-any.whl":
+        raise SystemExit("This verifier accepts only the repository's 0.4.0 pure-Python example wheel.")
     version = tuple(int(part) for part in metadata.version("opensprite-backend").split("."))
-    if not (0, 21, 33) <= version < (0, 22, 0):
-        raise SystemExit("The example requires opensprite-backend>=0.21.33,<0.22.")
+    if not (0, 21, 34) <= version < (0, 22, 0):
+        raise SystemExit("The example requires opensprite-backend>=0.21.34,<0.22.")
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         wheel_info = [name for name in names if name.endswith(".dist-info/WHEEL")]

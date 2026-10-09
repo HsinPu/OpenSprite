@@ -13,7 +13,7 @@ from context_test_support import TestCapabilityResolver
 from test_agent_loop import ScriptedGateway
 from test_execution_plugin_catalog import InstalledPoint, LOOPS
 
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.conversations.models import RunEventType, RunStatus
@@ -28,25 +28,20 @@ class AlternateDriver:
     host: object = None
     operations: list[str] = field(default_factory=list)
 
-    def allow_context_retry(self, state):
-        return True
-
-    def allow_output_continuation(self, state):
-        return True
-
     async def execute(self, host):
         self.host = host
         self.operations.append("checkpoint")
         await host.checkpoint()
         self.operations.append("model")
-        turn = await host.next_turn()
+        from opensprite_backend.agent.plugin import StepRequest, FinalOutput
+        turn = await host.infer(StepRequest(await host.context()))
         self.operations.append("finish")
-        return await host.finish(turn)
+        return await host.finish(FinalOutput(turn.text, (turn,)))
 
 
 @dataclass
 class AlternateFactory:
-    api_version: int = 3
+    api_version: int = 4
     instances: list[AlternateDriver] = field(default_factory=list)
 
     def create(self):
@@ -83,7 +78,7 @@ def test_replaced_driver_preserves_cancellation_and_partial_output(tmp_path):
                 await asyncio.Event().wait()
                 yield ModelCompleted(ModelFinishReason.FINAL)
 
-        manager = RunManager(repository, AgentLoop(
+        manager = RunManager(repository, RunExecutor(
             repository=repository, gateway=Gateway(),
 
             capability_resolver=TestCapabilityResolver()))

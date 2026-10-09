@@ -226,7 +226,7 @@ if ($SkipStartupRegistration -and -not $NoStart) {
 if ($Port -lt 1024 -or $Port -gt 65535) {
     throw "Port must be between 1024 and 65535."
 }
-foreach ($required in @("backend\pyproject.toml", "backend\uv.lock", "backend\src", "frontend\package.json", "frontend\package-lock.json", "frontend\src", "frontend\index.html", "frontend\tsconfig.json", "frontend\vite.config.ts")) {
+foreach ($required in @("backend\pyproject.toml", "backend\uv.lock", "backend\src", "backend\loop_plugins", "frontend\package.json", "frontend\package-lock.json", "frontend\src", "frontend\index.html", "frontend\tsconfig.json", "frontend\vite.config.ts")) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRootPath $required))) {
         throw "SourceRoot is not a complete OpenSprite checkout: $required"
     }
@@ -267,7 +267,7 @@ if ($null -ne $gitCommand -and -not (Test-Path -LiteralPath $releaseSourcePath))
     if ($LASTEXITCODE -eq 0 -and -not [String]::IsNullOrWhiteSpace($resolvedRevision)) {
         $revision = $resolvedRevision.Trim().ToLowerInvariant()
         $gitStatus = (& $gitCommand.Source -c "safe.directory=$gitSafeDirectory" -C $sourceRootPath status --porcelain -- `
-            backend/src backend/pyproject.toml backend/uv.lock `
+            backend/src backend/loop_plugins backend/pyproject.toml backend/uv.lock `
             frontend/src frontend/package.json frontend/package-lock.json `
             frontend/index.html frontend/tsconfig.json frontend/vite.config.ts `
             installers/windows 2>$null)
@@ -320,6 +320,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $stagingRoot "frontend") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $stagingRoot "installers\windows") -Force | Out-Null
 
+    Copy-RequiredItem (Join-Path $sourceRootPath "backend\loop_plugins") (Join-Path $stagingRoot "backend")
     Copy-RequiredItem (Join-Path $sourceRootPath "backend\src") (Join-Path $stagingRoot "backend")
     foreach ($file in @("pyproject.toml", "uv.lock", "README.md")) {
         Copy-RequiredItem (Join-Path $sourceRootPath "backend\$file") (Join-Path $stagingRoot "backend")

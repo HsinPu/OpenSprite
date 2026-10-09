@@ -1,35 +1,116 @@
-# Agent Loop plugins — API v3
+# Agent Loop plugins — API v4
 
-An installed trusted Python wheel exports a no-argument factory provider through **only** `opensprite_backend.agent_loops.v3`. A factory advertises integer `api_version = 3` and its synchronous `create()` returns a fresh complete plugin for every Run.
+OpenSprite 0.21.34 separates execution decisions from bounded effects. A trusted
+Python wheel exports a no-argument factory provider in
+`opensprite_backend.agent_loops.v4`. Its factory has integer `api_version = 4`
+and synchronous `create()` returns a fresh instance implementing only
+`async execute(host)`. There is one executable plugin category and one choice.
 
-The same instance implements `async execute(host)`, `allow_context_retry(state)` and `allow_output_continuation(state)`. There is one executable plugin category, one selection, one package version and one Run-local instance. Recovery callbacks return an actual bool synchronously; they must be fast and perform no I/O.
+## Responsibility boundary
 
-Discovery and settings GET/PUT read metadata without importing Python. Admission resolves and pins the selected factory and package version. A load failure rejects admission without a user message or Run; instance creation or execution failure terminally fails the accepted Run with a sanitized error. No fallback silently changes the selected plugin.
+| Loop decides | Core Host enforces |
+| --- | --- |
+| Number/order of inference steps and stage instructions | One model operation per infer; pinned Provider/model/reasoning settings |
+| History selection, recent-message floor and selection target | Immutable admission history; current user always included; actual input budget |
+| Summary trigger, contiguous source range, format and instructions | Source ownership/hash/coverage; one compact call; durable provenance |
+| Recoverable retries, backoff and continuation prompts | Error classification, user continuation ceiling, cancellation and resource ceilings |
+| Draft/review/revision and final text | Private draft storage; append-only answer stream; exactly one terminal transaction |
 
-## Core authority
+`RunExecutor` owns Run lifetime and terminal persistence, without iteration or
+strategy. `LoopExecutionHost` exposes checkpoint/context/infer/compact/finish.
+It never automatically summarizes, retries or continues. The independent
+`opensprite-standard-loop==0.1.0` wheel owns the standard recent-12, 75%/55%
+selection, summary instructions, one eligible context retry, continuation tail
+and stopping choices. `no_recovery` uses the same preparation but omits retries
+and continuation. Both are discovered through installed metadata. Missing the
+official package fails admission; there is no built-in executable fallback.
 
-`opensprite_backend.agent.plugin` defines the public contract and immutable `ModelTurn`, `DriverResult`, `ContextRetryState` and `CompletionState`. The Host exposes `checkpoint()`, `next_turn()` and `finish(turn)`. API v3 permits one main `next_turn`; eligible recovery and output continuation stay inside the Host. This version does not add multi-turn planning.
+The official wheel is bundled with the backend via a relative uv source to
+avoid a runtime dependency cycle. It requires the product's API v4 SDK and is
+not a standalone application. Docker and both desktop installers include and
+install this source as an ordinary distribution.
 
-Host calls must be awaited sequentially. The unchanged Host-issued turn goes to finish; the unchanged Host-issued result is returned. No model operation follows finish. Core gates, budgets and configured bounds precede recovery callbacks; True cannot grant extra retries, continuation, prompt changes or credentials. The core retains Provider endpoints, transcripts, cancellation, SSE, context compaction and all persistence. A plugin can veto eligible recovery.
+## Public operation semantics
 
-The `standard` built-in allows core-eligible recovery and configured continuation. `no_recovery` uses the same text flow and vetoes both. Both are version 3.0.0. Plugins are trusted in-process Python, not a sandbox. Cancellation of Python code is cooperative; the core cannot forcibly terminate arbitrary uncooperative code.
+The immutable dataclasses live in `opensprite_backend.agent.plugin`.
 
-## Admission and immutable history
+- `host.run`: read-only Run IDs, model, budget, continuation choice, limits and selected plugin version.
+- `context(ContextSpec)`: assemble a bounded context without model calls.
+  `recent_messages` is 1..64, `selection_tokens` is at most the input budget,
+  `history_ids` selects from the latest 200 raw messages (current user is always
+  retained), and `summary_format` scopes compatible coverage.
+- `infer(StepRequest)`: one streamed model request; added messages are only
+  user/assistant text. `instruction` supplements the fixed system prompt.
+  `channel="draft"` persists text privately; `answer` also streams it publicly.
+  Returns a StepResult with text, finish reason, usage and optional safe error.
+- `compact(CompactionSpec)`: one draft inference of an owned, contiguous older
+  prefix; the Loop supplies format and instructions. Returns step plus persisted
+  summary, or step plus None when recovery is needed. A stale context cannot
+  replace newer coverage. Source hash and producing plugin ID/version are saved.
+- `finish(FinalOutput)`: validate final output or an owned step/context failure.
+  Return the exact issued RunResult. RunExecutor performs the terminal transaction
+  after the plugin returns; finishing is not a second Run completion.
 
-New production Runs store `execution.selected` in the same SQLite transaction as acceptance:
+Await operations sequentially. Parallel/replayed/mutated contexts, steps or
+results, operations after finish, fabricated public exceptions and swallowed
+fatal Host failures cannot become successful Runs. Draft text may be revised;
+published answer text must remain a prefix of final text. This permits a draft
+step to be selected/transformed and published at finish without publishing other drafts.
+
+Recoverable context/rate-limit/timeout/unreachable errors are StepResult errors.
+Retries explicitly reference the owned failed step via `retry_of`; a partially
+published answer cannot be retried. Authentication, malformed provider output,
+storage failures, cancellation and hard ceilings stop execution. The standard
+Loop handles only its documented context recovery; other retries are author policy.
+
+Default ceilings: 128 total actual model requests (including summaries/retries),
+32 compactions, 600 seconds of cooperative execution, 1,048,576 generated text
+characters, 2,048 Host operations. Smaller bounds are useful in regression tests.
+User continuation settings impose a further ceiling of 64 for unlimited.
+No hidden extra continuation requests are made after a final answer.
+
+## Admission, data and diagnostics
+
+Discovery and settings read metadata without importing Python. Admission pins
+the factory and distribution version and persists the profile in the same
+transaction as user message/Run creation:
 
 ```json
-{"pluginId":"standard","pluginVersion":"3.0.0","apiVersion":3}
+{"pluginId":"standard","pluginVersion":"0.1.0","apiVersion":4}
 ```
 
-An idempotent replay is checked before mutable settings or loading factories; it neither rebinds the plugin nor makes another model request. Changes affect new Runs only. Existing API v2 profile events retain their raw bytes and remain readable as historical Loop/policy metadata; no API v2 code is loaded.
+Idempotent replay reads the accepted Run before mutable settings. Settings
+schema 2, expectedRevision/409 behavior and explicit external-choice migration
+are unchanged. API v2/v3 events remain readable without rewriting or executing
+the old package. New import/deployment accepts API v4 only.
 
-`config/execution.json` schema 2 stores `version`, positive `revision` and `pluginId`. Absent settings implicitly select standard at revision 0 without creating data. PUT requires `expectedRevision` and increments it under the sole settings writer's lock; stale writes return 409 without overwriting. Known schema-1 pairs standard/standard and standard/no_recovery migrate atomically once. Any external pair stays unchanged, reports explicit migration information, and blocks new Runs until an API v3 choice is applied. Back up the complete sensitive `.opensprite` before upgrading.
+SQLite schema 22 adds run_steps and format-scoped summary provenance. Upgrades
+from 20/21 transactionally copy all existing event and compaction columns/rows
+before replacing their constraints; no old text/IDs are discarded. Unexpected
+schemas fail without advancing the version. Older schemas need the preceding
+upgrade path. Restart marks active Runs and unfinished steps interrupted.
+An upgraded database cannot be written by the older backend.
 
-## Wheel and Docker
+step.started/step.completed carry bounded stage labels/status/usage, never draft
+text. GET /api/runs/{run_id}/steps is a same-origin, authenticated when configured,
+100-row paginated endpoint for persisted draft/answer text and retry references.
+Only answer deltas/final text become conversation messages. Draft is visible
+model output, not hidden reasoning; provider reasoning remains filtered.
+The workbench shows generic stages and step detail, without branching on plugin IDs.
+model.attempt preserves actual request/attempt lineage and content-free receipts.
 
-Static bounded ZIP/metadata/dependency/RECORD validation never imports code. New imports accept only agent_loops.v3. Cache schema 2 is written for new packages; schema 1 remains readable for inert history. API v1/v2 cached wheels report `needs_update` and cannot be redeployed. Retired policy groups are recognized only during old-cache inspection.
+## Wheel trust and delivery
 
-Deployment bundles install the exact wheel offline into a derived image, check installed files and entry points, and write schema-2 provenance. Runtime verification reads old provenance too without executing plugin code. A same ID/version does not prove an exact deployment. Use an API v3 base image and rebuild all retired external plugins; a bundle fails if retaining an incompatible deployed package. Keep the existing Compose project and single-writer data volume and end active Runs before restart. Import does not install or select; return to verify deployment and explicitly apply the discovered Loop.
+Import validates bounded ZIP, metadata, dependencies and RECORD without execution.
+Imported bytes are a cache, not installation or selection. Deployment installs the
+exact wheel offline, verifies installed files/entry points and saves provenance.
+Retired wheels stay readable as needs_update; they cannot be deployed on API v4.
+Use an API v4 base image and rebuild any retained incompatible external packages.
+
+Python plugins run with backend privileges in process. Static wheel validation
+and frozen dataclasses do not create a sandbox. Cancellation/time limits apply to
+cooperative async code; uncooperative blocking Python requires future process
+isolation, which is outside this change. No tools, Skill, Subagent, MCP, scheduler,
+command shim or generic lifecycle mechanism is introduced.
 
 See [authoring](execution-plugin-authoring.md) and [clean core](clean-agent-core.md).

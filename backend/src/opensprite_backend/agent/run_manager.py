@@ -17,7 +17,7 @@ from opensprite_backend.conversations.repository import (
 from opensprite_backend.workspaces import WorkspaceExecutionContext
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 
-from .loop import AgentLoop
+from .run_executor import RunExecutor
 from .events import INTERNAL_ERROR
 from .plugin_catalog import ExecutionPluginSelection
 
@@ -28,10 +28,10 @@ class RunManager:
     def __init__(
         self,
         repository: ConversationRepository,
-        loop: AgentLoop,
+        executor: RunExecutor,
     ) -> None:
         self._repository = repository
-        self._loop = loop
+        self._executor = executor
         self._tasks: dict[str, asyncio.Task[RunSnapshot]] = {}
         self._cancellations: dict[str, asyncio.Event] = {}
         self._provider_references: dict[str, frozenset[str]] = {}
@@ -93,7 +93,7 @@ class RunManager:
         execution_plugin: ExecutionPluginSelection | None = None,
     ) -> RunSnapshot:
         try:
-            return await self._loop.execute(
+            return await self._executor.execute(
                 run_id, cancellation, workspace, provider_endpoint,
                 execution_plugin=execution_plugin,
             )

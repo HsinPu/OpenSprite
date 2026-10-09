@@ -99,7 +99,10 @@ _ASSISTANT_DELTA_JSON_PREFIX_BYTES = len(b'{"text":"')
 _ASSISTANT_DELTA_JSON_SUFFIX_BYTES = len(b'"}')
 
 
-class SqliteConversationRepository:
+from .step_store import SqliteRunSteps
+
+
+class SqliteConversationRepository(SqliteRunSteps):
     """Own five core chat tables below one explicit AppPaths database file."""
 
     def __init__(
@@ -264,6 +267,7 @@ class SqliteConversationRepository:
     def get_latest_compaction(
         self,
         conversation_id: str,
+        *, summary_format: str = "opensprite.text.v1",
     ) -> ConversationCompaction | None:
         self._require_identifier(conversation_id)
         with self._lock:
@@ -274,11 +278,11 @@ class SqliteConversationRepository:
                 row = connection.execute(
                     """
                     SELECT * FROM conversation_compactions
-                    WHERE conversation_id = ?
+                    WHERE conversation_id = ? AND summary_format = ?
                     ORDER BY covers_through_sequence DESC
                     LIMIT 1
                     """,
-                    (conversation_id,),
+                    (conversation_id, summary_format),
                 ).fetchone()
                 return None if row is None else self._compaction(row)
             except (sqlite3.Error, TypeError, ValueError) as error:
@@ -338,10 +342,20 @@ class SqliteConversationRepository:
         model_id: str,
         input_tokens: int,
         output_tokens: int,
+        producer_plugin_id: str = "legacy",
+        producer_plugin_version: str = "unknown",
+        summary_format: str = "opensprite.text.v1",
+        compaction_id: str | None = None,
     ) -> ConversationCompaction:
         self._require_identifier(conversation_id)
         normalized_summary = self._require_text(summary, maximum=262_144)
         normalized_model = self._require_text(model_id, maximum=256)
+        if compaction_id is not None:
+            self._require_identifier(compaction_id)
+        if (not isinstance(producer_plugin_id, str) or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", producer_plugin_id) is None
+            or not self._is_bounded_text(producer_plugin_version, maximum=64)
+            or not isinstance(summary_format, str) or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", summary_format) is None):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if (
             not isinstance(covers_through_sequence, int)
             or isinstance(covers_through_sequence, bool)
@@ -378,14 +392,14 @@ class SqliteConversationRepository:
                     """
                     SELECT MAX(covers_through_sequence)
                     FROM conversation_compactions
-                    WHERE conversation_id = ?
+                    WHERE conversation_id = ? AND summary_format = ?
                     """,
-                    (conversation_id,),
+                    (conversation_id, summary_format),
                 ).fetchone()[0]
                 if latest is not None and covers_through_sequence <= int(latest):
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
                 item = ConversationCompaction(
-                    id=self._new_identifier(),
+                    id=compaction_id or self._new_identifier(),
                     conversation_id=conversation_id,
                     covers_through_sequence=covers_through_sequence,
                     summary=normalized_summary,
@@ -396,14 +410,18 @@ class SqliteConversationRepository:
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     created_at=self._now(),
+                    producer_plugin_id=producer_plugin_id,
+                    producer_plugin_version=producer_plugin_version,
+                    summary_format=summary_format,
                 )
                 connection.execute(
                     """
                     INSERT INTO conversation_compactions(
                         id, conversation_id, covers_through_sequence, summary,
                         summary_version, source_hash, provider_id, model_id,
-                        input_tokens, output_tokens, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        input_tokens, output_tokens, created_at,
+                        producer_plugin_id, producer_plugin_version, summary_format
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item.id,
@@ -417,6 +435,9 @@ class SqliteConversationRepository:
                         item.input_tokens,
                         item.output_tokens,
                         self._timestamp(item.created_at),
+                        producer_plugin_id,
+                        producer_plugin_version,
+                        summary_format,
                     ),
                 )
                 connection.commit()
@@ -705,7 +726,7 @@ class SqliteConversationRepository:
                 if conversation_row is None or run_row is None:
                     raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
                 if execution_profile is not None:
-                    if execution_profile.get("apiVersion") != 3:
+                    if execution_profile.get("apiVersion") != 4:
                         raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
                     self._append_event(connection, run_id, resolved_conversation_id,
                                        RunEventType.EXECUTION_SELECTED, execution_profile, now)
@@ -1295,6 +1316,10 @@ class SqliteConversationRepository:
                 )
                 for row in rows:
                     connection.execute(
+                        "UPDATE run_steps SET status='interrupted',finished_at=? WHERE run_id=? AND status='running'",
+                        (self._timestamp(now), row["id"]),
+                    )
+                    connection.execute(
                         """
                         UPDATE runs
                         SET status = 'interrupted', error_code = ?,
@@ -1519,6 +1544,7 @@ class SqliteConversationRepository:
             "messages",
             "runs",
             "run_events",
+            "run_steps",
         }.issubset(tables):
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
 
@@ -1637,6 +1663,9 @@ class SqliteConversationRepository:
             created_at=SqliteConversationRepository._parse_timestamp(
                 row["created_at"]
             ),
+            producer_plugin_id=row["producer_plugin_id"],
+            producer_plugin_version=row["producer_plugin_version"],
+            summary_format=row["summary_format"],
         )
 
     @staticmethod
@@ -1708,7 +1737,7 @@ class SqliteConversationRepository:
         event_type = RunEventType(row["type"])
         if event_type is RunEventType.MODEL_STARTED:
             data.pop("toolNames", None)
-        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") not in {2, 3}:
+        if event_type is RunEventType.EXECUTION_SELECTED and data.get("apiVersion") not in {2, 3, 4}:
             return None
         if event_type is RunEventType.MODEL_ATTEMPT:
             # v1 receipts and action attempts remain stored, but are not current diagnostics.
@@ -1886,10 +1915,10 @@ class SqliteConversationRepository:
         keys = set(data)
         if event_type is RunEventType.EXECUTION_SELECTED:
             api = data.get("apiVersion")
-            if type(api) is not int or api not in {2, 3}:
+            if type(api) is not int or api not in {2, 3, 4}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            identifiers = ("pluginId",) if api == 3 else ("loopId", "policyId")
-            versions = ("pluginVersion",) if api == 3 else ("loopVersion", "policyVersion")
+            identifiers = ("pluginId",) if api in {3, 4} else ("loopId", "policyId")
+            versions = ("pluginVersion",) if api in {3, 4} else ("loopVersion", "policyVersion")
             if keys != {"apiVersion", *identifiers, *versions}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             for key in identifiers:
@@ -1950,6 +1979,11 @@ class SqliteConversationRepository:
                 )
             except ConversationStoreError:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST) from None
+            return
+        if event_type in {RunEventType.STEP_STARTED, RunEventType.STEP_COMPLETED}:
+            from .step_events import valid_step_payload
+            if not valid_step_payload(event_type.value, data):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         if event_type is RunEventType.MODEL_ATTEMPT:
             from .attempt_events import valid_attempt_payload

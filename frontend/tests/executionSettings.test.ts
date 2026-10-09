@@ -3,7 +3,7 @@ import { ExecutionSettingsApiError, executionSettingsErrorText, getExecutionSett
 import { createTranslator } from "../src/i18n/catalog";
 const settings: ExecutionSettings = {
   selection: { pluginId: "standard" }, revision: 0, migration: null,
-  plugins: [{ id: "standard", name: "Standard", description: "Default", version: "3.0.0", apiVersion: 3, status: "available" }],
+  plugins: [{ id: "standard", name: "Standard", description: "Default", version: "0.1.0", apiVersion: 4, status: "available" }],
 };
 const body = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const saved = { ...settings, selection: { pluginId: "external" }, revision: 1 };
@@ -58,6 +58,7 @@ describe("single Loop settings API", () => {
     { ...settings, plugins: [...settings.plugins, settings.plugins[0]] },
     { ...settings, plugins: [{ ...settings.plugins[0], kind: "policy" }] },
     { ...settings, plugins: [{ ...settings.plugins[0], apiVersion: 2 }] },
+    { ...settings, plugins: [{ ...settings.plugins[0], apiVersion: 3 }] },
     { ...settings, plugins: [{ ...settings.plugins[0], status: "enabled" }] },
     { ...settings, plugins: [{ ...settings.plugins[0], version: "" }] },
   ])("rejects malformed catalogs", async value => {

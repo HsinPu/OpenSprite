@@ -11,6 +11,8 @@ frontend/coverage/
 !backend/uv.lock
 !backend/src/
 !backend/src/**
+!backend/loop_plugins/
+!backend/loop_plugins/**
 !backend/tests/
 !backend/tests/**
 !installers/

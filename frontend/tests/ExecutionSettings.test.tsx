@@ -15,8 +15,8 @@ vi.mock("../src/api/executionPluginPackages", async (original) => ({ ...await or
 const settings: ExecutionData = {
   selection: { pluginId: "standard" }, revision: 0, migration: null,
   plugins: [
-    { id: "standard", name: "Standard Loop", description: "Default", version: "3.0.0", apiVersion: 3, status: "available" },
-    { id: "no_recovery", name: "No recovery", description: "No automatic recovery", version: "3.0.0", apiVersion: 3, status: "available" },
+    { id: "standard", name: "Standard Loop", description: "Default", version: "0.1.0", apiVersion: 4, status: "available" },
+    { id: "no_recovery", name: "No recovery", description: "No automatic recovery", version: "0.1.0", apiVersion: 4, status: "available" },
     { id: "future", name: "Future Loop", description: "Future API", version: "4.0.0", apiVersion: 4, status: "incompatible" },
   ],
 };
@@ -57,7 +57,7 @@ describe("execution plugin workbench", () => {
     expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
     await screen.findByRole("radio", { name: radio });
     expect(screen.queryByRole("tab", { name: policy })).toBeNull();
-    expect(within(screen.getByRole("region", { name: savedTitle })).getAllByText(/3\.0\.0/)).toHaveLength(1);
+    expect(within(screen.getByRole("region", { name: savedTitle })).getAllByText(/0\.1\.0/)).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: guide }));
     const link = await screen.findByRole("link", { name: download });
     expect(link.getAttribute("href")).toBe("/execution-plugin-example.zip");
@@ -193,7 +193,7 @@ describe("execution plugin workbench", () => {
     const drawer = await screen.findByRole("dialog", { name: "插件詳情" });
     expect(within(drawer).getByText("不自動重試上下文超限，也不接續被截斷的模型輸出。")).toBeTruthy();
     expect(within(drawer).getByText("no_recovery")).toBeTruthy();
-    expect(within(drawer).getByText("3.0.0")).toBeTruthy();
+    expect(within(drawer).getByText("0.1.0")).toBeTruthy();
     fireEvent.click(within(drawer).getByRole("button", { name: "選為草稿" }));
     expect(within(savedRegion()).getByText("標準 Loop")).toBeTruthy();
     expect(applyButton().hasAttribute("disabled")).toBe(false);
@@ -219,11 +219,11 @@ describe("execution plugin workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "安裝說明" }));
     const drawer = await screen.findByRole("dialog", { name: "開發說明" });
     expect(within(drawer).getByText("uv build --wheel --out-dir tmp/execution-plugin-wheel examples/execution-plugin")).toBeTruthy();
-    expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v3");
+    expect(drawer.textContent).toContain("opensprite_backend.agent_loops.v4");
     expect(drawer.textContent).toContain("OPENSPRITE_PLUGIN_BUNDLE_DIR");
-    fireEvent.click(within(drawer).getByRole("tab", { name: "API v3 邊界" }));
+    fireEvent.click(within(drawer).getByRole("tab", { name: "API v4 邊界" }));
     expect(within(drawer).getByRole("alert").textContent).toContain("程序內 API 不是安全沙箱");
-    expect(within(drawer).getByText(/API v3 不提供修改 prompt/)).toBeTruthy();
+    expect(within(drawer).getByText(/API v4 支援文字的規劃/)).toBeTruthy();
     expect(api.put).not.toHaveBeenCalled();
   });
 
@@ -296,7 +296,7 @@ describe("execution plugin workbench", () => {
   it("explains a legacy external pair and requires an explicit choice", async () => {
     api.get.mockResolvedValue({ ...settings, selection: null, migration: { loopId: "old_loop", policyId: "old_policy" } });
     render(<ExecutionSettings active />);
-    expect((await screen.findByRole("alert")).textContent).toContain("API v3");
+    expect((await screen.findByRole("alert")).textContent).toContain("API v4");
     expect(screen.getByRole("alert").textContent).toContain("old_loop");
     expect(applyButton().hasAttribute("disabled")).toBe(true);
     await chooseNoRecovery();

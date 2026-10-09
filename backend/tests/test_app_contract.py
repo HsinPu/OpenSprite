@@ -193,6 +193,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ),
         ("/api/runs", "post", "startRun"),
         ("/api/runs/{run_id}", "get", "getRun"),
+        ("/api/runs/{run_id}/steps", "get", "listRunSteps"),
         ("/api/runs/{run_id}/events", "get", "streamRunEvents"),
         ("/api/runs/{run_id}/event-history", "get", "listRunEventHistory"),
         ("/api/runs/{run_id}/cancel", "post", "cancelRun"),

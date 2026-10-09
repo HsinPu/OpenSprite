@@ -130,9 +130,9 @@ def test_fresh_database_has_only_core_tables_and_no_action_or_schedule_columns(t
     with closing(sqlite3.connect(repository.database_file)) as connection:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         columns = {row[1] for row in connection.execute("PRAGMA table_info(runs)")}
-        assert tables == {"conversations", "messages", "runs", "run_events", "conversation_compactions"}
+        assert tables == {"conversations", "messages", "runs", "run_events", "run_steps", "conversation_compactions"}
         assert not {"source", "occurrence_id"}.intersection(columns)
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
 
 
 def test_v20_upgrade_preserves_inert_tables_and_projects_only_core_events(tmp_path):
@@ -157,7 +157,7 @@ def test_v20_upgrade_preserves_inert_tables_and_projects_only_core_events(tmp_pa
         connection.executemany("INSERT INTO run_events VALUES (?, ?, ?, ?, ?)", rows)
         connection.commit()
         before = connection.execute("SELECT * FROM run_events ORDER BY sequence").fetchall()
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
         assert connection.execute("SELECT payload FROM preserved_fixture").fetchone()[0] == "opaque legacy state"
     page = repository.list_run_events(run.id, after_sequence=0, limit=1)
     assert page[0].sequence == 3 and "toolNames" not in page[0].data

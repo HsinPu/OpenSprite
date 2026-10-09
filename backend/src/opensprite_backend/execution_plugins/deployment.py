@@ -91,7 +91,7 @@ def verify(package):
             elif not path.is_dir():
                 raise ValueError("nonregular installed source")
     for plugin in package["plugins"]:
-        if plugin["apiVersion"] != 3 or plugin["kind"] != "loop" or not any(point.group == "opensprite_backend.agent_loops.v3"
+        if plugin["apiVersion"] != 4 or plugin["kind"] != "loop" or not any(point.group == "opensprite_backend.agent_loops.v4"
             and point.name == plugin["id"] and point.value == plugin["entryPoint"] for point in dist.entry_points):
             raise ValueError("installed entry point mismatch")
 

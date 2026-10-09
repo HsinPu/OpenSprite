@@ -7,7 +7,8 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ('opensprite-download-' + [guid]::N
 New-Item -ItemType Directory -Path (Join-Path $root 'installers/windows') -Force | Out-Null
 try {
     foreach ($file in @('package.ps1','bootstrap.ps1')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $root 'installers/windows') }
-    $files = @('backend/src/app.py','backend/uv.lock','backend/README.md','frontend/src/app.ts',
+    $files = @('backend/src/app.py','backend/uv.lock','backend/README.md',
+        'backend/loop_plugins/standard/pyproject.toml','backend/loop_plugins/standard/src/opensprite_standard_loop/__init__.py','frontend/src/app.ts',
         'frontend/package.json','frontend/package-lock.json','frontend/index.html','frontend/tsconfig.json','frontend/vite.config.ts','frontend/README.md',
         'installers/windows/install.ps1','installers/windows/access.ps1','installers/windows/launch.ps1','installers/windows/uninstall.ps1',
         'docs/not-shipped.txt','frontend/tests/not-shipped.txt')
@@ -32,6 +33,11 @@ try {
     if ($manifest.version -ne '1.2.3' -or $manifest.revision -notmatch '^[a-f0-9]{40}$') { throw 'Package provenance missing.' }
     if (Test-Path (Join-Path $root 'dist/expanded/docs')) { throw 'Package included docs.' }
     if (Test-Path (Join-Path $root 'dist/expanded/frontend/tests')) { throw 'Package included tests.' }
+    foreach ($pluginFile in @('pyproject.toml','src/opensprite_standard_loop/__init__.py')) {
+        if (-not (Test-Path (Join-Path $root "dist/expanded/backend/loop_plugins/standard/$pluginFile") -PathType Leaf)) {
+            throw "Package omitted the official Loop source: $pluginFile"
+        }
+    }
     [IO.File]::WriteAllText((Join-Path $root 'frontend/src/app.ts'), 'dirty')
     $rejected = $false
     try { & (Join-Path $root 'installers/windows/package.ps1') -OutputDirectory (Join-Path $root 'dist/dirty') } catch { $rejected = $true }

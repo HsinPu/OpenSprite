@@ -1,6 +1,6 @@
 """Bounded one-message Agent execution and in-process Run ownership."""
 
-from .loop import AgentLoop
+from .run_executor import RunExecutor
 from .run_manager import RunManager
 
-__all__ = ["AgentLoop", "RunManager"]
+__all__ = ["RunExecutor", "RunManager"]

@@ -13,7 +13,7 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.application import (
     AgentChatError,
@@ -174,7 +174,7 @@ def service(
         ),
         responseMode=ResponseMode.MEDIUM,
     )
-    loop = AgentLoop(
+    loop = RunExecutor(
         repository=repository,
         gateway=FinalGateway(),
 
@@ -385,7 +385,7 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
         )
     ]
 
-    assert [event.sequence for event in events] == [2, 3, 4, 5, 6]
+    assert [event.sequence for event in events] == [2, 3, 4, 5, 6, 7, 8]
     assert [event.data["status"] for event in events if event.type.value == "model.attempt"] == ["started", "completed"]
     history = await chat.event_history(accepted.run.id, after_sequence=1, limit=2)
     assert [event.sequence for event in history] == [2, 3, 4]

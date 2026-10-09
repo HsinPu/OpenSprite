@@ -7,6 +7,7 @@ import { diagnosticExport } from "./diagnosticExport";
 import { diagnosticOperations, type DiagnosticOperation } from "./diagnosticOperations";
 import "./RunDiagnostics.css";
 import { PanelResizeHandle } from "../../ui/PanelResizeHandle";
+import { RunSteps } from "./RunSteps";
 
 type Props = { runId: string; conversationId: string; run?: RunSnapshot; modelName?: string };
 const badgeStatus = (status: string) => status === "completed" ? "success" : status === "failed" || status === "interrupted" ? "error" : status === "started" || status === "running" ? "processing" : "default";
@@ -122,6 +123,7 @@ export function RunDiagnostics({ runId, conversationId, run, modelName }: Props)
             children: <DiagnosticDetails operation={operation} hideError={rows.length === 1 && page?.nextAfterSequence == null && run?.status === "failed" && operation.event.runId === run.id && operation.event.data.errorCode === run.error?.code} />,
           }))} />}
         {page?.nextAfterSequence != null ? <footer className="run-diagnostics__footer"><Button size="small" loading={loading} onClick={() => void load(page.nextAfterSequence!)}>{t("diagnostics.next")}</Button></footer> : null}
+        {page?.events.some(event => event.type === "step.started") ? <RunSteps runId={runId} revision={`${page.events.at(-1)?.sequence ?? 0}-${run?.status ?? ""}`} /> : null}
       </div>
     </Drawer> : null}
   </span>;

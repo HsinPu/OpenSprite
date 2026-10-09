@@ -114,7 +114,7 @@ check_user_linger() {
 }
 
 mkdir -p "$STAGING/backend" "$STAGING/frontend" "$STAGING/installers"
-cp -a "$SOURCE_ROOT/backend/src" "$SOURCE_ROOT/backend/pyproject.toml" "$SOURCE_ROOT/backend/uv.lock" "$SOURCE_ROOT/backend/README.md" "$STAGING/backend/"
+cp -a "$SOURCE_ROOT/backend/loop_plugins" "$SOURCE_ROOT/backend/src" "$SOURCE_ROOT/backend/pyproject.toml" "$SOURCE_ROOT/backend/uv.lock" "$SOURCE_ROOT/backend/README.md" "$STAGING/backend/"
 cp -a "$SOURCE_ROOT/frontend/src" "$SOURCE_ROOT/frontend/package.json" "$SOURCE_ROOT/frontend/package-lock.json" "$SOURCE_ROOT/frontend/index.html" "$SOURCE_ROOT/frontend/tsconfig.json" "$SOURCE_ROOT/frontend/vite.config.ts" "$SOURCE_ROOT/frontend/README.md" "$STAGING/frontend/"
 cp -a "$SOURCE_ROOT/installers/linux" "$STAGING/installers/"
 npm --prefix "$STAGING/frontend" ci --ignore-scripts
@@ -136,7 +136,7 @@ PY
 )"
 REVISION="unknown"; DIRTY=true
 if command -v git >/dev/null && REVISION_VALUE="$(git -C "$SOURCE_ROOT" rev-parse --short=8 HEAD 2>/dev/null)"; then
-  REVISION="$REVISION_VALUE"; [[ -z "$(git -C "$SOURCE_ROOT" status --porcelain -- backend/src backend/pyproject.toml backend/uv.lock frontend/src frontend/package.json frontend/package-lock.json installers 2>/dev/null)" ]] && DIRTY=false
+  REVISION="$REVISION_VALUE"; [[ -z "$(git -C "$SOURCE_ROOT" status --porcelain -- backend/src backend/loop_plugins backend/pyproject.toml backend/uv.lock frontend/src frontend/package.json frontend/package-lock.json installers 2>/dev/null)" ]] && DIRTY=false
 fi
 python3 - "$INSTALL_ROOT/build-info.json" "$VERSION" "$REVISION" "$DIRTY" <<'PY'
 from datetime import UTC, datetime

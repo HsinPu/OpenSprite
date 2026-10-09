@@ -24,9 +24,9 @@ def valid_attempt_payload(data: dict[str, object]) -> bool:
                 return False
         except ValueError:
             return False
-    if type(data["attemptNumber"]) is not int or not 1 <= data["attemptNumber"] <= 64:
+    if type(data["attemptNumber"]) is not int or not 1 <= data["attemptNumber"] <= 128:
         return False
-    if data["purpose"] not in ("main", "continuation", "compaction") or data["retryCause"] not in (None, "provider_context_limit"):
+    if data["purpose"] not in ("main", "continuation", "compaction") or data["retryCause"] not in (None, "provider_context_limit", "provider_rate_limited", "provider_timeout", "provider_unreachable"):
         return False
     if (data["attemptNumber"] == 1) != (data["retryOfAttemptId"] is None) or (data["retryOfAttemptId"] is None) != (data["retryCause"] is None):
         return False

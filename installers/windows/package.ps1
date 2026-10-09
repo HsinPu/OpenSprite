@@ -15,7 +15,7 @@ if ($LASTEXITCODE -ne 0 -or $status) { throw 'Release packaging requires a clean
 $versionMatch = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'backend\pyproject.toml')), '(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+)"\r?$')
 if (-not $versionMatch.Success) { throw 'Invalid product version.' }
 $version = $versionMatch.Groups[1].Value
-$files = @(& $git.Source -c "safe.directory=$($root.Replace('\','/'))" -C $root -c core.quotepath=false ls-files -- backend/src frontend/src)
+$files = @(& $git.Source -c "safe.directory=$($root.Replace('\','/'))" -C $root -c core.quotepath=false ls-files -- backend/src backend/loop_plugins frontend/src)
 if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate release source.' }
 $files += @('backend/pyproject.toml','backend/uv.lock','backend/README.md',
     'frontend/package.json','frontend/package-lock.json','frontend/index.html','frontend/tsconfig.json','frontend/vite.config.ts','frontend/README.md',

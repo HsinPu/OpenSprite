@@ -4,10 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opensprite-backend"
-version = "0.21.33"
+version = "0.21.34"
 description = "Local HTTP service foundation for OpenSprite"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "opensprite-standard-loop==0.1.0",
   "packaging==26.3",
   "python-multipart==0.0.32",
   "cryptography==50.0.0",
@@ -26,6 +27,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opensprite_backend"]
+
+[tool.uv.sources]
+opensprite-standard-loop = { path = "loop_plugins/standard" }
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

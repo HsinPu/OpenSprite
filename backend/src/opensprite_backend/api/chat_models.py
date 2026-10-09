@@ -18,6 +18,7 @@ from opensprite_backend.conversations.models import (
     Message,
     MessagePage,
     RunSnapshot,
+    RunStep,
 )
 
 from opensprite_backend.application import ChatErrorCode
@@ -127,6 +128,33 @@ class RunResponse(ChatContractModel):
 class CancelRunResponse(ChatContractModel):
     run_id: UUID
     status: Literal["cancelling", "cancelled"]
+
+
+class RunStepResponse(ChatContractModel):
+    id: UUID
+    run_id: UUID
+    sequence: int = Field(ge=1, le=2048)
+    label: str = Field(min_length=1, max_length=64)
+    channel: Literal["draft", "answer"]
+    status: Literal["running", "completed", "failed", "cancelled", "interrupted"]
+    text: str = Field(max_length=1048576)
+    finish_reason: Literal["final", "output_limit"] | None
+    error_code: str | None
+    input_tokens: int | None = Field(ge=0)
+    output_tokens: int | None = Field(ge=0)
+    retry_of: UUID | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class RunStepListResponse(ChatContractModel):
+    steps: list[RunStepResponse] = Field(max_length=100)
+    next_after_sequence: int | None
+
+
+def run_step_response(step: RunStep) -> RunStepResponse:
+    from dataclasses import asdict
+    return RunStepResponse(**asdict(step))
 
 
 class MoveConversationRequest(BaseModel):

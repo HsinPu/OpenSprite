@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opensprite-execution-example"
-version = "0.3.0"
-description = "Single OpenSprite Agent Loop with checkpointed execution and main-context recovery"
+version = "0.4.0"
+description = "OpenSprite Agent Loop with private draft, review and final answer steps"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-dependencies = ["opensprite-backend>=0.21.33,<0.22"]
+dependencies = ["opensprite-backend>=0.21.34,<0.22"]
 
-[project.entry-points."opensprite_backend.agent_loops.v3"]
-example_main_retry_only = "opensprite_execution_example.plugin:create_plugin_factory"
+[project.entry-points."opensprite_backend.agent_loops.v4"]
+example_review = "opensprite_execution_example.plugin:create_plugin_factory"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opensprite_execution_example"]

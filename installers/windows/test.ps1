@@ -132,6 +132,8 @@ try {
     $python = Join-Path $installRoot "backend\.venv\Scripts\python.exe"
     & $python -c "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()"
     if ($LASTEXITCODE -ne 0) { throw "Installed Python runtime check failed." }
+    & $python -c "from importlib.metadata import distribution; from opensprite_standard_loop import create_standard_factory; assert distribution('opensprite-standard-loop').version == '0.1.0'; assert create_standard_factory().api_version == 4"
+    if ($LASTEXITCODE -ne 0) { throw "Installed official Loop wheel check failed." }
     $buildInfo = Get-Content -LiteralPath (Join-Path $installRoot "build-info.json") -Raw | ConvertFrom-Json
     $installedVersion = (& $python -c "from importlib.metadata import version; print(version('opensprite-backend'))").Trim()
     if ($LASTEXITCODE -ne 0 -or $buildInfo.version -ne $installedVersion) {

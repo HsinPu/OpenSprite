@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from dataclasses import replace
+from importlib.metadata import entry_points
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -15,7 +16,7 @@ from test_execution_plugin_catalog import InstalledPoint, LOOPS
 
 class Catalog:
     def __init__(self):
-        self.items = ExecutionPluginCatalog(()).descriptors()
+        self.items = ExecutionPluginCatalog().descriptors()
         self.validated = []
     def descriptors(self): return self.items
     def validate_selection(self, identifier):
@@ -31,7 +32,7 @@ def setup(tmp_path, catalog=None):
 
 def test_defaults_are_lazy_and_saving_never_loads_python(tmp_path):
     point = InstalledPoint("untrusted_until_admission", LOOPS, RuntimeError("must not load"))
-    paths, service = setup(tmp_path, ExecutionPluginCatalog((point,)))
+    paths, service = setup(tmp_path, ExecutionPluginCatalog((*entry_points().select(group=LOOPS), point)))
     initial = asyncio.run(service.get())
     assert initial.selection.plugin_id == "standard" and initial.revision == 0
     assert service.selection() == "standard" and not paths.home.exists()
@@ -87,7 +88,7 @@ def test_concurrent_writes_have_one_winner_and_keep_loser_draft_out_of_storage(t
 @pytest.mark.parametrize("payload", ["not-json", "null", "{}", '{"version":true,"pluginId":"standard","revision":1}',
     '{"version":2,"pluginId":"standard","revision":true}', '{"version":2,"pluginId":"../x","revision":1}',
     '{"version":2,"pluginId":"standard","revision":0}', '{"version":2,"pluginId":"standard","revision":1,"extra":1}',
-    '{"version":2,"pluginId":"standard","pluginId":"standard","revision":1}', " " * (1024 * 1024 + 1)])
+    '{"version":2,"pluginId":"standard","pluginId":"standard","revision":1}', " " * (1024 * 1024 + 1)], ids=lambda value: "oversized" if len(value) > 200 else value)
 def test_corrupt_settings_are_sanitized_and_not_overwritten(tmp_path, payload):
     paths, service = setup(tmp_path)
     paths.config_dir.mkdir(parents=True)

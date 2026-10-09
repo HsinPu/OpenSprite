@@ -188,7 +188,7 @@ def test_exported_build_validator_reads_real_dist_info_without_importing_plugin(
     manifest = json.loads((tmp_path / "built-manifest.json").read_text())
     assert manifest["packages"][0]["sha256"] == imported.packages[0].sha256
     assert manifest["packages"][0]["plugins"] == [{
-        "id": "fixture_loop", "kind": "loop", "apiVersion": 3, "entryPoint": MODULE + ":factory",
+        "id": "fixture_loop", "kind": "loop", "apiVersion": 4, "entryPoint": MODULE + ":factory",
     }]
     # The fixture module raises if imported; success establishes metadata-only verification.
     assert "IMPORT MUST NOT RUN" not in result.stderr

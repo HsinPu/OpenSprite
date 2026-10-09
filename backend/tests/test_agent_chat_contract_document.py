@@ -52,6 +52,7 @@ def test_contract_has_only_the_approved_agent_chat_operations() -> None:
         ("/api/runs/{run_id}", "get"),
         ("/api/runs/{run_id}/events", "get"),
         ("/api/runs/{run_id}/event-history", "get"),
+        ("/api/runs/{run_id}/steps", "get"),
         ("/api/runs/{run_id}/cancel", "post"),
     }
 
@@ -154,7 +155,8 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "context.compaction.cancelled",
         "model.started",
         "model.attempt",
-        "response.continuation.started",
+        "step.started",
+        "step.completed",        "response.continuation.started",
         "assistant.delta",
         "run.completed",
         "run.failed",

@@ -12,7 +12,7 @@ const EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed1
 import { validCompactionPayload } from "./compactionEvents";
 import { validAttemptPayload } from "./attemptEvents";
 
-export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "response.continuation.started", "assistant.delta", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export const runEventTypes = ["run.started", "execution.selected", "context.compaction.started", "context.compaction.completed", "context.compaction.failed", "context.compaction.cancelled", "model.started", "model.attempt", "step.started", "step.completed", "response.continuation.started", "assistant.delta", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
 export const chatErrorCodes = ["invalid_request", "idempotency_conflict", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "invalid_provider_response", "internal_error", "workspace_not_found", "workspace_mismatch", "workspace_store_unavailable", "revision_conflict"] as const;
@@ -256,6 +256,36 @@ export async function getRun(runId: string): Promise<RunSnapshot> {
 
 export type RunEventPage = { events: RunEvent[]; nextAfterSequence: number | null };
 
+export type RunStep = {
+  id: string; runId: string; sequence: number; label: string; channel: "draft" | "answer";
+  status: "running" | "completed" | "failed" | "cancelled" | "interrupted";
+  text: string; finishReason: "final" | "output_limit" | null; errorCode: ChatServerErrorCode | null;
+  inputTokens: number | null; outputTokens: number | null; retryOf: string | null;
+  createdAt: string; finishedAt: string | null;
+};
+
+export async function listRunSteps(runId: string, afterSequence = 0): Promise<{ steps: RunStep[]; nextAfterSequence: number | null }> {
+  if (!isIdentifier(runId) || !Number.isSafeInteger(afterSequence) || afterSequence < 0) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest(`/api/runs/${runId}/steps?afterSequence=${afterSequence}&limit=100`, undefined, 200,
+    new Map([[400, ["invalid_request"]], [404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["steps", "nextAfterSequence"]) || !Array.isArray(body.steps) || body.steps.length > 100) throw new AgentChatApiError("malformed_response");
+  const steps = body.steps.map((step: unknown, index: number) => {
+    if (!record(step) || !exactKeys(step, ["id", "runId", "sequence", "label", "channel", "status", "text", "finishReason", "errorCode", "inputTokens", "outputTokens", "retryOf", "createdAt", "finishedAt"])
+      || !isIdentifier(step.id) || step.runId !== runId || !Number.isSafeInteger(step.sequence) || Number(step.sequence) < 1 || Number(step.sequence) > 2048
+      || Number(step.sequence) <= (index === 0 ? afterSequence : Number((body.steps as RunStep[])[index - 1]!.sequence))
+      || !boundedString(step.label, 1, 64) || !["draft", "answer"].includes(String(step.channel))
+      || !["running", "completed", "failed", "cancelled", "interrupted"].includes(String(step.status))
+      || !boundedString(step.text, 0, 1048576) || ![null, "final", "output_limit"].includes(step.finishReason as string | null)
+      || (step.errorCode !== null && !chatErrorCodes.includes(step.errorCode as ChatServerErrorCode))
+      || ![step.inputTokens, step.outputTokens].every(value => value === null || (Number.isSafeInteger(value) && Number(value) >= 0))
+      || (step.retryOf !== null && !isIdentifier(step.retryOf)) || !utc(step.createdAt) || (step.finishedAt !== null && !utc(step.finishedAt))) throw new AgentChatApiError("malformed_response");
+    return step as RunStep;
+  });
+  const next = body.nextAfterSequence;
+  if (next !== null && (!Number.isSafeInteger(next) || next !== steps.at(-1)?.sequence || Number(next) <= afterSequence)) throw new AgentChatApiError("malformed_response");
+  return { steps, nextAfterSequence: next as number | null };
+}
+
 export async function listRunEventHistory(runId: string, afterSequence = 0): Promise<RunEventPage> {
   if (!isIdentifier(runId) || !Number.isSafeInteger(afterSequence) || afterSequence < 0) throw new AgentChatApiError("malformed_response");
   const body = await jsonRequest(`/api/runs/${runId}/event-history?afterSequence=${afterSequence}&limit=100`, undefined, 200,
@@ -282,9 +312,9 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
   let data = value.data;
   if (expectedType === "execution.selected") {
-    const ids = data.apiVersion === 3 ? ["pluginId"] : ["loopId", "policyId"];
-    const versions = data.apiVersion === 3 ? ["pluginVersion"] : ["loopVersion", "policyVersion"];
-    if (![2, 3].includes(Number(data.apiVersion)) || typeof data.apiVersion !== "number"
+    const ids = Number(data.apiVersion) >= 3 ? ["pluginId"] : ["loopId", "policyId"];
+    const versions = Number(data.apiVersion) >= 3 ? ["pluginVersion"] : ["loopVersion", "policyVersion"];
+    if (![2, 3, 4].includes(Number(data.apiVersion)) || typeof data.apiVersion !== "number"
       || !exactKeys(data, [...ids, ...versions, "apiVersion"])
       || !ids.every(key => typeof data[key] === "string" && /^[a-z][a-z0-9_.-]{0,63}$/.test(String(data[key])))
       || !versions.every(key => boundedString(data[key], 1, 64))) throw new AgentChatApiError("malformed_response");
@@ -324,6 +354,14 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   }
   if (expectedType.startsWith("context.compaction.") && !validCompactionPayload(expectedType, data)) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.attempt" && !validAttemptPayload(data)) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "step.started" && (!exactKeys(data, ["stepId", "sequence", "label", "channel"])
+    || !isIdentifier(data.stepId) || !Number.isSafeInteger(data.sequence) || Number(data.sequence) < 1 || Number(data.sequence) > 2048
+    || !boundedString(data.label, 1, 64) || !["draft", "answer"].includes(String(data.channel)))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "step.completed" && (!exactKeys(data, ["stepId", "status", "finishReason", "errorCode", "inputTokens", "outputTokens"])
+    || !isIdentifier(data.stepId) || !["completed", "failed", "cancelled"].includes(String(data.status))
+    || ![null, "final", "output_limit"].includes(data.finishReason as string | null)
+    || (data.errorCode !== null && !chatErrorCodes.includes(data.errorCode as ChatServerErrorCode))
+    || ![data.inputTokens, data.outputTokens].every(value => value === null || (Number.isSafeInteger(value) && Number(value) >= 0)))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "run.cancelled" && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
   if (expectedType === "model.started") {
     const legacyKeys = ["providerId", "modelId", "responseMode", "maxOutputTokens"] as const;

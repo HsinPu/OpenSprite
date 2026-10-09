@@ -30,7 +30,7 @@
     "members": 512,
     "packages": 64
   },
-  "x-supported-wheel": "Purelib, none/any wheel; API v3 loop/policy entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
+  "x-supported-wheel": "Purelib, none/any wheel; API v4 Agent Loop entry points; dependencies must already be installed and satisfy Requires-Python/Requires-Dist. Native code, scripts/.data, .pth, customizers, stdlib/core/dependency shadowing, URL and extra requirements rejected.",
   "paths": {
     "/api/execution-plugin-packages": {
       "get": {
@@ -360,7 +360,7 @@
           "apiVersion": {
             "type": "integer",
             "minimum": 1,
-            "description": "Metadata API version. New imports and deployment bundles require API 2; older cached metadata remains inspectable."
+            "description": "Metadata API version. New imports and deployment bundles require API 4; older cached metadata remains inspectable."
           },
           "entryPoint": {
             "type": "string",
@@ -547,5 +547,5 @@
       }
     }
   },
-  "x-retired-packages": "Cached API v1/v2 wheels remain readable without execution and report needs_update. New imports and deployment bundles accept only agent_loops.v3."
+  "x-retired-packages": "Cached API v1/v2/v3 wheels remain readable without execution and report needs_update. New imports and deployment bundles accept only agent_loops.v4."
 }

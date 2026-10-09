@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 SCHEMA_SQL = """
 BEGIN IMMEDIATE;
 CREATE TABLE conversations (
@@ -77,14 +77,17 @@ CREATE TABLE conversation_compactions (
     input_tokens INTEGER NOT NULL CHECK(input_tokens >= 0),
     output_tokens INTEGER NOT NULL CHECK(output_tokens >= 0),
     created_at TEXT NOT NULL,
-    UNIQUE(conversation_id, covers_through_sequence)
+    producer_plugin_id TEXT NOT NULL DEFAULT 'legacy',
+    producer_plugin_version TEXT NOT NULL DEFAULT 'unknown',
+    summary_format TEXT NOT NULL DEFAULT 'opensprite.text.v1',
+    UNIQUE(conversation_id, summary_format, covers_through_sequence)
 ) STRICT;
 
 CREATE TABLE run_events (
     run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     sequence INTEGER NOT NULL CHECK(sequence >= 1),
     type TEXT NOT NULL CHECK(type IN (
-        'run.started', 'execution.selected', 'context.compaction.started', 'context.compaction.completed', 'context.compaction.failed', 'context.compaction.cancelled', 'model.started', 'model.attempt',
+        'run.started', 'execution.selected', 'context.compaction.started', 'context.compaction.completed', 'context.compaction.failed', 'context.compaction.cancelled', 'model.started', 'model.attempt', 'step.started', 'step.completed',
         'response.continuation.started',
         'assistant.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
     )),
@@ -112,28 +115,92 @@ CREATE INDEX active_runs_by_workspace
 ON runs(workspace_id)
 WHERE status IN ('queued', 'running', 'cancelling');
 ALTER TABLE runs ADD COLUMN reasoning_resolution_json TEXT CHECK(reasoning_resolution_json IS NULL OR length(reasoning_resolution_json) <= 512);
-PRAGMA user_version = 21;
+PRAGMA user_version = 22;
 COMMIT;
 
 """
 
+STEP_SCHEMA_SQL = """
+CREATE TABLE run_steps (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK(sequence BETWEEN 1 AND 2048),
+    label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND 64),
+    channel TEXT NOT NULL CHECK(channel IN ('draft', 'answer')),
+    status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed', 'cancelled', 'interrupted')),
+    text TEXT NOT NULL DEFAULT '' CHECK(length(text) <= 1048576),
+    finish_reason TEXT CHECK(finish_reason IN ('final', 'output_limit')),
+    error_code TEXT,
+    input_tokens INTEGER CHECK(input_tokens IS NULL OR input_tokens >= 0),
+    output_tokens INTEGER CHECK(output_tokens IS NULL OR output_tokens >= 0),
+    retry_of TEXT REFERENCES run_steps(id),
+    created_at TEXT NOT NULL,
+    finished_at TEXT,
+    UNIQUE(run_id, sequence)
+) STRICT;
+CREATE INDEX steps_by_run_sequence ON run_steps(run_id, sequence);
+"""
+SCHEMA_SQL = SCHEMA_SQL.replace("PRAGMA user_version = 22;", STEP_SCHEMA_SQL + "\nPRAGMA user_version = 22;")
 
 def migrate_schema(connection: sqlite3.Connection) -> None:
     version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-    if version == 20:
-        # All core columns are already present. Historical extra tables/events
-        # stay untouched; this release never starts their retired capabilities.
-        required = {
-            "conversations": {"id", "workspace_id", "revision"},
-            "messages": {"id", "conversation_id", "run_id", "content"},
-            "runs": {"id", "workspace_id", "workspace_mount_manifest_hash", "reasoning_resolution_json"},
-            "run_events": {"run_id", "sequence", "type", "payload_json"},
-            "conversation_compactions": {"id", "conversation_id", "summary"},
-        }
-        for table, columns in required.items():
-            actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
-            if not columns.issubset(actual):
-                raise ValueError("Incomplete v20 core schema")
-        connection.execute("PRAGMA user_version = 21")
-    elif version != SCHEMA_VERSION:
+    if version == SCHEMA_VERSION:
+        return
+    if version not in {20, 21}:
         raise ValueError("Upgrade older data to OpenSprite 0.21.30 before using the clean core")
+    required = {
+        "conversations": {"id", "workspace_id", "revision"},
+        "messages": {"id", "conversation_id", "run_id", "content"},
+        "runs": {"id", "workspace_id", "workspace_mount_manifest_hash", "reasoning_resolution_json"},
+        "run_events": {"run_id", "sequence", "type", "payload_json"},
+        "conversation_compactions": {"id", "conversation_id", "summary"},
+    }
+    for table, columns in required.items():
+        actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if not columns.issubset(actual):
+            raise ValueError("Incomplete core schema")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        import re
+        # Keep the original allowed historical event types and all original rows.
+        sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='run_events'").fetchone()[0]
+        new_sql = re.sub(r"(?i)(CREATE TABLE\s+)(?:\"run_events\"|run_events)", r"\1run_events_v22", sql, count=1)
+        new_sql, count = re.subn(r"(?is)(CHECK\s*\(\s*type\s+IN\s*\()(.*?)(\)\s*\))",
+                                r"\1\2, 'step.started', 'step.completed'\3", new_sql, count=1)
+        if count != 1:
+            raise ValueError("Unsupported event schema")
+        connection.execute(new_sql)
+        connection.execute("INSERT INTO run_events_v22 SELECT * FROM run_events")
+        connection.execute("DROP TABLE run_events")
+        connection.execute("ALTER TABLE run_events_v22 RENAME TO run_events")
+
+        # The old unique coverage bound becomes format-scoped. Copy every column
+        # and preserve historical IDs/content before replacing the schema.
+        sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='conversation_compactions'").fetchone()[0]
+        new_sql = re.sub(r"(?i)(CREATE TABLE\s+)(?:\"conversation_compactions\"|conversation_compactions)",
+                         r"\1conversation_compactions_v22", sql, count=1)
+        new_sql, count = re.subn(r"(?i)UNIQUE\s*\(\s*conversation_id\s*,\s*covers_through_sequence\s*\)",
+                                "UNIQUE(conversation_id, summary_format, covers_through_sequence)", new_sql, count=1)
+        if count != 1:
+            raise ValueError("Unsupported compaction schema")
+        position = new_sql.upper().index("UNIQUE(CONVERSATION_ID, SUMMARY_FORMAT, COVERS_THROUGH_SEQUENCE)")
+        new_sql = new_sql[:position] + """
+    producer_plugin_id TEXT NOT NULL DEFAULT 'legacy',
+    producer_plugin_version TEXT NOT NULL DEFAULT 'unknown',
+    summary_format TEXT NOT NULL DEFAULT 'opensprite.text.v1',
+""" + new_sql[position:]
+        connection.execute(new_sql)
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(conversation_compactions)")]
+        names = ", ".join('"' + name.replace('"', '""') + '"' for name in columns)
+        connection.execute(f"INSERT INTO conversation_compactions_v22 ({names}) SELECT {names} FROM conversation_compactions")
+        connection.execute("DROP TABLE conversation_compactions")
+        connection.execute("ALTER TABLE conversation_compactions_v22 RENAME TO conversation_compactions")
+        connection.execute("CREATE INDEX compactions_by_conversation_coverage ON conversation_compactions(conversation_id, covers_through_sequence DESC)")
+        for statement in STEP_SCHEMA_SQL.split(";"):
+            if statement.strip():
+                connection.execute(statement)
+        connection.execute("PRAGMA user_version = 22")
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise

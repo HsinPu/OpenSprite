@@ -10,7 +10,7 @@ import pytest
 from context_test_support import TestCapabilityResolver
 from test_agent_loop import ScriptedGateway, accepted_run, store
 from test_agent_chat_service import service
-from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.application import AgentChatError
@@ -22,67 +22,15 @@ from opensprite_backend.inference.models import InferenceFailure, ModelCompleted
 from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID
 
 
-def test_execute_and_each_recovery_callback_use_the_same_fresh_run_instance(tmp_path):
-    instances = []
-    class Plugin:
-        def __init__(self): self.calls = []
-        async def execute(self, host):
-            self.calls.append("execute")
-            return await host.finish(await host.next_turn())
-        def allow_context_retry(self, state):
-            assert self.calls == ["execute"]
-            self.calls.append("context")
-            return False
-        def allow_output_continuation(self, state):
-            assert self.calls == ["execute"]
-            self.calls.append("continuation")
-            return False
-    class Factory:
-        api_version = 3
-        def create(self):
-            plugin = Plugin(); instances.append(plugin); return plugin
-    repository = store(tmp_path)
-    gateway = ScriptedGateway([
-        [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
-        [ModelTextDelta("partial " + str(uuid4())), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
-    ])
-    loop = AgentLoop(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(), plugin_factory=Factory())
-    async def scenario():
-        one = await loop.execute(accepted_run(repository).id, asyncio.Event())
-        two = await loop.execute(accepted_run(repository).id, asyncio.Event())
-        assert one.status is RunStatus.FAILED and one.error.code == "context_limit_exceeded"
-        assert two.status is RunStatus.COMPLETED and two.completion_reason is CompletionReason.OUTPUT_LIMIT
-    asyncio.run(scenario())
-    assert len(instances) == len(gateway.requests) == 2
-    assert instances[0] is not instances[1]
-    assert [x.calls for x in instances] == [["execute", "context"], ["execute", "continuation"]]
-
-
-@pytest.mark.parametrize("value", [None, 1, "yes"])
-@pytest.mark.parametrize("phase", ["context", "continuation"])
-def test_non_boolean_recovery_is_a_sanitized_failure_without_extra_request(tmp_path, value, phase):
-    class Plugin:
-        async def execute(self, host): return await host.finish(await host.next_turn())
-        def allow_context_retry(self, state): return value
-        def allow_output_continuation(self, state): return value
-    repository = store(tmp_path)
-    script = [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)] if phase == "context" else [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
-    gateway = ScriptedGateway([script])
-    loop = AgentLoop(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(), plugin_factory=SimpleNamespace(api_version=3, create=Plugin))
-    result = asyncio.run(loop.execute(accepted_run(repository).id, asyncio.Event()))
-    assert result.status is RunStatus.FAILED and result.error.code == "internal_error"
-    assert len(gateway.requests) == 1
-
-
 def test_profile_is_persisted_with_queued_admission_and_replay_does_not_replace_it(tmp_path):
     repository = store(tmp_path)
     arguments = dict(conversation_id=None, client_request_id=str(uuid4()), message=str(uuid4()), provider_id="openai", model_id="test", response_mode="default")
-    profile = ExecutionPluginCatalog(()).resolve("standard").profile()
+    profile = ExecutionPluginCatalog().resolve("standard").profile()
     first = repository.start_run(**arguments, execution_profile=profile)
     assert first.run.status is RunStatus.QUEUED
     events = repository.list_run_events(first.run.id, after_sequence=0, limit=100)
     assert len(events) == 1 and events[0].data == profile
-    replay = repository.start_run(**arguments, execution_profile=ExecutionPluginCatalog(()).resolve("no_recovery").profile())
+    replay = repository.start_run(**arguments, execution_profile=ExecutionPluginCatalog().resolve("no_recovery").profile())
     assert replay.replayed and replay.run.id == first.run.id
     assert repository.list_run_events(first.run.id, after_sequence=0, limit=100) == events
 

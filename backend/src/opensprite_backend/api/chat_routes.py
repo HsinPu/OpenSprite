@@ -20,6 +20,8 @@ from .chat_models import (
     MessageListResponse,
     MoveConversationRequest,
     RunResponse,
+    RunStepListResponse,
+    run_step_response,
     StartRunRequest,
     StartRunResponse,
     conversation_list_response,
@@ -203,6 +205,20 @@ async def event_history(
     page = events[:limit]
     return {"events": [run_event_data(event) for event in page],
             "nextAfterSequence": page[-1].sequence if len(events) > limit else None}
+
+
+@router.get("/api/runs/{run_id}/steps", operation_id="listRunSteps",
+            response_model=RunStepListResponse, responses=_errors(400, 404, 500, 503))
+async def list_run_steps(
+    run_id: UUID,
+    after_sequence: Annotated[int, Query(alias="afterSequence", ge=0, le=9007199254740991)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    chat: AgentChatOperations = Depends(_agent_chat),
+) -> RunStepListResponse:
+    steps = await chat.list_run_steps(str(run_id), after_sequence=after_sequence, limit=limit)
+    page = steps[:limit]
+    return RunStepListResponse(steps=[run_step_response(step) for step in page],
+        next_after_sequence=page[-1].sequence if len(steps) > limit else None)
 
 
 @router.get(

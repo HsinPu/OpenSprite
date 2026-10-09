@@ -10,9 +10,9 @@
   </p>
 </div>
 
-OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Python 本機服務管理模型請求、上下文、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
+OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Loop 插件控制多輪推論、摘要、重試與續寫；Python Host 處理模型連線、限制、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
 
-目前產品版本為 `0.21.33`。執行插件使用 **Host API v3**。
+目前產品版本為 `0.21.34`。執行插件使用 **Host API v4**。
 
 ![OpenSprite Agent 工作臺](docs/screenshots/agent-workbench.jpg)
 
@@ -112,12 +112,12 @@ cd OpenSprite
 flowchart LR
   UI[Agent 工作臺] --> Run[Run 設定快照]
   Run --> Loop[Agent Loop]
-  Loop --> Host[Host API v3]
+  Loop --> Host[Host API v4]
   Host --> Provider[Provider]
   Host --> State[文字 / 事件 / SQLite]
 ```
 
-Host API v3 僅提供 `checkpoint()`、`next_turn()`、`finish(turn)`。API v1／v2 插件須合併執行與恢復方法、更新 entry point／factory 並重新建置。舊外部選擇保留原檔，套用 API v3 插件後才能建立新任務；歴史紀錄維持可讀。
+Host API v4 僅提供 `checkpoint()`、`next_turn()`、`finish(turn)`。API v1／v2 插件須合併執行與恢復方法、更新 entry point／factory 並重新建置。舊外部選擇保留原檔，套用 API v4 插件後才能建立新任務；歴史紀錄維持可讀。
 
 安裝流程：**匯入 wheel → 下載部署包 → 在主機安裝／建置映像 → 重啟 → 核對狀態 → 選擇並套用至新任務**。匯入只做靜態檢查與快取，不會安裝套件。
 

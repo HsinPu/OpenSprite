@@ -47,7 +47,7 @@ function responseBody(value: unknown): ExecutionSettings {
       || !pluginId(item.id) || !text(item.name, 128, 1) || !text(item.description, 2048) || !text(item.version, 64, 1)
       || typeof item.apiVersion !== "number" || !Number.isSafeInteger(item.apiVersion) || item.apiVersion < 1
       || !["available", "incompatible", "unavailable"].includes(String(item.status)) || identities.has(item.id)
-      || (item.status === "available" && item.apiVersion !== 3)) throw invalid();
+      || (item.status === "available" && item.apiVersion !== 4)) throw invalid();
     identities.add(item.id);
     return { id: item.id, name: item.name, description: item.description, version: item.version,
       apiVersion: item.apiVersion, status: item.status as ExecutionPlugin["status"] };
