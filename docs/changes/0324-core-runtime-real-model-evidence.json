@@ -1,0 +1,146 @@
+{
+  "kind": "actual-openrouter-auto-smoke",
+  "verifiedAtUtc": "2026-10-09T14:29:14.531373+00:00",
+  "modelExecutionVersion": "0.21.39",
+  "deliveryVersion": "0.21.40",
+  "hostApiVersion": 5,
+  "providerId": "openrouter",
+  "requestedModelId": "openrouter/auto",
+  "transport": "NativeModelGateway using the built-in OpenRouter HTTPS endpoint",
+  "wheelSha256": "e75ed2849b131bf3c051885e6d68a290856a168b662d9a7c7df60b01b0c9b4b3",
+  "sourceFilesUnchanged": 126,
+  "restartPreservedRunsStepsEventsAndMessages": true,
+  "noReplayModelRequests": true,
+  "runs": [
+    {
+      "plugin": "standard",
+      "runId": "9790c675-5c01-4247-9768-45a5712a5099",
+      "conversationId": "743452b5-c2b1-4145-9f7a-6d287cbda42e",
+      "executionProfile": {
+        "apiVersion": 5,
+        "pluginId": "standard",
+        "pluginVersion": "0.2.0"
+      },
+      "startedAt": "2026-10-09T14:15:51.787024Z",
+      "finishedAt": "2026-10-09T14:15:57.677147Z",
+      "status": "completed",
+      "nonce": "aafbe4b4c7f34d9faff5fc542ffdf638",
+      "expectedSum": 441,
+      "actualAnswer": "aafbe4b4c7f34d9faff5fc542ffdf638\n441",
+      "exactVariableAnswerVerified": true,
+      "modelRequestCount": 1,
+      "modelUsage": [
+        {
+          "inputTokens": 454,
+          "outputTokens": 80
+        }
+      ],
+      "steps": [
+        {
+          "sequence": 1,
+          "label": "answer",
+          "channel": "answer",
+          "status": "completed",
+          "textSha256": "27c20ed143997cd2629506e172c2db7868d99ee70658c1c4c1bd09c3bca73174"
+        }
+      ],
+      "privateDraftsExcludedFromConversation": true,
+      "sseVerified": true,
+      "replayAfterSwitchingLoopVerified": true
+    },
+    {
+      "plugin": "no_recovery",
+      "runId": "dc9a4ba0-3b28-4f4c-b0a3-91793ed8da11",
+      "conversationId": "f82abde8-7e5b-4409-b967-d1dbffeca971",
+      "executionProfile": {
+        "apiVersion": 5,
+        "pluginId": "no_recovery",
+        "pluginVersion": "0.2.0"
+      },
+      "startedAt": "2026-10-09T14:15:58.058326Z",
+      "finishedAt": "2026-10-09T14:16:14.791055Z",
+      "status": "completed",
+      "nonce": "2efb2aa711f44e80b67154bbf9812fcf",
+      "expectedSum": 317,
+      "actualAnswer": "2efb2aa711f44e80b67154bbf9812fcf\n317",
+      "exactVariableAnswerVerified": true,
+      "modelRequestCount": 1,
+      "modelUsage": [
+        {
+          "inputTokens": 454,
+          "outputTokens": 81
+        }
+      ],
+      "steps": [
+        {
+          "sequence": 1,
+          "label": "answer",
+          "channel": "answer",
+          "status": "completed",
+          "textSha256": "79146f1677561da7c094307695b2fd0e938ecba13e03d0f197e38de425d54fba"
+        }
+      ],
+      "privateDraftsExcludedFromConversation": true,
+      "sseVerified": true,
+      "replayAfterSwitchingLoopVerified": true
+    },
+    {
+      "plugin": "example_review",
+      "runId": "1e34bbd4-0ebe-4f8f-8404-e2c8ee90e630",
+      "conversationId": "4b2ec469-8461-44ae-a4ea-8a03cb0922b3",
+      "executionProfile": {
+        "apiVersion": 5,
+        "pluginId": "example_review",
+        "pluginVersion": "0.5.0"
+      },
+      "startedAt": "2026-10-09T14:16:15.006347Z",
+      "finishedAt": "2026-10-09T14:16:24.903430Z",
+      "status": "completed",
+      "nonce": "c3b821ae43224d899b9452afd75f3d09",
+      "expectedSum": 399,
+      "actualAnswer": "c3b821ae43224d899b9452afd75f3d09\n399",
+      "exactVariableAnswerVerified": true,
+      "modelRequestCount": 3,
+      "modelUsage": [
+        {
+          "inputTokens": 429,
+          "outputTokens": 127
+        },
+        {
+          "inputTokens": 456,
+          "outputTokens": 82
+        },
+        {
+          "inputTokens": 416,
+          "outputTokens": 84
+        }
+      ],
+      "steps": [
+        {
+          "sequence": 1,
+          "label": "draft",
+          "channel": "draft",
+          "status": "completed",
+          "textSha256": "3101482d7d4fdd43465e36ab0325f1cc5dcd14d40c8e80f49dfc5cf6aa50847d"
+        },
+        {
+          "sequence": 2,
+          "label": "review",
+          "channel": "draft",
+          "status": "completed",
+          "textSha256": "3101482d7d4fdd43465e36ab0325f1cc5dcd14d40c8e80f49dfc5cf6aa50847d"
+        },
+        {
+          "sequence": 3,
+          "label": "final",
+          "channel": "answer",
+          "status": "completed",
+          "textSha256": "3101482d7d4fdd43465e36ab0325f1cc5dcd14d40c8e80f49dfc5cf6aa50847d"
+        }
+      ],
+      "privateDraftsExcludedFromConversation": true,
+      "sseVerified": true,
+      "replayAfterSwitchingLoopVerified": true
+    }
+  ]
+}

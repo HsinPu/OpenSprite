@@ -59,6 +59,8 @@ Windows 使用儲存庫 Node 24／uv 執行 `installers/windows/test.ps1`，只�
 
 ## 尚未完成與邊界
 
+此節記錄 0.21.39 提交時的狀態。使用者後續已明確授權真實測試；授權後的複製、模型成功與重啟證據見 [0.21.40 真實模型驗證紀錄](0324-core-runtime-real-model-verification.md)。
+
 本次尚未執行真實 OpenRouter auto 請求。自動核准審查拒絕把既有測試卷的 auth.json／credential.key 與供應商狀態複製到新的持久測試卷，理由是會新增一份可解密憑證的保存位置，需要使用者明確授權；已提出精確授權問題，目前待回答。該複製未執行，新測試卷不存在 auth.json 或 credential.key。本紀錄不把協定 gateway、假資料、匯入成功或故障測試當作付費模型成功。
 
 保留原核心硬限制與 Loop 決策邊界，公開 API v5 不變。期限及取消仍要求可信 in-process Python 配合 await，不能阻止阻塞主程序的任意 Python；沒有新程序沙箱。不承諾尚未 flush 的字元或主機斷電 durability。後續可獨立規劃 Loop 行為品質評測、建置版本追溯，以及真正需要不可信插件時的程序隔離。
