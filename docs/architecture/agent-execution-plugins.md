@@ -163,3 +163,17 @@ preserving receipt object bindings. Executor converts public errors and
 completion reasons before storage. Authors must import public enum/record
 types from the SDK, without assuming internal transport/storage class identity.
 Entry points, factories and the official/example wheel versions are unchanged.
+
+## Atomic terminal decisions and crash recovery (0.21.39)
+
+Cancellation committed before a failure transaction wins within that same
+SQLite transaction: the Run becomes cancelled, with one cancellation event
+and no failure or limit evidence. Cleanup preserves an already committed
+terminal state, including completion committed before a notification fails.
+Status, messages, summaries and their events must commit together or roll back
+together. Restart marks unfinished Runs interrupted without resending model
+requests; only previously committed text is retained. Repository verification
+scripts exercise real SIGKILL during public/private streams and summary/final
+transactions. This proves process-crash recovery, not unflushed text retention
+or power-loss durability. Trusted in-process Loops still require cooperative
+awaits and are not a security sandbox.

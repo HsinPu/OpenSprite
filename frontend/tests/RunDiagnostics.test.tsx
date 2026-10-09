@@ -27,6 +27,10 @@ it("shows the persisted core stop reason with accepted usage and the effective l
   expect(screen.getByText("已用量")).toBeTruthy();
   expect(screen.getByText("7 次")).toBeTruthy();
   expect(screen.getByText("有效上限")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "技術資訊" }));
+  expect(JSON.parse(screen.getByText(/"code": "model_request_limit_reached"/).textContent!)).toEqual(failure.data.error);
+  expect(JSON.parse(screen.getByText(/"kind": "model_requests"/).textContent!)).toEqual(failure.data.limit);
+  expect(screen.queryByText("[object Object]")).toBeNull();
 });
 
 it.each(["completed", "failed", "cancelled", "interrupted"] as const)("synchronizes after a running snapshot becomes %s and preserves expansion", async status => {

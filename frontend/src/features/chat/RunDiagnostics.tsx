@@ -178,7 +178,12 @@ function DiagnosticDetails({ operation, hideError }: { operation: DiagnosticOper
       { key: "type", label: "Event", children: event.type },
       { key: "events", label: t("diagnostics.range", { from: String(operation.events[0].sequence), to: String(operation.events.at(-1)!.sequence) }), children: operation.events.map(item => <div key={item.sequence}>{item.createdAt} · {String(item.data.status ?? item.type)}</div>) },
       { key: "run", label: "Run ID", children: <Typography.Text copyable className="run-diagnostics__wrap">{event.runId}</Typography.Text> },
-      ...Object.entries(event.data).filter(([key, value]) => key !== "context" && value != null).map(([key, value]) => ({ key, label: key, children: <Typography.Text className="run-diagnostics__wrap" copyable={/Id$/.test(key)}>{String(value)}</Typography.Text> })),
+      ...Object.entries(event.data).filter(([key, value]) => key !== "context" && value != null).map(([key, value]) => ({
+        key, label: key,
+        children: typeof value === "object"
+          ? <pre className="run-diagnostics__receipt">{JSON.stringify(value, null, 2)}</pre>
+          : <Typography.Text className="run-diagnostics__wrap" copyable={/Id$/.test(key)}>{String(value)}</Typography.Text>,
+      })),
       ...Object.entries(context ?? {}).filter(([key, value]) => key !== "components" && value != null).map(([key, value]) => ({
         key: "context-" + key, label: key,
         children: typeof value === "object"

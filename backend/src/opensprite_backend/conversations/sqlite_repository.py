@@ -1483,6 +1483,9 @@ class SqliteConversationRepository(SqliteRunSteps):
                 row = self._require_run_row(connection, run_id)
                 if row["status"] not in _ACTIVE_STATUSES:
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
+                cancel_won = status is RunStatus.FAILED and row["status"] == RunStatus.CANCELLING.value
+                if cancel_won:
+                    status, event_type, payload = RunStatus.CANCELLED, RunEventType.RUN_CANCELLED, {}
                 now = self._now()
                 connection.execute(
                     """
@@ -1493,9 +1496,9 @@ class SqliteConversationRepository(SqliteRunSteps):
                     """,
                     (
                         status.value,
-                        error.code,
-                        error.message,
-                        int(error.retryable),
+                        None if cancel_won else error.code,
+                        None if cancel_won else error.message,
+                        None if cancel_won else int(error.retryable),
                         self._timestamp(now),
                         run_id,
                     ),

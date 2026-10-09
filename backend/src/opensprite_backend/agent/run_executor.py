@@ -138,9 +138,21 @@ class RunExecutor:
 
     async def _fail(self, run_id, error, *, limit=None):
         current = await asyncio.to_thread(self._repository.get_run, run_id)
-        if current and current.status in {RunStatus.CANCELLING, RunStatus.CANCELLED}:
+        if current and current.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED, RunStatus.INTERRUPTED}:
+            return current
+        if current and current.status is RunStatus.CANCELLING:
             return await self._cancel(run_id)
         return await asyncio.to_thread(self._repository.fail_run, run_id, error, limit=limit)
 
     async def _cancel(self, run_id):
-        return await asyncio.to_thread(self._repository.mark_run_cancelled, run_id)
+        current = await asyncio.to_thread(self._repository.get_run, run_id)
+        if current and current.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED, RunStatus.INTERRUPTED}:
+            return current
+        try:
+            return await asyncio.to_thread(self._repository.mark_run_cancelled, run_id)
+        except ConversationStoreError as error:
+            if error.failure is StoreFailure.INVALID_STATE:
+                current = await asyncio.to_thread(self._repository.get_run, run_id)
+                if current and current.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED, RunStatus.INTERRUPTED}:
+                    return current
+            raise
