@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from opensprite_backend.workspaces import WorkspaceAvailability
+from opensprite_backend.workspaces.models import WorkspaceAvailability
 from opensprite_backend.workspaces.relocation import WorkspaceRelocator, WorkspaceRelocationError
 from test_workspaces import make_service
 
@@ -55,7 +55,7 @@ def test_existing_target_is_not_merged_or_adopted(tmp_path):
 def test_catalog_write_failure_can_resume_without_recopy(tmp_path, monkeypatch):
     service, source, target, catalog = legacy_service(tmp_path)
     original = service._store.set
-    from opensprite_backend.workspaces import WorkspaceStoreError
+    from opensprite_backend.workspaces.store import WorkspaceStoreError
     def fail(_):
         raise WorkspaceStoreError
     monkeypatch.setattr(service._store, "set", fail)
@@ -140,7 +140,7 @@ def test_failed_relocation_blocks_catalog_mutations(tmp_path):
     service, source, target, catalog = legacy_service(tmp_path)
     (target / "Alpha").mkdir(parents=True)
     run(service.startup())
-    from opensprite_backend.workspaces import WorkspaceError
+    from opensprite_backend.workspaces.service import WorkspaceError
     original = catalog.read_bytes()
     with pytest.raises(WorkspaceError):
         run(service.create(name="Other", expected_revision=1))

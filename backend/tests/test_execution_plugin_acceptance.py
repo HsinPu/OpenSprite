@@ -10,13 +10,13 @@ import pytest
 from test_agent_chat_service import service
 from test_execution_plugin_catalog import InstalledPoint, LOOPS
 
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog
 from opensprite_backend.application import AgentChatError, ChatErrorCode
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import CompletionReason, RunEventType, RunStatus
 from opensprite_backend.execution_settings import ExecutionSettingsService
 from opensprite_backend.inference.models import ModelCompleted, ModelFinishReason, ModelTextDelta
-from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID
 
 
 def selected_profile(repository, run_id):

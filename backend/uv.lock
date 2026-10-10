@@ -242,7 +242,7 @@ wheels = [
 
 [[package]]
 name = "opensprite-backend"
-version = "0.21.41"
+version = "0.21.42"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },

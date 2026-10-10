@@ -9,12 +9,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from opensprite_backend.workspaces import (
-    WorkspaceError,
-    WorkspaceFailure,
-    WorkspaceMountAccess,
-    WorkspaceOperations,
-)
+from opensprite_backend.workspaces.service import WorkspaceError, WorkspaceFailure, WorkspaceOperations
+from opensprite_backend.workspaces.models import WorkspaceMountAccess
 
 from .workspace_models import (
     CreateWorkspaceRequest,

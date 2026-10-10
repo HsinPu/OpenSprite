@@ -17,18 +17,10 @@ from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.runtime import create_system_app
 import opensprite_backend.workspaces.policy as workspace_policy
-from opensprite_backend.workspaces import (
-    DEFAULT_WORKSPACE_ID,
-    JsonWorkspaceStore,
-    WorkspaceAvailability,
-    WorkspaceCatalogService,
-    WorkspaceError,
-    WorkspaceFailure,
-    WorkspaceMountAccess,
-    WorkspaceRootPolicy,
-    WorkspaceStoreError,
-    WorkspaceUsage,
-)
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID, WorkspaceAvailability, WorkspaceMountAccess, WorkspaceUsage
+from opensprite_backend.workspaces.store import JsonWorkspaceStore, WorkspaceStoreError
+from opensprite_backend.workspaces.service import WorkspaceCatalogService, WorkspaceError, WorkspaceFailure
+from opensprite_backend.workspaces.policy import WorkspaceRootPolicy
 
 
 WORKSPACE_ID = "11111111-1111-4111-8111-111111111111"

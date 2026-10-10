@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from opensprite_backend.response_modes import HistoricalResponseMode, ReasoningResolution
-from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.models import ProviderId
 
 from datetime import datetime
 from typing import Literal

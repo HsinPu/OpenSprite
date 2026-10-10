@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError, PluginDescriptor
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog, ExecutionPluginError, PluginDescriptor
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.execution_settings import ExecutionSettingsError, ExecutionSettingsService

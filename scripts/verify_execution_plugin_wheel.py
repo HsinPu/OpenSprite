@@ -30,7 +30,7 @@ import sys
 
 target = Path(os.environ["OPENSPRITE_PLUGIN_VERIFY_TARGET"]).resolve()
 sys.path.insert(0, str(target))
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog
 from opensprite_backend.agent.plugin import CompletionReason, ModelFinishReason
 import opensprite_execution_example.plugin as example
 
@@ -51,7 +51,7 @@ assert plugin is not selection.create()
 # Exercise the installed plugin through the actual core and provider adapter.
 from uuid import uuid4
 import httpx
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.conversations.models import RunEventType, RunStatus
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
 from opensprite_backend.inference.native_gateway import NativeModelGateway
@@ -84,7 +84,7 @@ async def execute():
     accepted = repository.start_run(conversation_id=None, client_request_id=str(uuid4()), message=nonce,
                                     provider_id="openrouter", model_id="fixture/model", response_mode="default", execution_profile=selection.profile())
     async with httpx.AsyncClient(transport=httpx.MockTransport(wire)) as client:
-        loop = RunExecutor(repository=repository, gateway=NativeModelGateway(Credentials(), client, ProviderOperationLocks()),
+        loop = ProductRunExecutor(repository=repository, gateway=NativeModelGateway(Credentials(), client, ProviderOperationLocks()),
                          capability_resolver=Capabilities())
         await loop.execute(accepted.run.id, asyncio.Event(), execution_plugin=selection)
     result = repository.get_run(accepted.run.id)
@@ -114,7 +114,7 @@ async def cancel_execute():
             yield ModelTextDelta("private-" + nonce)
             started.set()
             await asyncio.Event().wait()
-    loop = RunExecutor(repository=repository, gateway=BlockedGateway(), capability_resolver=Capabilities())
+    loop = ProductRunExecutor(repository=repository, gateway=BlockedGateway(), capability_resolver=Capabilities())
     task = asyncio.create_task(loop.execute(run.id, cancellation, execution_plugin=selection))
     await asyncio.wait_for(started.wait(), 5)
     repository.request_cancel(run.id)

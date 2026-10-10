@@ -3,7 +3,7 @@
 from typing import cast
 
 from fastapi import APIRouter, Depends, Request, Query, status
-from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.models import ProviderId
 from opensprite_backend.response_modes import ResponseModeValue, ReasoningResolution
 from fastapi.responses import JSONResponse
 

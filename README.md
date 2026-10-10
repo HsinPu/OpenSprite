@@ -12,7 +12,7 @@
 
 OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Loop 插件控制多輪推論、摘要、重試與續寫；Python Host 處理模型連線、限制、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
 
-目前產品版本為 `0.21.41`。執行插件使用 **Host API v5**。
+目前產品版本為 `0.21.42`。執行插件使用 **Host API v5**。
 
 ![OpenSprite Agent 工作臺](docs/screenshots/agent-workbench.jpg)
 

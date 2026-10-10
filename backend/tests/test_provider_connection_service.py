@@ -12,7 +12,7 @@ import httpx
 from fastapi.testclient import TestClient
 import pytest
 
-from opensprite_backend import create_app
+from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.credentials import (
     CredentialStore,
@@ -39,11 +39,8 @@ from opensprite_backend.provider_transaction import (
     ProviderTransaction,
     ProviderTransactionJournal,
 )
-from opensprite_backend.providers import (
-    ProviderOperationLocks,
-    ProviderValidationError,
-    ProviderValidator,
-)
+from opensprite_backend.providers.operation_locks import ProviderOperationLocks
+from opensprite_backend.providers.adapters import ProviderValidationError, ProviderValidator
 
 NOW = datetime(2026, 8, 20, 10, 15, tzinfo=UTC)
 OLD = datetime(2026, 8, 19, 10, 15, tzinfo=UTC)

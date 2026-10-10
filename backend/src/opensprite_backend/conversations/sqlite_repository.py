@@ -40,12 +40,7 @@ from .run_limits import RunLimitEvidence, LIMIT_ERROR_CODES, valid_limit_data
 from .repository import ConversationStoreError
 from .sqlite_schema import SCHEMA_SQL, SCHEMA_VERSION, migrate_schema
 from .event_notifier import RunEventNotifier
-from opensprite_backend.workspaces import (
-    EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
-    DEFAULT_WORKSPACE_ID,
-    WorkspaceAvailability,
-    WorkspaceUsage,
-)
+from opensprite_backend.workspaces.models import EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH, DEFAULT_WORKSPACE_ID, WorkspaceAvailability, WorkspaceUsage
 from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_NAME
 
 

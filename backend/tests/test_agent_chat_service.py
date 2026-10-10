@@ -13,8 +13,8 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.run_executor import RunExecutor
-from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.application.run_preparation import ProductRunExecutor
+from opensprite_backend.application.run_manager import RunManager
 from opensprite_backend.application import (
     AgentChatError,
     AgentChatService,
@@ -43,16 +43,10 @@ from opensprite_backend.models import (
     ProviderSummary,
     ResponseMode,
 )
-from opensprite_backend.workspaces import (
-    DEFAULT_WORKSPACE_ID,
-    JsonWorkspaceStore,
-    WorkspaceCatalogService,
-    WorkspaceError,
-    WorkspaceFailure,
-    WorkspaceMountAccess,
-    WorkspaceMutationGate,
-    WorkspaceRootPolicy,
-)
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID, WorkspaceMountAccess
+from opensprite_backend.workspaces.store import JsonWorkspaceStore
+from opensprite_backend.workspaces.service import WorkspaceCatalogService, WorkspaceError, WorkspaceFailure, WorkspaceMutationGate
+from opensprite_backend.workspaces.policy import WorkspaceRootPolicy
 
 
 def async_test(function):
@@ -175,7 +169,7 @@ def service(
         ),
         responseMode=ResponseMode.MEDIUM,
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway or FinalGateway(),
 

@@ -11,8 +11,9 @@ from typing import Protocol
 
 from fastapi import FastAPI
 
-from .agent import RunExecutor, RunManager
-from .agent.plugin_catalog import ExecutionPluginCatalog
+from .application.run_preparation import ProductRunExecutor
+from .application.run_manager import RunManager
+from .execution_plugins.catalog import ExecutionPluginCatalog
 from .execution_settings import ExecutionSettingsOperations, ExecutionSettingsService, UnavailableExecutionSettings
 from .execution_plugins.service import ExecutionPackageOperations, ExecutionPackageService, UnavailableExecutionPackages
 from .application import (
@@ -30,14 +31,15 @@ from .ai_settings import (
     UnavailableAiSettings,
     create_ai_settings_service,
 )
-from .conversations import RunEventNotifier, SqliteConversationRepository
+from opensprite_backend.conversations.event_notifier import RunEventNotifier
+from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
 from .credentials import CredentialStore
 from .conversation_settings import (
     ConversationSettingsOperations,
     UnavailableConversationSettings,
     create_conversation_settings_service,
 )
-from .inference import ModelGateway
+from opensprite_backend.inference.gateway import ModelGateway
 from .model_capability_resolver import ProviderModelCapabilityResolver
 from .local_paths import create_local_path_picker
 from .authentication import AccessMode, JsonAccessPolicyStore, UnavailableLocalAuthentication, create_local_authentication
@@ -53,14 +55,9 @@ from .provider_connections import (
 )
 from .provider_runtime import create_provider_runtime
 from .system_prompt import FileSystemPromptLogWriter, create_system_prompt_provider
-from .workspaces import (
-    JsonWorkspaceStore,
-    UnavailableWorkspaces,
-    WorkspaceCatalogService,
-    WorkspaceMutationGate,
-    WorkspaceOperations,
-    WorkspaceRootPolicy,
-)
+from opensprite_backend.workspaces.store import JsonWorkspaceStore
+from opensprite_backend.workspaces.service import UnavailableWorkspaces, WorkspaceCatalogService, WorkspaceMutationGate, WorkspaceOperations
+from opensprite_backend.workspaces.policy import WorkspaceRootPolicy
 from .workspaces.relocation import WorkspaceRelocator
 
 
@@ -180,7 +177,7 @@ def create_system_runtime(
         custom_providers=provider_runtime.custom_providers,
     )
     prompt_recorder = PromptRecorder(FileSystemPromptLogWriter(paths), FilePromptLogWriter(paths))
-    run_executor = RunExecutor(
+    run_executor = ProductRunExecutor(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         capability_resolver=capability_resolver,

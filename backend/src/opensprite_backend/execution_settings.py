@@ -9,7 +9,8 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .agent.plugin_catalog import ExecutionPluginError, PluginDescriptor
+from .agent.execution_input import ExecutionPluginError
+from .execution_plugins.catalog import PluginDescriptor
 from .app_paths import AppPaths
 from .atomic_file import atomic_write
 

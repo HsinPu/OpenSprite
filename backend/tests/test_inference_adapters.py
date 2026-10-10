@@ -16,7 +16,7 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunStatus
 from opensprite_backend.conversations.sqlite_repository import (
@@ -606,7 +606,7 @@ async def test_native_gateway_to_agent_persists_text_not_secret_or_reasoning(
     )
     credentials = FakeCredentials()
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        loop = RunExecutor(
+        loop = ProductRunExecutor(
             repository=repository,
             gateway=NativeModelGateway(
                 credentials,

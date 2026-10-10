@@ -89,12 +89,7 @@ from .conversation_settings import (
     ConversationSettingsStoreError,
     UnavailableConversationSettings,
 )
-from .workspaces import (
-    UnavailableWorkspaces,
-    WorkspaceError,
-    WorkspaceFailure,
-    WorkspaceOperations,
-)
+from opensprite_backend.workspaces.service import UnavailableWorkspaces, WorkspaceError, WorkspaceFailure, WorkspaceOperations
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 _LOGGER = logging.getLogger("opensprite.runtime")

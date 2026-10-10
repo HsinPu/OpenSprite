@@ -40,6 +40,7 @@ def test_agent_depends_on_interfaces_not_sqlite_or_provider_adapters() -> None:
         "opensprite_backend.app",
         "opensprite_backend.runtime",
         "opensprite_backend.system_prompt",
+        "opensprite_backend.prompt_logging",
     }
 
     assert [
@@ -47,6 +48,16 @@ def test_agent_depends_on_interfaces_not_sqlite_or_provider_adapters() -> None:
         for source, module in imported_modules("agent")
         if module in forbidden
     ] == []
+
+
+def test_agent_does_not_import_product_preparation_or_management():
+    forbidden = ("opensprite_backend.application", "opensprite_backend.execution_plugins",
+                 "opensprite_backend.authentication", "opensprite_backend.local_paths",
+                 "opensprite_backend.workspaces.service", "opensprite_backend.workspaces.store",
+                 "opensprite_backend.ai_settings", "opensprite_backend.general_settings",
+                 "opensprite_backend.models")
+    assert [(source, module) for source, module in imported_modules("agent")
+            if any(module == name or module.startswith(name + ".") for name in forbidden)] == []
 
 
 def test_inference_boundary_has_no_persistence_tool_or_runtime_dependency() -> None:

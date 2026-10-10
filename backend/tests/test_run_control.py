@@ -14,7 +14,7 @@ from opensprite_backend.agent.plugin import ExecutionLimits, ModelLimits, FinalO
 from opensprite_backend.agent.plugin_conversion import completion_reason
 from opensprite_backend.agent.request_trace import TracedGateway
 from opensprite_backend.agent.run_control import RunControl
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.conversations.models import RunStatus, RunEventType
 from context_test_support import TestCapabilityResolver
 
@@ -87,7 +87,7 @@ async def test_raw_timeout_is_not_misreported_as_core_deadline(tmp_path, stage):
             raise TimeoutError("private timeout message")
     async def plugin(host):
         raise TimeoutError("private timeout message")
-    runtime = RunExecutor(repository=repository, gateway=gateway,
+    runtime = ProductRunExecutor(repository=repository, gateway=gateway,
         capability_resolver=Capability() if stage == "capability" else TestCapabilityResolver(),
         system_prompt_provider=SimpleNamespace(build=fake_timeout) if stage == "prompt" else None,
         plugin_factory=SimpleNamespace(api_version=5, create=lambda: SimpleNamespace(execute=plugin)) if stage == "loop" else None)
@@ -107,7 +107,7 @@ async def test_factory_time_is_charged_to_run_deadline(tmp_path):
     def create():
         sleep(.04)
         return SimpleNamespace(execute=execute)
-    runtime = RunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(),
+    runtime = ProductRunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(),
         plugin_factory=SimpleNamespace(api_version=5, create=create), max_duration_seconds=.02)
     result = await runtime.execute(accept(repository).id, asyncio.Event())
     assert result.error.code == "run_deadline_exceeded" and not gateway.requests

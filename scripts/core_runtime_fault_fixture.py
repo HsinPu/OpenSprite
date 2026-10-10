@@ -16,8 +16,8 @@ from opensprite_backend.agent.plugin import (
     ContextReadRequest, FinalOutput, InputSource, ModelMessage, StepRequest,
     SummarySource, SummaryWriteRequest,
 )
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginSelection
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginSelection
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.conversations.models import RunEventType
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
 from opensprite_backend.inference.capabilities import ModelCapability
@@ -105,7 +105,7 @@ async def actor():
             return await host.finish(FinalOutput(step.text, (step,)))
     factory = SimpleNamespace(api_version=5, create=lambda: SimpleNamespace(execute=loop))
     selection = ExecutionPluginSelection("fault_probe", "1.0.0", factory)
-    executor = RunExecutor(repository=repository, gateway=Gateway(), capability_resolver=Capabilities())
+    executor = ProductRunExecutor(repository=repository, gateway=Gateway(), capability_resolver=Capabilities())
     await executor.execute(run.id, asyncio.Event(), execution_plugin=selection)
     raise AssertionError("The controller should kill the active fixture")
 

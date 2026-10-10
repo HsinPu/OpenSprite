@@ -8,7 +8,7 @@ from opensprite_backend.inference.capabilities import (
     ModelCapability,
 )
 from opensprite_backend.inference.models import InferenceFailure
-from opensprite_backend.models import ProviderId
+from opensprite_backend.provider_identity import ProviderId
 
 
 class ModelCapabilityNotFound(Exception):

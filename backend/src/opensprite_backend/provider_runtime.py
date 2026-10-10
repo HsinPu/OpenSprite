@@ -18,7 +18,8 @@ from .provider_transaction import (
     JsonProviderTransactionJournal,
     ProviderTransactionJournal,
 )
-from .providers import ProviderOperationLocks, ProviderValidator
+from opensprite_backend.providers.operation_locks import ProviderOperationLocks
+from opensprite_backend.providers.adapters import ProviderValidator
 from .providers.catalog_store import JsonProviderCatalog
 from .providers.catalog_transaction import ProviderCatalogTransaction
 from .providers.custom_service import CustomProviderService

@@ -26,7 +26,7 @@ from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
-from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID, WorkspaceAvailability
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID, WorkspaceAvailability
 
 
 NOW = datetime(2026, 8, 21, 8, 30, tzinfo=UTC)

@@ -22,6 +22,7 @@ class RunControl:
         self._started_at = monotonic()
         self._deadline = self._started_at + limits.max_duration_seconds
         self._requests = self._summaries = self._generated_chars = self._operations = 0
+        self._deadline_error = None
 
     @property
     def limits(self) -> ExecutionLimits:
@@ -36,8 +37,12 @@ class RunControl:
         return monotonic() >= self._deadline
 
     def deadline_failure(self):
-        return limit_failure("duration_seconds", self._limits.max_duration_seconds,
-                             round(max(0, monotonic() - self._started_at), 6))
+        self._deadline_error = limit_failure("duration_seconds", self._limits.max_duration_seconds,
+                                            round(max(0, monotonic() - self._started_at), 6))
+        return self._deadline_error
+
+    def owns_deadline_failure(self, error: BaseException) -> bool:
+        return error is self._deadline_error
 
     def check_cancelled(self) -> None:
         if self.cancellation_requested:

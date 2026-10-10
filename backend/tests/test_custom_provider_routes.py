@@ -16,7 +16,7 @@ from opensprite_backend.providers.catalog_store import JsonProviderCatalog
 from opensprite_backend.providers.catalog_transaction import ProviderCatalogTransaction
 from opensprite_backend.providers.custom_service import CustomProviderService
 from opensprite_backend.providers.mutations import ProviderMutations
-from opensprite_backend.workspaces import WorkspaceMutationGate
+from opensprite_backend.workspaces.service import WorkspaceMutationGate
 
 
 def client_for(tmp_path):

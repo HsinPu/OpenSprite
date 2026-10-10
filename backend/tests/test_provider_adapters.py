@@ -8,17 +8,8 @@ import httpx
 import pytest
 
 from opensprite_backend.models import ErrorCode
-from opensprite_backend.providers import (
-    ANTHROPIC_MODELS_URL,
-    MAX_OPENROUTER_MODELS,
-    MAX_OPENROUTER_MODELS_RESPONSE_BYTES,
-    MAX_PROVIDER_RESPONSE_BYTES,
-    OPENAI_MODELS_URL,
-    OPENROUTER_MODELS_URL,
-    OpenRouterModelDiscovery,
-    ProviderValidationError,
-    ProviderValidator,
-)
+from opensprite_backend.providers.adapters import ANTHROPIC_MODELS_URL, MAX_PROVIDER_RESPONSE_BYTES, OPENAI_MODELS_URL, ProviderValidationError, ProviderValidator
+from opensprite_backend.providers.openrouter_models import MAX_OPENROUTER_MODELS, MAX_OPENROUTER_MODELS_RESPONSE_BYTES, OPENROUTER_MODELS_URL, OpenRouterModelDiscovery
 from opensprite_backend.providers.adapters import OPENROUTER_KEY_URL
 
 SECRET = "provider-secret-must-not-leak"

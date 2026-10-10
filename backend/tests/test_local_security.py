@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 import pytest
 from starlette.types import Message, Scope
 
-from opensprite_backend import create_app
+from opensprite_backend.app import create_app
 from opensprite_backend.models import (
     OpenRouterModel,
     OpenRouterModelListResponse,

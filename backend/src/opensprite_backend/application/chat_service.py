@@ -10,8 +10,8 @@ from collections.abc import AsyncIterator
 from enum import StrEnum
 from typing import Protocol
 
-from opensprite_backend.agent.run_manager import RunManager
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError
+from opensprite_backend.application.run_manager import RunManager
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog, ExecutionPluginError
 from opensprite_backend.execution_settings import ExecutionSettingsOperations, ExecutionSettingsError
 from opensprite_backend.ai_settings import AiSettingsOperations, SettingsStoreError
 from opensprite_backend.models import ModelSelection
@@ -35,13 +35,8 @@ from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnections,
 )
-from opensprite_backend.workspaces import (
-    DEFAULT_WORKSPACE_ID,
-    WorkspaceError,
-    WorkspaceFailure,
-    WorkspaceMutationGate,
-    WorkspaceResolver,
-)
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID
+from opensprite_backend.workspaces.service import WorkspaceError, WorkspaceFailure, WorkspaceMutationGate, WorkspaceResolver
 
 
 class ChatErrorCode(StrEnum):

@@ -1,7 +1,7 @@
 """Explicit copies between the stable SDK and internal persistence/transport."""
 from opensprite_backend.conversations import models as stored
 from opensprite_backend.inference import models as inference
-from . import plugin_data as public
+from opensprite_backend.agent import plugin_data as public
 
 
 def message(value: stored.Message) -> public.Message:

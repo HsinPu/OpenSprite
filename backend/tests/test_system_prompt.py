@@ -16,10 +16,7 @@ from opensprite_backend.models import GeneralSettings
 from opensprite_backend.system_prompt import (
     DynamicSystemPromptProvider, FileSystemPromptLogWriter, SystemPromptBuildError, SystemPromptLogError,
 )
-from opensprite_backend.workspaces import (
-    WorkspaceAvailability, WorkspaceExecutionContext, WorkspaceKind,
-    WorkspaceMountAccess, WorkspaceMountExecutionContext,
-)
+from opensprite_backend.workspaces.models import WorkspaceAvailability, WorkspaceExecutionContext, WorkspaceKind, WorkspaceMountAccess, WorkspaceMountExecutionContext
 
 
 class StubGeneralSettings:

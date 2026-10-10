@@ -8,7 +8,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog, ExecutionPluginError
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog, ExecutionPluginError
 from opensprite_standard_loop import LoopFactory
 
 LOOPS = "opensprite_backend.agent_loops.v5"

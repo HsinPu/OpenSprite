@@ -10,8 +10,8 @@ import pytest
 from context_test_support import TestCapabilityResolver
 from test_agent_loop import ScriptedGateway, accepted_run, store
 from test_agent_chat_service import service
-from opensprite_backend.agent.run_executor import RunExecutor
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
+from opensprite_backend.application.run_preparation import ProductRunExecutor
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.application import AgentChatError
 from opensprite_backend.conversations.models import CompletionReason, RunEventType, RunStatus
@@ -19,7 +19,7 @@ from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.execution_settings import ExecutionSettingsService
 from opensprite_backend.inference.gateway import ModelGatewayError
 from opensprite_backend.inference.models import InferenceFailure, ModelCompleted, ModelFinishReason, ModelTextDelta
-from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID
 
 
 def test_profile_is_persisted_with_queued_admission_and_replay_does_not_replace_it(tmp_path):

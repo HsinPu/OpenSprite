@@ -10,7 +10,7 @@ from opensprite_backend.agent.plugin import (
     ContextReadRequest, InputSource, ModelMessage, StepRequest, FinalOutput,
     SummarySource, SummaryWriteRequest,
 )
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.conversations.models import RunStatus, RunEventType
 from opensprite_backend.inference.models import ModelTextDelta, ModelCompleted, ModelFinishReason, ModelUsage
 
@@ -24,7 +24,7 @@ def accept(repository, *, conversation=None, message=None):
 def make_executor(repository, gateway, function=None, **limits):
     factory = None if function is None else SimpleNamespace(api_version=5,
         create=lambda: SimpleNamespace(execute=function))
-    return RunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(),
+    return ProductRunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(),
                        plugin_factory=factory, **limits)
 
 

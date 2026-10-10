@@ -13,13 +13,13 @@ from context_test_support import TestCapabilityResolver
 from test_agent_loop import ScriptedGateway
 from test_execution_plugin_catalog import InstalledPoint, LOOPS
 
-from opensprite_backend.agent.run_executor import RunExecutor
-from opensprite_backend.agent.plugin_catalog import ExecutionPluginCatalog
-from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.application.run_preparation import ProductRunExecutor
+from opensprite_backend.execution_plugins.catalog import ExecutionPluginCatalog
+from opensprite_backend.application.run_manager import RunManager
 from opensprite_backend.conversations.models import RunEventType, RunStatus
 from opensprite_backend.conversations.sqlite_repository import SqliteConversationRepository
 from opensprite_backend.inference.models import ModelCompleted, ModelFinishReason, ModelTextDelta
-from opensprite_backend.workspaces import DefaultWorkspaceResolver
+from opensprite_backend.workspaces.service import DefaultWorkspaceResolver
 
 
 @dataclass
@@ -80,7 +80,7 @@ def test_replaced_driver_preserves_cancellation_and_partial_output(tmp_path):
                 await asyncio.Event().wait()
                 yield ModelCompleted(ModelFinishReason.FINAL)
 
-        manager = RunManager(repository, RunExecutor(
+        manager = RunManager(repository, ProductRunExecutor(
             repository=repository, gateway=Gateway(),
 
             capability_resolver=TestCapabilityResolver()))

@@ -1,8 +1,6 @@
 """Shared provider identity validation, separate from runtime availability."""
 
-from typing import Annotated
-
-from pydantic import AfterValidator, Strict
+from typing import TypeAlias
 
 from uuid import UUID
 
@@ -18,4 +16,4 @@ def require_provider_id(value: str) -> str:
     return value
 
 
-ProviderId = Annotated[str, Strict(), AfterValidator(require_provider_id)]
+ProviderId: TypeAlias = str

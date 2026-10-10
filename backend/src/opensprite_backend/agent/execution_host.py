@@ -22,12 +22,12 @@ from opensprite_backend.inference.models import (
 )
 from .context.counter import ConservativeTokenCounter
 from .summary_sources import summary_coverage
-from . import plugin_conversion as convert
+from opensprite_backend.agent import plugin_conversion as convert
 from .context.receipt import ReceiptSources
 from .events import CONTEXT_LIMIT_ERROR, CONTEXT_PREPARATION_ERROR, INTERNAL_ERROR, INVALID_PROVIDER_RESPONSE, inference_error
 from .execution_errors import ExecutionFailed, RunCancelled
 from .run_control import RunControl
-from .plugin_catalog import ExecutionPluginSelection
+from .execution_input import ExecutionPluginSelection
 from .plugin import (
     ContextReadRequest, ContextSnapshot, InputSource, SummarySource, SummaryWriteRequest,
     FinalOutput, RunContext, RunResult, StepRequest, StepResult, ModelLimits, CompletionReason, ModelMessage,
@@ -435,7 +435,7 @@ class LoopExecutionHost:
         if self._request_observer is not None:
             try:
                 self._request_observer.record_request(run_id=self._run.id, created_at=datetime.now(UTC),
-                                                      request_sequence=sequence, request=request)
+                                                      request_sequence=sequence, request=deepcopy(request))
             except Exception:
                 logging.getLogger("opensprite.agent.context").warning("request_observer_unavailable run_id=%s", self._run.id)
 

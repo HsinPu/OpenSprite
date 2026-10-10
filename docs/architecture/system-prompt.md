@@ -29,7 +29,7 @@ managed `.opensprite/workspace/default` root.
 The top-level `system_prompt.py` feature owns the production renderer, General
 Settings fallback and clock conversion. `DynamicSystemPromptProvider` returns
 an immutable rendered snapshot without writing files. The product wrapper
-supplies its text through the internal `SystemPromptProvider` protocol and
+supplies its text to product Run preparation through `SystemPromptProvider` and
 submits a complete receipt only when the admitted Run has `logFullPrompts` enabled.
 `runtime.py` composes the renderer and the optional `PromptRecorder`.
 
@@ -37,7 +37,7 @@ submits a complete receipt only when the admitted Run has `logFullPrompts` enabl
 General Settings + Workspace snapshot + Clock
                 -> DynamicSystemPromptProvider
                 -> ProductSystemPromptProvider
-                -> RunExecutor -> Loop
+                -> ProductRunPreparation -> PreparedRun -> RunExecutor -> Loop
                 -> normalized ModelRequest
                 -> one Provider adapter
 

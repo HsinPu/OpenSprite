@@ -13,8 +13,8 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.run_executor import RunExecutor
-from opensprite_backend.agent.run_manager import RunManager
+from opensprite_backend.application.run_preparation import ProductRunExecutor
+from opensprite_backend.application.run_manager import RunManager
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunEventType, RunStatus, StoreFailure
@@ -29,10 +29,8 @@ from opensprite_backend.inference.models import (
     ModelStreamEvent,
     ModelTextDelta,
 )
-from opensprite_backend.workspaces import (
-    DEFAULT_WORKSPACE_ID,
-    DefaultWorkspaceResolver,
-)
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID
+from opensprite_backend.workspaces.service import DefaultWorkspaceResolver
 
 
 DEFAULT_WORKSPACE = DefaultWorkspaceResolver().execution_context(
@@ -83,7 +81,7 @@ async def test_manager_owns_one_task_per_run_and_waits_for_completion(
 
     manager = RunManager(
         repository,
-        RunExecutor(
+        ProductRunExecutor(
             repository=repository,
             gateway=FinalGateway(),
 
@@ -119,7 +117,7 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
 
     manager = RunManager(
         repository,
-        RunExecutor(
+        ProductRunExecutor(
             repository=repository,
             gateway=BlockingGateway(),
 
@@ -159,7 +157,7 @@ async def test_user_cancel_preserves_buffered_assistant_text(tmp_path: Path) -> 
 
     manager = RunManager(
         repository,
-        RunExecutor(
+        ProductRunExecutor(
             repository=repository,
             gateway=PartialGateway(),
 
@@ -226,7 +224,7 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
 
     manager = RunManager(
         failing_repository,  # type: ignore[arg-type]
-        RunExecutor(
+        ProductRunExecutor(
             repository=failing_repository,  # type: ignore[arg-type]
             gateway=FinalGateway(),
 

@@ -5,9 +5,10 @@ from enum import StrEnum
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SecretStr, Strict, StrictBool, field_validator, model_validator
 
-from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.provider_identity import require_provider_id
+ProviderId = Annotated[str, Strict(), AfterValidator(require_provider_id)]
 from .response_modes import ResponseMode
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
 TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]

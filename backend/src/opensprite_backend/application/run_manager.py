@@ -14,12 +14,12 @@ from opensprite_backend.conversations.repository import (
     ConversationRepository,
     ConversationStoreError,
 )
-from opensprite_backend.workspaces import WorkspaceExecutionContext
+from opensprite_backend.workspaces.models import WorkspaceExecutionContext
 from opensprite_backend.providers.catalog_models import ProviderEndpointSnapshot
 
-from .run_executor import RunExecutor
-from .events import INTERNAL_ERROR
-from .plugin_catalog import ExecutionPluginSelection
+from .run_preparation import ProductRunExecutor
+from opensprite_backend.agent.events import INTERNAL_ERROR
+from opensprite_backend.agent.execution_input import ExecutionPluginSelection
 
 _LOGGER = logging.getLogger("opensprite.agent.run_manager")
 
@@ -28,7 +28,7 @@ class RunManager:
     def __init__(
         self,
         repository: ConversationRepository,
-        executor: RunExecutor,
+        executor: ProductRunExecutor,
     ) -> None:
         self._repository = repository
         self._executor = executor

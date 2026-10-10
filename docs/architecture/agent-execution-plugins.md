@@ -21,6 +21,30 @@ eligible context recovery, continuation tail and stopping policy. No executable
 fallback lives in the core. no_recovery uses the same preparation but omits
 context retry and output continuation.
 
+## Product composition and isolated execution
+
+`application/run_preparation.py` owns product preparation: workspace checks,
+model-capability resolution, response preferences, product Prompt construction
+and the opt-in request recorder. `ProductRunExecutor` delegates those inputs
+to the core; its standard Loop default is a product choice. Metadata discovery
+and installed-plugin management live in `execution_plugins/catalog.py`.
+Background task dispatch and Provider usage references live in
+`application/run_manager.py`.
+
+The core `agent/run_executor.py` requires an explicit `RunPreparation`. A
+`PreparedRun` contains a fixed base Prompt, limits, selected factory, non-secret
+endpoint and start metadata. The same RunControl covers preparation and Loop
+execution; preparing a Run does not restart its deadline. A Run stays queued
+until preparation succeeds, then starts before model inference. The core never
+discovers plugins, reads product preferences or selects a default Loop.
+
+Package initializers do not eagerly import App or management implementations.
+The core imports technology-neutral records and protocols; pure workspace and
+endpoint records remain shared data, without filesystem or network services.
+Provider ID HTTP validation stays in consumer models while its core type and
+canonical identity validator require no Pydantic. Optional request observers
+receive detached request copies and cannot mutate the transmitted inputs.
+
 ## Public SDK
 
 All public types are available from opensprite_backend.agent.plugin.

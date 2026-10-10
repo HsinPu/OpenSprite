@@ -29,10 +29,8 @@ from .provider_transaction import (
     ProviderTransactionJournal,
     ProviderTransactionSide,
 )
-from .providers import (
-    ProviderOperationLocks,
-    ProviderValidationError,
-)
+from opensprite_backend.providers.operation_locks import ProviderOperationLocks
+from opensprite_backend.providers.adapters import ProviderValidationError
 
 _CATALOG: tuple[tuple[ProviderId, str], ...] = (
     ("openai", "OpenAI"),

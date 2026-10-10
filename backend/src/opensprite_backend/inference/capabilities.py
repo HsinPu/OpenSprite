@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from opensprite_backend.models import ProviderId
+from opensprite_backend.provider_identity import ProviderId
 
 
 @dataclass(frozen=True, slots=True)

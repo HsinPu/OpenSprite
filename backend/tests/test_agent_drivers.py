@@ -8,7 +8,7 @@ import pytest
 from context_test_support import TestCapabilityResolver
 from test_agent_loop import ScriptedGateway, accepted_run, async_test, seed_completed_turns, store
 from opensprite_backend.agent.plugin import ContextReadRequest, InputSource, SummarySource, SummaryWriteRequest, StepRequest, FinalOutput, RunResult, CompletionReason, ModelMessage
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.agent.execution_errors import ExecutionFailed, RunCancelled
 from opensprite_backend.agent.events import INTERNAL_ERROR
 from opensprite_backend.conversations.models import CompletionReason as StoredCompletionReason, RunEventType, RunStatus
@@ -31,7 +31,7 @@ def executor(repository, gateway, function, **bounds):
         instances.append(instance)
         return instance
     factory = SimpleNamespace(api_version=5, create=create)
-    return RunExecutor(repository=repository, gateway=gateway,
+    return ProductRunExecutor(repository=repository, gateway=gateway,
         capability_resolver=TestCapabilityResolver(), plugin_factory=factory, **bounds), instances
 
 
@@ -241,7 +241,7 @@ async def test_host_hard_limits_stop_custom_loops(tmp_path, bound):
 async def test_no_recovery_official_wheel_does_not_continue(tmp_path):
     repository = store(tmp_path)
     gateway = ScriptedGateway([[ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]])
-    loop = RunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(), plugin_factory=LoopFactory(False))
+    loop = ProductRunExecutor(repository=repository, gateway=gateway, capability_resolver=TestCapabilityResolver(), plugin_factory=LoopFactory(False))
     result = await loop.execute(accepted_run(repository).id, asyncio.Event())
     assert result.status is RunStatus.COMPLETED and result.completion_reason is StoredCompletionReason.OUTPUT_LIMIT
     assert len(gateway.requests) == 1

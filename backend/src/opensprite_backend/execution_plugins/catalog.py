@@ -2,25 +2,18 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from importlib.metadata import EntryPoint, entry_points
 import inspect
 import re
 from threading import RLock
 from typing import Literal
 
-from .plugin import AgentLoopPlugin, AgentLoopPluginFactory
+from opensprite_backend.agent.execution_input import API_VERSION, ExecutionPluginError, ExecutionPluginSelection
 
 PluginStatus = Literal["available", "incompatible", "unavailable"]
-API_VERSION = 5
 _GROUP = re.compile(r"^opensprite_backend\.agent_loops\.v([1-9][0-9]*)$")
 _ID = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
-
-
-class ExecutionPluginError(Exception):
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,31 +29,6 @@ class PluginDescriptor:
 @dataclass(frozen=True, slots=True)
 class _EntryPointSource:
     point: EntryPoint
-
-
-@dataclass(frozen=True, slots=True)
-class ExecutionPluginSelection:
-    plugin_id: str
-    plugin_version: str
-    factory: AgentLoopPluginFactory = field(repr=False)
-
-    def create(self) -> AgentLoopPlugin:
-        try:
-            if type(getattr(self.factory, "api_version", None)) is not int or self.factory.api_version != API_VERSION:
-                raise ValueError("invalid factory API")
-            plugin = self.factory.create()
-            if inspect.iscoroutine(plugin):
-                plugin.close()
-                raise ValueError("create must return a plugin synchronously")
-            if not inspect.iscoroutinefunction(getattr(plugin, "execute", None)):
-                raise ValueError("execute must be async")
-            return plugin
-        except (Exception, asyncio.CancelledError):
-            raise ExecutionPluginError("plugin_unavailable") from None
-
-    def profile(self) -> dict[str, object]:
-        return {"pluginId": self.plugin_id, "pluginVersion": self.plugin_version,
-                "apiVersion": API_VERSION}
 
 
 class ExecutionPluginCatalog:

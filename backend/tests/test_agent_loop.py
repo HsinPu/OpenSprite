@@ -21,7 +21,7 @@ import pytest
 
 from context_test_support import TestCapabilityResolver
 
-from opensprite_backend.agent.run_executor import RunExecutor
+from opensprite_backend.application.run_preparation import ProductRunExecutor
 from opensprite_backend.api.chat_models import run_response
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.prompt_logging import FilePromptLogWriter, PromptRecorder
@@ -40,13 +40,7 @@ from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
 from opensprite_backend.inference.gateway import ModelGatewayError
-from opensprite_backend.workspaces import (
-    WorkspaceAvailability,
-    WorkspaceExecutionContext,
-    WorkspaceKind,
-    WorkspaceMountAccess,
-    WorkspaceMountExecutionContext,
-)
+from opensprite_backend.workspaces.models import WorkspaceAvailability, WorkspaceExecutionContext, WorkspaceKind, WorkspaceMountAccess, WorkspaceMountExecutionContext
 
 
 def async_test(function):
@@ -149,7 +143,7 @@ async def test_context_compaction_pages_until_recent_history_is_covered(tmp_path
         [ModelTextDelta("summary-one"), ModelCompleted(ModelFinishReason.FINAL)],
         [ModelTextDelta("summary-two"), ModelCompleted(ModelFinishReason.FINAL)],
         [ModelTextDelta("answer"), ModelCompleted(ModelFinishReason.FINAL)]])
-    result = await RunExecutor(repository=repository, gateway=gateway,
+    result = await ProductRunExecutor(repository=repository, gateway=gateway,
         capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
     assert result.status is RunStatus.COMPLETED
     assert len(gateway.requests) == 3
@@ -174,7 +168,7 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
             ]
         ]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -246,7 +240,7 @@ async def test_agent_loop_separates_earlier_instruction_from_current_request(
     )
 
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -293,7 +287,7 @@ async def test_run_uses_its_snapshotted_output_budget(
     gateway = ScriptedGateway(
         [[ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)]]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -329,7 +323,7 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
             ]
         ]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -374,7 +368,7 @@ async def test_enabled_prompt_logging_records_the_exact_model_messages(
         log_full_prompts=True,
     ).run
     recorder = PromptRecorder(FileSystemPromptLogWriter(paths), FilePromptLogWriter(paths))
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=ScriptedGateway([[ModelTextDelta("收到"), ModelCompleted(ModelFinishReason.FINAL)]]),
 
@@ -412,7 +406,7 @@ async def test_output_limit_continues_twice_into_one_visible_answer(
             [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
         ]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -459,7 +453,7 @@ async def test_automatic_continuation_has_no_separate_count_cap(tmp_path, maximu
         [ModelTextDelta(f"part {index}|"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
         for index in range(maximum)
     ] + [[ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)]])
-    result = await RunExecutor(repository=repository, gateway=gateway,
+    result = await ProductRunExecutor(repository=repository, gateway=gateway,
         capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
     assert result.status is RunStatus.COMPLETED and result.completion_reason is CompletionReason.STOP
     assert len(gateway.requests) == maximum+1
@@ -480,7 +474,7 @@ async def test_unlimited_continuation_runs_until_the_model_finishes(
         ]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -508,7 +502,7 @@ async def test_automatic_continuation_obeys_shared_model_request_cap(tmp_path):
     gateway = ScriptedGateway([
         [ModelTextDelta(f"part {index}|"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
         for index in range(130)])
-    result = await RunExecutor(repository=repository, gateway=gateway,
+    result = await ProductRunExecutor(repository=repository, gateway=gateway,
         capability_resolver=TestCapabilityResolver()).execute(run.id, asyncio.Event())
     assert result.status is RunStatus.FAILED and result.error.code == "model_request_limit_reached"
     assert len(gateway.requests) == 128 and result.partial_text.endswith("part 127|")
@@ -527,7 +521,7 @@ async def test_continuation_context_rejection_preserves_existing_text(
         ]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -575,7 +569,7 @@ async def test_continuation_context_rejection_compacts_once_then_retries(
         ]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -612,7 +606,7 @@ async def test_assistant_output_limit_fails_run_before_repository_overflow(
             yield ModelTextDelta("56")
             yield ModelCompleted(ModelFinishReason.FINAL)
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=OversizedGateway(),
 
@@ -632,7 +626,7 @@ async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
     gateway = ScriptedGateway(
         [[ModelGatewayError(InferenceFailure.PROVIDER_TIMEOUT)]]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -685,7 +679,7 @@ async def test_long_history_is_compacted_without_deleting_raw_messages(
             ],
         ]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -748,7 +742,7 @@ async def test_required_recent_history_overflow_fails_without_model_request(
         context_budget="auto",
     ).run
     gateway = ScriptedGateway([])
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -795,7 +789,7 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
         ]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -867,7 +861,7 @@ async def test_context_rejection_after_partial_output_is_not_retried(
         ]]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -911,7 +905,7 @@ async def test_second_context_rejection_stops_after_one_compaction_retry(
         ]
     )
 
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -934,7 +928,7 @@ async def test_prompt_log_failure_stops_before_any_model_request(
     gateway = ScriptedGateway(
         [[ModelTextDelta("must not run"), ModelCompleted(ModelFinishReason.FINAL)]]
     )
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -976,7 +970,7 @@ async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) ->
             if False:
                 yield ModelCompleted(ModelFinishReason.FINAL)
 
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=BlockingGateway(),
 
@@ -1029,7 +1023,7 @@ async def test_cancellation_interrupts_context_compaction_request(
 
     cancellation = asyncio.Event()
     task = asyncio.create_task(
-        RunExecutor(
+        ProductRunExecutor(
             repository=repository,
             gateway=BlockingSummaryGateway(),
 
@@ -1072,7 +1066,7 @@ async def test_failed_compaction_has_one_safe_terminal_event(tmp_path: Path) -> 
         response_mode="default", context_budget="auto",
     ).run
     gateway = ScriptedGateway([[ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)]])
-    result = await RunExecutor(
+    result = await ProductRunExecutor(
         repository=repository, gateway=gateway,
 
         capability_resolver=TestCapabilityResolver(),
@@ -1096,7 +1090,7 @@ async def test_fast_text_deltas_are_coalesced_before_persistence(
     run = accepted_run(repository)
     chunks = [ModelTextDelta("a" * 1_000) for _ in range(8)]
     gateway = ScriptedGateway([[*chunks, ModelCompleted(ModelFinishReason.FINAL)]])
-    loop = RunExecutor(
+    loop = ProductRunExecutor(
         repository=repository,
         gateway=gateway,
 
@@ -1132,7 +1126,7 @@ async def test_first_short_chunk_is_persisted_before_the_model_finishes(tmp_path
             yield ModelTextDelta(final)
             yield ModelCompleted(ModelFinishReason.FINAL)
 
-    task = asyncio.create_task(RunExecutor(
+    task = asyncio.create_task(ProductRunExecutor(
         repository=repository, gateway=PausedGateway(), capability_resolver=TestCapabilityResolver(),
     ).execute(run.id, asyncio.Event()))
     try:

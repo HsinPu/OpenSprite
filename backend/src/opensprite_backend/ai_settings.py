@@ -14,7 +14,7 @@ from .provider_connections import ProviderConnectionError, ProviderConnections
 from .providers.catalog_models import BUILTIN_PROVIDER_IDS
 from .providers.catalog_store import CatalogError
 from .providers.custom_service import CustomProviderService
-from .workspaces import WorkspaceMutationGate
+from opensprite_backend.workspaces.service import WorkspaceMutationGate
 
 _SCHEMA_VERSION: Final = 12
 _PREVIOUS_CANONICAL_SCHEMA_VERSION: Final = 7
@@ -270,7 +270,7 @@ class AiSettingsService:
     async def resolve_mode(self, provider_id: str, model_id: str, mode: ResponseModeValue) -> ReasoningResolution:
         if mode == "default":
             return resolve_response_mode(mode, None)
-        from .agent.context.capability_resolver import ModelCapabilityNotFound, ModelCapabilityProviderError
+        from .application.model_capability import ModelCapabilityNotFound, ModelCapabilityProviderError
         try:
             capability = await self._capability_resolver.resolve(provider_id, model_id)
             supported = capability.reasoning_efforts

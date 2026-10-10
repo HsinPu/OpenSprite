@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from opensprite_backend.agent.context.capability_resolver import ModelCapabilityNotFound
+from opensprite_backend.application.model_capability import ModelCapabilityNotFound
 from opensprite_backend.credentials.encrypted_json_store import EncryptedJsonCredentialStore
 from opensprite_backend.model_capability_resolver import ProviderModelCapabilityResolver
 from opensprite_backend.providers.catalog_store import CustomModel, JsonProviderCatalog

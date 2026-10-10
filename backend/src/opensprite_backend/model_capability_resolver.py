@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from time import monotonic
 
-from opensprite_backend.agent.context.capability_resolver import (
+from opensprite_backend.application.model_capability import (
     ModelCapabilityNotFound,
     ModelCapabilityProviderError,
 )

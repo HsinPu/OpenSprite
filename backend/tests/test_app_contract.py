@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 
-from opensprite_backend import create_app
+from opensprite_backend.app import create_app
 from opensprite_backend.build_info import product_version
 from opensprite_backend.models import (
     ErrorCode,

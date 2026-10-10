@@ -104,7 +104,8 @@ async def test_cancel_cleanup_returns_an_already_committed_terminal(tmp_path):
     repository = store(tmp_path)
     run = repository.mark_run_started(accept(repository).id)
     repository.mark_run_cancelled(run.id)
-    runtime, _ = executor(repository, ScriptedGateway([]), one_step)
+    from opensprite_backend.agent.run_executor import RunExecutor
+    runtime = RunExecutor(repository=repository, gateway=ScriptedGateway([]))
     assert (await runtime._cancel(run.id)).status is RunStatus.CANCELLED
     assert (await runtime._fail(run.id, INTERNAL_ERROR)).status is RunStatus.CANCELLED
     assert len(terminals(repository, run)) == 1

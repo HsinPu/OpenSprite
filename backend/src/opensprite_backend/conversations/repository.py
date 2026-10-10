@@ -6,10 +6,7 @@ from opensprite_backend.response_modes import ReasoningResolution
 from collections.abc import Mapping
 from typing import Protocol
 
-from opensprite_backend.workspaces import (
-    EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH,
-    WorkspaceAvailability,
-)
+from opensprite_backend.workspaces.models import EMPTY_WORKSPACE_MOUNT_MANIFEST_HASH, WorkspaceAvailability
 
 from .run_limits import RunLimitEvidence
 from .models import (

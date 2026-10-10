@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from opensprite_backend.provider_identity import ProviderId
+from opensprite_backend.models import ProviderId
 
 
 @pytest.mark.parametrize("value", ["openai", "anthropic", "openrouter", str(uuid4())])

@@ -8,11 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from opensprite_backend.workspaces import (
-    WorkspaceCatalog,
-    WorkspaceImportCandidatePage,
-    WorkspaceSummary,
-)
+from opensprite_backend.workspaces.models import WorkspaceCatalog, WorkspaceImportCandidatePage, WorkspaceSummary
 
 
 class WorkspaceContractModel(BaseModel):

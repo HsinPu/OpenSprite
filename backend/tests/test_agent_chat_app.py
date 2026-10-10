@@ -21,7 +21,7 @@ from opensprite_backend.conversations.models import (
     RunStatus,
     StartRunResult,
 )
-from opensprite_backend.workspaces import DEFAULT_WORKSPACE_ID
+from opensprite_backend.workspaces.models import DEFAULT_WORKSPACE_ID
 
 
 NOW = datetime(2026, 8, 21, 8, 30, tzinfo=UTC)

@@ -3,9 +3,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from opensprite_backend.agent.context import (
-    ModelCapabilityNotFound,
-)
+from opensprite_backend.application.model_capability import ModelCapabilityNotFound
 from opensprite_backend.model_capability_resolver import ProviderModelCapabilityResolver
 from opensprite_backend.inference.models import (
     ModelCompleted,
