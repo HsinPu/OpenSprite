@@ -119,11 +119,11 @@ finish 只呼叫一次並原樣回傳 RunResult。draft 可以在 finish 時選�
 從儲存庫根目錄執行：
 
 ~~~powershell
-uv sync --project backend --dev
-uv run --project backend python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
+uv sync --project backend --extra app --dev
+uv run --project backend --extra app python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
 uv build --wheel --out-dir tmp/v5-wheels examples/execution-plugin
 $env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/v5-wheels/opensprite_execution_example-0.5.0-py3-none-any.whl).Path
-uv run --project backend python scripts/verify_execution_plugin_wheel.py
+uv run --project backend --extra app python scripts/verify_execution_plugin_wheel.py
 ~~~
 
 驗證脚本离線安裝真 wheel 到隔離目錄，使用實際 Host、SQLite、原生 Provider

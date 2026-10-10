@@ -362,7 +362,7 @@ try {
     $previousProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
     try {
         $env:UV_PROJECT_ENVIRONMENT = $preparedEnvironment
-        Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $stagingRoot "backend"), "--no-dev", "--frozen")
+        Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $stagingRoot "backend"), "--extra", "app", "--no-dev", "--frozen")
     } finally { $env:UV_PROJECT_ENVIRONMENT = $previousProjectEnvironment }
 
     if (-not $SkipStartupRegistration) {
@@ -382,7 +382,7 @@ try {
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
 
-    Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--no-dev", "--frozen")
+    Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--extra", "app", "--no-dev", "--frozen")
     $installedPython = Join-Path $installRootPath "backend\.venv\Scripts\python.exe"
     Invoke-Checked $installedPython @("-c", "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()")
     $installedVersion = (& $installedPython -c "from importlib.metadata import version; print(version('opensprite-backend'))").Trim()

@@ -125,7 +125,7 @@ if ((SKIP_SERVICE == 0)); then systemctl --user stop opensprite.service 2>/dev/n
 if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$PREVIOUS"; fi
 cutover=1
 mv -- "$STAGING" "$INSTALL_ROOT"
-uv sync --project "$INSTALL_ROOT/backend" --no-dev
+uv sync --project "$INSTALL_ROOT/backend" --extra app --no-dev --locked
 
 VERSION="$(python3 - "$SOURCE_ROOT/backend/pyproject.toml" <<'PY'
 import pathlib, re, sys

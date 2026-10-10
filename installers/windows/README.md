@@ -115,7 +115,7 @@ Run from the repository root in PowerShell:
 The installer:
 
 - stages only runtime backend/frontend source and installer files;
-- installs production Python dependencies with `uv sync --no-dev`;
+- installs production Python dependencies with `uv sync --extra app --no-dev`;
 - builds the React frontend with `npm ci --ignore-scripts` and `npm run build`;
 - removes build-only `node_modules` from the installed application;
 - installs to `%LOCALAPPDATA%\OpenSprite\app`;

@@ -15,10 +15,10 @@ ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 COPY backend/loop_plugins ./loop_plugins
-RUN python -m venv --copies --without-pip .venv \
-    && uv sync --locked --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv python -m venv --copies --without-pip .venv \
+    && uv sync --locked --extra app --no-dev --no-install-project
 COPY backend/src ./src
-RUN uv sync --locked --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --extra app --no-dev
 
 FROM backend-build AS backend-test
 COPY backend/tests ./tests
@@ -27,9 +27,9 @@ COPY contracts /app/contracts
 COPY scripts /app/scripts
 COPY docs /app/docs
 COPY README.md AGENTS.md /app/
-RUN uv sync --locked --dev \
-    && uv run pytest -W error \
-    && uv run python -m compileall -q src tests \
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --extra app --dev \
+    && uv run --extra app pytest -W error \
+    && uv run --extra app python -m compileall -q src tests \
     && uv lock --check --offline \
     && uv pip check
 

@@ -242,9 +242,11 @@ wheels = [
 
 [[package]]
 name = "opensprite-backend"
-version = "0.21.42"
+version = "0.21.43"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+app = [
     { name = "argon2-cffi" },
     { name = "cryptography" },
     { name = "dbus-next", marker = "sys_platform == 'linux'" },
@@ -264,17 +266,18 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "argon2-cffi", specifier = "==25.1.0" },
-    { name = "cryptography", specifier = "==50.0.0" },
-    { name = "dbus-next", marker = "sys_platform == 'linux'", specifier = "==0.2.3" },
-    { name = "fastapi", specifier = "==0.116.1" },
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "opensprite-standard-loop", directory = "loop_plugins/standard" },
-    { name = "packaging", specifier = "==26.3" },
-    { name = "python-multipart", specifier = "==0.0.32" },
-    { name = "tzdata", specifier = "==2025.2" },
-    { name = "uvicorn", specifier = "==0.35.0" },
+    { name = "argon2-cffi", marker = "extra == 'app'", specifier = "==25.1.0" },
+    { name = "cryptography", marker = "extra == 'app'", specifier = "==50.0.0" },
+    { name = "dbus-next", marker = "sys_platform == 'linux' and extra == 'app'", specifier = "==0.2.3" },
+    { name = "fastapi", marker = "extra == 'app'", specifier = "==0.116.1" },
+    { name = "httpx", marker = "extra == 'app'", specifier = "==0.28.1" },
+    { name = "opensprite-standard-loop", marker = "extra == 'app'", directory = "loop_plugins/standard" },
+    { name = "packaging", marker = "extra == 'app'", specifier = "==26.3" },
+    { name = "python-multipart", marker = "extra == 'app'", specifier = "==0.0.32" },
+    { name = "tzdata", marker = "extra == 'app'", specifier = "==2025.2" },
+    { name = "uvicorn", marker = "extra == 'app'", specifier = "==0.35.0" },
 ]
+provides-extras = ["app"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = "==8.4.1" }]

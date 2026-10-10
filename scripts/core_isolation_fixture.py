@@ -18,7 +18,7 @@ from opensprite_backend.inference.models import ModelCompleted, ModelFinishReaso
 from opensprite_backend.response_modes import ReasoningResolution
 
 
-async def exercise_core(root):
+async def exercise_core(root, *, factory=None, plugin_id="isolated_test", plugin_version="1.0.0"):
     random = SystemRandom()
     payload = {"nonce": str(uuid4()), "values": [random.randrange(1000, 10000) for _ in range(3)]}
     expected = payload["nonce"] + ":" + str(sum(payload["values"]))
@@ -28,7 +28,17 @@ async def exercise_core(root):
     class Gateway:
         async def stream(self, request):
             requests.append(request)
-            data = json.loads(request.messages[-1].content)
+            candidates = []
+            for message in request.messages:
+                if message.role == 'user':
+                    try:
+                        value = json.loads(message.content)
+                        if isinstance(value, dict) and set(value) == {'nonce', 'values'}:
+                            candidates.append(value)
+                    except json.JSONDecodeError:
+                        pass
+            assert len(candidates) == 1
+            data = candidates[0]
             yield ModelTextDelta(data["nonce"] + ":" + str(sum(data["values"])))
             yield ModelCompleted(ModelFinishReason.FINAL)
 
@@ -46,7 +56,7 @@ async def exercise_core(root):
         def create(self):
             return Loop()
 
-    selection = ExecutionPluginSelection("isolated_test", "1.0.0", Factory())
+    selection = ExecutionPluginSelection(plugin_id, plugin_version, Factory() if factory is None else factory)
     class Preparation:
         async def prepare(self, run):
             return PreparedRun(run.id, base_prompt, ModelLimits(32000, 4096), selection,
@@ -58,13 +68,15 @@ async def exercise_core(root):
         provider_id="openrouter", model_id="fixture/model", response_mode="default", execution_profile=selection.profile())
     result = await RunExecutor(repository=repository, gateway=Gateway()).execute(
         accepted.run.id, asyncio.Event(), preparation=Preparation())
-    assert result.status is RunStatus.COMPLETED and result.partial_text == expected
-    assert len(requests) == 1 and requests[0].messages[0].content == base_prompt
+    assert result.status is RunStatus.COMPLETED, (result.status.value, result.error.code if result.error else None, len(requests))
+    assert result.partial_text == expected
+    expected_requests = 1 if factory is None else 3
+    assert len(requests) == expected_requests and requests[0].messages[0].content.startswith(base_prompt)
     reloaded = SqliteConversationRepository(paths.database_file)
     assert reloaded.get_run(result.id) == result
     events = reloaded.list_run_events(result.id, after_sequence=0, limit=100)
     assert sum(event.type is RunEventType.RUN_COMPLETED for event in events) == 1
-    assert sum(event.type is RunEventType.MODEL_ATTEMPT and event.data["status"] == "started" for event in events) == 1
+    assert sum(event.type is RunEventType.MODEL_ATTEMPT and event.data["status"] == "started" for event in events) == expected_requests
     assert not paths.system_prompt_logs_dir.exists() and not paths.prompt_logs_dir.exists()
     return {"kind": "isolated-core-protocol", "status": result.status.value,
             "nonce": payload["nonce"], "answer": result.partial_text, "modelRequests": len(requests),

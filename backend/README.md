@@ -20,8 +20,8 @@ Tools、Skills、Subagents、自訂 Agent、MCP、核准與排程的執行模組
 先用平台安裝器初始化本機存取設定，並停止其背景後端；同一資料根目錄不能同時啟動兩個程序。從本目錄執行：
 
 ```powershell
-uv sync --dev
-uv run uvicorn opensprite_backend.runtime:create_system_app --factory --host 127.0.0.1 --port 8765 --workers 1 --no-proxy-headers
+uv sync --extra app --dev
+uv run --extra app uvicorn opensprite_backend.runtime:create_system_app --factory --host 127.0.0.1 --port 8765 --workers 1 --no-proxy-headers
 ```
 
 這是 API 開發入口；同源前端由 Vite proxy 或安裝後的 `installed_runtime` 提供。套件沒有應用程式 CLI。
@@ -47,8 +47,8 @@ SQLite v20 經結構核對後升至 v21，不刪除舊表或原始事件；歷�
 ## 驗證
 
 ```powershell
-uv run pytest -W error
-uv run python -m compileall -q src tests
+uv run --extra app pytest -W error
+uv run --extra app python -m compileall -q src tests
 uv lock --check --offline
 uv pip check
 ```

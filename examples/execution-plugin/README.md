@@ -8,8 +8,8 @@ Only final text becomes the conversation answer. Each Run gets a fresh instance.
 From the OpenSprite repository root:
 
 ```bash
-uv sync --project backend --dev
-uv run --project backend python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
+uv sync --project backend --extra app --dev
+uv run --project backend --extra app python -m pytest -c examples/execution-plugin/pyproject.toml examples/execution-plugin/tests
 uv build --wheel --out-dir tmp/v5-wheels examples/execution-plugin
 ```
 
@@ -17,7 +17,7 @@ PowerShell installed-wheel check:
 
 ```powershell
 $env:OPENSPRITE_PLUGIN_WHEEL = (Resolve-Path tmp/v5-wheels/opensprite_execution_example-0.5.0-py3-none-any.whl).Path
-uv run --project backend python scripts/verify_execution_plugin_wheel.py
+uv run --project backend --extra app python scripts/verify_execution_plugin_wheel.py
 ```
 
 Source tests check decisions. The separate verifier installs the actual wheel

@@ -12,7 +12,7 @@
 
 OpenSprite 把模型連線、對話、執行紀錄與插件設定放在同一個工作臺。Loop 插件控制多輪推論、摘要、重試與續寫；Python Host 處理模型連線、限制、取消與持久化；React 介面透過同源 HTTP／SSE 顯示執行結果。
 
-目前產品版本為 `0.21.42`。執行插件使用 **Host API v5**。
+目前產品版本為 `0.21.43`。執行插件使用 **Host API v5**。
 
 ![OpenSprite Agent 工作臺](docs/screenshots/agent-workbench.jpg)
 
@@ -164,12 +164,12 @@ npm run dev
 ```bash
 # 另一個終端：後端
 cd backend
-uv sync --dev
-uv run pytest -W error
-uv run python -m compileall -q src tests
+uv sync --extra app --dev
+uv run --extra app pytest -W error
+uv run --extra app python -m compileall -q src tests
 uv lock --check --offline
 uv pip check
-uv run uvicorn opensprite_backend.runtime:create_system_app --factory --host 127.0.0.1 --port 8765 --workers 1 --no-proxy-headers
+uv run --extra app uvicorn opensprite_backend.runtime:create_system_app --factory --host 127.0.0.1 --port 8765 --workers 1 --no-proxy-headers
 ```
 
 Vite 保留瀏覽器 Host／Origin，代理同源 `/api` 到本機後端。詳見 [前端說明](frontend/README.md) 與 [後端說明](backend/README.md)。
@@ -187,8 +187,8 @@ docker build --target backend-test -t opensprite:backend-test .
 Linux 隔離安裝器測試需非 root 帳號與 systemd 使用者服務管理器：
 
 ```bash
-uv sync --project backend --dev
-uv run --project backend bash installers/linux/test.sh
+uv sync --project backend --extra app --dev
+uv run --project backend --extra app bash installers/linux/test.sh
 ```
 
 Docker smoke test 使用獨立 project／volume。Linux 檢查驗證隔離建置與服務單元，不啟動真正的使用者服務；完整生命週期需可拋棄帳號另驗證。

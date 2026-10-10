@@ -66,9 +66,9 @@ npm run dev
 
 ```powershell
 cd backend
-uv sync --dev
-uv run pytest -W error
-uv run python -m compileall -q src tests
+uv sync --extra app --dev
+uv run --extra app pytest -W error
+uv run --extra app python -m compileall -q src tests
 uv lock --check --offline
 uv pip check
 ```
@@ -89,8 +89,8 @@ Windows 安裝器檢查：
 Linux 安裝器檢查：使用非 root 的 Linux 帳號，並備妥 npm、uv、Python 與 systemd 使用者服務管理器。
 
 ```bash
-uv sync --project backend --dev
-uv run --project backend bash installers/linux/test.sh
+uv sync --project backend --extra app --dev
+uv run --project backend --extra app bash installers/linux/test.sh
 ```
 
 Linux 檢查會在含有空白字元的暫存路徑中建置隔離安裝，並驗證產生的 systemd 服務單元。此檢查不會啟動或解除安裝真正的使用者服務；完整生命週期必須另以可拋棄的 Linux 測試帳號驗證。瀏覽器驗證仍須針對本機 Vite 伺服器或安裝後的同源執行環境手動進行。

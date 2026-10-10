@@ -26,7 +26,7 @@ server binds. API routes remain registered before the `/` static mount.
 
 The installer builds in a sibling staging directory. Frontend dependencies are
 used only for the build and removed before deployment. The staging tree is
-moved to the final application path before `uv sync --no-dev`, because Windows
+moved to the final application path before `uv sync --extra app --no-dev`, because Windows
 virtual-environment launchers contain final-path information and must not be
 moved after creation.
 

@@ -49,8 +49,8 @@ From a non-root Linux account with a systemd user manager and the installer
 prerequisites available, run:
 
 ```bash
-uv sync --project backend --dev
-uv run --project backend bash installers/linux/test.sh
+uv sync --project backend --extra app --dev
+uv run --project backend --extra app bash installers/linux/test.sh
 ```
 
 The test builds an isolated installation under a temporary path containing
