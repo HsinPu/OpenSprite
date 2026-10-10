@@ -321,7 +321,7 @@
           },
           "logFullPrompts": {
             "type": "boolean",
-            "description": "Whether complete model request messages are written to local per-request Prompt logs."
+            "description": "Whether the product System Prompt snapshot and complete model request messages are recorded locally for debugging. Recording is optional and failures do not stop a Run."
           }
         }
       },

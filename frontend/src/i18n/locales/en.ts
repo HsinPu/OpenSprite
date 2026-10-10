@@ -607,7 +607,7 @@ export const enMessages = {
   "models.loggingEnabled": "Logging enabled",
   "models.planned": "Planned features",
   "models.removeConnection": "Remove connection",
-  "models.logFullPromptsDescription": "Save the System Prompt, user message and included context sent to each model request for debugging",
+  "models.logFullPromptsDescription": "Save the run's System Prompt and complete model inputs for debugging; recording failures do not stop the run",
   "models.autoModel": "Automatically choose an available model",
   "models.autoModelDescription": "Model routing and failover will be available later",
   "models.showModelName": "Show model name",

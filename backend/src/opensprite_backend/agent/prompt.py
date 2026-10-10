@@ -19,6 +19,7 @@ class SystemPromptProvider(Protocol):
         *,
         run_id: str,
         workspace: WorkspaceExecutionContext | None = None,
+        log_full_prompts: bool = False,
     ) -> str: ...
 
 
@@ -33,6 +34,7 @@ class StaticSystemPromptProvider:
         *,
         run_id: str,
         workspace: WorkspaceExecutionContext | None = None,
+        log_full_prompts: bool = False,
     ) -> str:
         del run_id, workspace
         return self._content

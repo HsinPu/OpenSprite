@@ -2,20 +2,30 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from datetime import datetime, timezone
 from dataclasses import asdict
+from functools import partial
 import hashlib
 import json
 import os
+import logging
 from pathlib import Path
+from queue import Empty, Queue
 import tempfile
+from threading import Condition, Thread
+from time import monotonic
 from typing import Protocol
 from uuid import UUID
 
 from .app_paths import AppPaths
 from .inference.models import ModelMessage
+from .inference.models import ModelRequest
+from .system_prompt import FileSystemPromptLogWriter, RenderedSystemPrompt
 
 _MAX_PROMPT_LOG_BYTES = 8 * 1024 * 1024
+_LOGGER = logging.getLogger("opensprite.prompt_recording")
 
 
 class PromptLogWriter(Protocol):
@@ -178,3 +188,85 @@ class FilePromptLogWriter:
                 ]
             )
         return "\n".join(parts).encode("utf-8")
+
+
+class PromptRecorder:
+    """A bounded, lazy product recorder; disk I/O never blocks an inference."""
+
+    def __init__(self, system_writer: FileSystemPromptLogWriter, request_writer: PromptLogWriter,
+                 *, capacity: int = 4) -> None:
+        if type(capacity) is not int or not 1 <= capacity <= 16:
+            raise ValueError("invalid recording capacity")
+        self._system_writer = system_writer
+        self._request_writer = request_writer
+        self._capacity = capacity
+        self._queue: Queue[tuple[str, Callable[[], None]]] = Queue(maxsize=capacity)
+        self._condition = Condition()
+        self._pending = 0
+        self._closed = False
+        self._worker: Thread | None = None
+
+    def record_system(self, *, run_id: str, prompt: RenderedSystemPrompt) -> None:
+        self._submit(run_id, len(prompt.content.encode("utf-8")), partial(
+            self._system_writer.write, run_id=run_id, created_at=prompt.created_at,
+            locale_source=prompt.locale_source, time_zone_source=prompt.time_zone_source,
+            settings_fallback=prompt.settings_fallback, content=prompt.content))
+
+    def record_request(self, *, run_id: str, request_sequence: int,
+                       request: ModelRequest, created_at: datetime) -> None:
+        size = sum(len(message.content.encode("utf-8")) for message in request.messages)
+        self._submit(run_id, size, partial(
+            self._request_writer.write, run_id=run_id, created_at=created_at,
+            request_sequence=request_sequence, request_kind=f"step-{request_sequence:03d}",
+            provider_id=request.provider_id, model_id=request.model_id,
+            response_mode=request.response_mode,
+            reasoning_effort=request.reasoning_resolution.effective if request.reasoning_resolution else None,
+            max_output_tokens=request.max_output_tokens, messages=request.messages))
+
+    def _submit(self, run_id: str, size: int, write: Callable[[], None]) -> None:
+        with self._condition:
+            if self._closed or size > _MAX_PROMPT_LOG_BYTES or self._pending >= self._capacity:
+                _LOGGER.warning("prompt_recording_skipped run_id=%s", run_id)
+                return
+            self._queue.put_nowait((run_id, write))
+            self._pending += 1
+            if self._worker is None:
+                self._worker = Thread(target=self._consume, name="opensprite-prompt-recorder", daemon=True)
+                self._worker.start()
+
+    def _consume(self) -> None:
+        while True:
+            try:
+                run_id, write = self._queue.get(timeout=.1)
+            except Empty:
+                with self._condition:
+                    if self._closed:
+                        return
+                continue
+            try:
+                write()
+            except Exception:
+                # Never include an exception, a Prompt, or a Provider response in diagnostics.
+                _LOGGER.warning("prompt_recording_unavailable run_id=%s", run_id)
+            finally:
+                with self._condition:
+                    self._pending -= 1
+                    self._condition.notify_all()
+
+    async def flush(self, *, timeout: float = 2) -> bool:
+        drained = await asyncio.to_thread(self._drain, timeout)
+        if not drained:
+            _LOGGER.warning("prompt_recording_flush_timeout")
+        return drained
+
+    def _drain(self, timeout: float) -> bool:
+        with self._condition:
+            return self._condition.wait_for(lambda: self._pending == 0, timeout=timeout)
+
+    async def aclose(self, *, timeout: float = 2) -> None:
+        with self._condition:
+            self._closed = True
+        started = monotonic()
+        await self.flush(timeout=timeout)
+        if self._worker is not None:
+            await asyncio.to_thread(self._worker.join, max(0, timeout - (monotonic() - started)))

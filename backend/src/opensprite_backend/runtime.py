@@ -24,7 +24,7 @@ from .app import create_app
 from .app_paths import AppPaths, build_app_paths
 from .build_info import load_app_info
 from .runtime_logging import RuntimeLoggingSession, configure_runtime_logging
-from .prompt_logging import FilePromptLogWriter
+from .prompt_logging import FilePromptLogWriter, PromptRecorder
 from .ai_settings import (
     AiSettingsOperations,
     UnavailableAiSettings,
@@ -52,7 +52,7 @@ from .provider_connections import (
     UnavailableProviderConnections,
 )
 from .provider_runtime import create_provider_runtime
-from .system_prompt import create_system_prompt_provider
+from .system_prompt import FileSystemPromptLogWriter, create_system_prompt_provider
 from .workspaces import (
     JsonWorkspaceStore,
     UnavailableWorkspaces,
@@ -99,6 +99,7 @@ class _SystemRuntime:
         provider_mutations=None,
         execution_settings: ExecutionSettingsOperations | None = None,
         execution_packages: ExecutionPackageOperations | None = None,
+        prompt_recorder: PromptRecorder | None = None,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -112,6 +113,7 @@ class _SystemRuntime:
         self.conversation_settings = conversation_settings
         self.workspaces = workspaces
         self.agent_chat = agent_chat
+        self._prompt_recorder = prompt_recorder
 
     async def astart(self) -> None:
         provider_starter = getattr(self._provider_runtime, "astart", None)
@@ -124,7 +126,11 @@ class _SystemRuntime:
         try:
             await self.agent_chat.close()
         finally:
-            await self._provider_runtime.aclose()
+            try:
+                if self._prompt_recorder is not None:
+                    await self._prompt_recorder.aclose()
+            finally:
+                await self._provider_runtime.aclose()
 
 
 def create_system_runtime(
@@ -173,15 +179,16 @@ def create_system_runtime(
         operation_locks=provider_runtime.operation_locks,
         custom_providers=provider_runtime.custom_providers,
     )
+    prompt_recorder = PromptRecorder(FileSystemPromptLogWriter(paths), FilePromptLogWriter(paths))
     run_executor = RunExecutor(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         capability_resolver=capability_resolver,
         system_prompt_provider=create_system_prompt_provider(
-            paths,
             general_settings,
+            prompt_recorder,
         ),
-        prompt_log_writer=FilePromptLogWriter(paths),
+        request_observer=prompt_recorder,
     )
     run_manager = RunManager(repository, run_executor)
     agent_chat = AgentChatService(
@@ -209,6 +216,7 @@ def create_system_runtime(
         provider_mutations,
         execution_settings,
         execution_packages,
+        prompt_recorder,
     )
 
 

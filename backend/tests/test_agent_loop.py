@@ -24,7 +24,8 @@ from context_test_support import TestCapabilityResolver
 from opensprite_backend.agent.run_executor import RunExecutor
 from opensprite_backend.api.chat_models import run_response
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.prompt_logging import FilePromptLogWriter
+from opensprite_backend.prompt_logging import FilePromptLogWriter, PromptRecorder
+from opensprite_backend.system_prompt import FileSystemPromptLogWriter
 from opensprite_backend.conversations.models import (
     ConversationCompaction,
     CompletionReason,
@@ -82,14 +83,14 @@ class RecordingSystemPromptProvider:
         self.run_ids: list[str] = []
         self.workspaces: list[WorkspaceExecutionContext | None] = []
 
-    async def build(self, *, run_id: str, workspace=None) -> str:
+    async def build(self, *, run_id: str, workspace=None, log_full_prompts=False) -> str:
         self.run_ids.append(run_id)
         self.workspaces.append(workspace)
         return self.content
 
 
 class FailingSystemPromptProvider:
-    async def build(self, *, run_id: str, workspace=None) -> str:
+    async def build(self, *, run_id: str, workspace=None, log_full_prompts=False) -> str:
         del run_id, workspace
         raise RuntimeError("prompt log failed")
 
@@ -372,16 +373,18 @@ async def test_enabled_prompt_logging_records_the_exact_model_messages(
         response_mode="default",
         log_full_prompts=True,
     ).run
+    recorder = PromptRecorder(FileSystemPromptLogWriter(paths), FilePromptLogWriter(paths))
     loop = RunExecutor(
         repository=repository,
         gateway=ScriptedGateway([[ModelTextDelta("收到"), ModelCompleted(ModelFinishReason.FINAL)]]),
 
         capability_resolver=TestCapabilityResolver(),
         system_prompt_provider=RecordingSystemPromptProvider("system prompt for test"),
-        prompt_log_writer=FilePromptLogWriter(paths),
+        request_observer=recorder,
     )
 
     result = await loop.execute(run.id, asyncio.Event())
+    await recorder.aclose()
 
     assert result.status is RunStatus.COMPLETED
     files = sorted(paths.prompt_logs_dir.rglob("*.md"))

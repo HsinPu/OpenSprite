@@ -649,7 +649,7 @@ export const zhTWMessages = {
   "models.loggingEnabled": "記錄已開啟",
   "models.planned": "規劃中功能",
   "models.removeConnection": "移除連線",
-  "models.logFullPromptsDescription": "保存每次送給模型的 System Prompt、使用者訊息與已帶入內容，方便除錯",
+  "models.logFullPromptsDescription": "保存任務的 System Prompt 與每次送給模型的完整內容，方便除錯；紀錄失敗不會中止任務",
   "models.autoModel": "自動選擇可用模型",
   "models.autoModelDescription": "模型路由與失效切換將在後續版本提供",
   "models.showModelName": "顯示模型名稱",

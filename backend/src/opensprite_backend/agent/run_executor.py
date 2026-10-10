@@ -24,7 +24,7 @@ class RunExecutor:
     def __init__(self, *, repository, gateway, capability_resolver,
                  system_prompt_provider=None, max_model_requests=128,
                  max_compactions_per_run=32, max_assistant_chars=MAX_ASSISTANT_CHARS,
-                 max_duration_seconds=600, prompt_log_writer=None, plugin_factory=None):
+                 max_duration_seconds=600, request_observer=None, plugin_factory=None):
         if type(max_model_requests) is not int or not 1 <= max_model_requests <= 128:
             raise ValueError("invalid request bound")
         if max_compactions_per_run is None:
@@ -39,7 +39,7 @@ class RunExecutor:
         self._gateway = TracedGateway(gateway, repository)
         self._capability_resolver = capability_resolver
         self._system_prompt_provider = system_prompt_provider or StaticSystemPromptProvider()
-        self._prompt_log_writer = prompt_log_writer
+        self._request_observer = request_observer
         self._plugin_factory = plugin_factory
         self._limits = ExecutionLimits(max_model_requests, max_compactions_per_run,
                                        max_duration_seconds, max_assistant_chars)
@@ -75,7 +75,8 @@ class RunExecutor:
                        "accessMode": mount.access_mode.value, "enabled": mount.enabled,
                        "availability": mount.availability.value} for mount in workspace.mounts))
             control.check()
-            system_prompt = await control.wait(self._system_prompt_provider.build(run_id=run_id, workspace=workspace))
+            system_prompt = await control.wait(self._system_prompt_provider.build(
+                run_id=run_id, workspace=workspace, log_full_prompts=run.log_full_prompts))
             capability = await control.wait(self._resolve_capability(run, provider_endpoint))
             if run.reasoning_resolution is None:
                 run = await asyncio.to_thread(self._repository.set_reasoning_resolution, run.id,
@@ -84,7 +85,7 @@ class RunExecutor:
             host = LoopExecutionHost(repository=self._repository, gateway=self._gateway, control=control,
                                      run=run, system_prompt=system_prompt, model_limits=model_limits,
                                      selection=execution_plugin, provider_endpoint=provider_endpoint,
-                                     prompt_log_writer=self._prompt_log_writer)
+                                     request_observer=self._request_observer if run.log_full_prompts else None)
             try:
                 result = await control.wait(plugin.execute(host))
                 await host._validate_result(result)

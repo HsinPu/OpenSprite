@@ -26,19 +26,23 @@ managed `.opensprite/workspace/default` root.
 
 ## Ownership and dependency direction
 
-`agent/prompt.py` owns the narrow `SystemPromptProvider` protocol. `AgentLoop`
-depends only on that protocol and requests one Prompt before its first model
-request. The top-level `system_prompt.py` feature owns the production renderer,
-General Settings fallback, clock conversion and full-log writer. `runtime.py`
-composes the production provider.
+The top-level `system_prompt.py` feature owns the production renderer, General
+Settings fallback and clock conversion. `DynamicSystemPromptProvider` returns
+an immutable rendered snapshot without writing files. The product wrapper
+supplies its text through the internal `SystemPromptProvider` protocol and
+submits a complete receipt only when the admitted Run has `logFullPrompts` enabled.
+`runtime.py` composes the renderer and the optional `PromptRecorder`.
 
 ```text
-General Settings + Workspace snapshot + Clock + AppPaths
+General Settings + Workspace snapshot + Clock
                 -> DynamicSystemPromptProvider
-                -> SystemPromptProvider protocol
-                -> AgentLoop
+                -> ProductSystemPromptProvider
+                -> RunExecutor -> Loop
                 -> normalized ModelRequest
                 -> one Provider adapter
+
+Opt-in product wrapper + request observer
+                -> bounded PromptRecorder -> filesystem receipts
 ```
 
 The Agent package does not import AppPaths, General Settings persistence,
@@ -52,15 +56,23 @@ normal `zh-TW` and `system` defaults. An unavailable or malformed General
 Settings store falls back without writing settings: follow the user's language
 and use UTC time.
 
-Production requires a complete Prompt log before a Provider request may start.
-An invalid Run id, invalid clock, oversized Prompt, duplicate log path, write
-failure or fsync failure stops the Run with the existing safe internal error;
-the model is not called. A failed new file write removes the partial file when
-possible.
+An invalid clock or an oversized rendered Prompt is a preparation failure.
+Filesystem receipts are diagnostics, not a precondition for execution. The
+recorder uses one lazy daemon worker and admits at most four pending records,
+including the record being written; each admitted content body is at most 8 MiB.
+The individual System Prompt writer additionally enforces its 64 KiB receipt
+bound. A full queue, oversized record, duplicate file, write failure or fsync
+failure emits only a sanitized diagnostic and does not stop inference.
+A failed new file write removes the partial file when possible.
+
+Run shutdown drains the product recorder for up to two seconds; slow or blocked
+filesystem I/O cannot hold inference or process shutdown indefinitely. Optional
+recording failures never replace mandatory SQLite step, source, event, summary
+or terminal transactions. Those persistence failures still fail closed.
 
 ## Full Prompt logs
 
-Each production Run writes exactly one local receipt:
+When full recording is enabled, the product submits one System Prompt receipt:
 
 ```text
 .opensprite/logs/system-prompts/<UTC-date>/<run-id>.md
@@ -75,6 +87,13 @@ These logs intentionally contain the complete current Prompt, including a
 Workspace's canonical root, so the entire
 `.opensprite` root remains sensitive. Full Prompt content is not copied into
 application logs, the database, HTTP responses or Run events.
+
+The same admitted `logFullPrompts` choice controls the System Prompt receipt
+and `.opensprite/logs/prompts` request receipts. Disabled Runs create neither
+receipt directory. Existing files are unaffected. Request observers receive
+normalized non-secret inputs and may not replace or mutate model requests.
+SDK v5 still requires the complete first System Prompt to preserve the pinned
+base prefix; moving rendering and recording policy does not change that contract.
 
 Future custom instructions, memory, Workspace-specific instructions or other context must not
 enter the rendered Prompt until their trust, size, failure and full-log

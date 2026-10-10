@@ -607,7 +607,7 @@ export const jaMessages = {
   "models.loggingEnabled": "記録は有効です",
   "models.planned": "今後の機能",
   "models.removeConnection": "接続を削除",
-  "models.logFullPromptsDescription": "デバッグ用に、各モデルリクエストへ送信した System Prompt、ユーザー入力、含まれる内容を保存します",
+  "models.logFullPromptsDescription": "デバッグ用にタスクの System Prompt とモデルへ送信する全内容を保存します。記録に失敗してもタスクは続行します",
   "models.autoModel": "利用可能なモデルを自動選択",
   "models.autoModelDescription": "モデルルーティングとフェイルオーバーは今後提供予定です",
   "models.showModelName": "モデル名を表示",

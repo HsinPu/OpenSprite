@@ -20,7 +20,6 @@ from opensprite_backend.inference.models import (
     InferenceFailure, ModelCompleted, ModelFinishReason,
     ModelRequest, ModelTextDelta, ModelUsage,
 )
-from opensprite_backend.prompt_logging import PromptLogError, PromptLogWriter
 from .context.counter import ConservativeTokenCounter
 from .summary_sources import summary_coverage
 from . import plugin_conversion as convert
@@ -34,6 +33,7 @@ from .plugin import (
     FinalOutput, RunContext, RunResult, StepRequest, StepResult, ModelLimits, CompletionReason, ModelMessage,
 )
 from .request_trace import Attempt, TracedGateway
+from .request_observer import ModelRequestObserver
 
 
 class _StepDeltaBuffer:
@@ -62,11 +62,11 @@ class LoopExecutionHost:
                  control: RunControl, run: RunSnapshot, system_prompt: str,
                  model_limits: ModelLimits, selection: ExecutionPluginSelection,
                  provider_endpoint: ProviderEndpointSnapshot | None,
-                 prompt_log_writer: PromptLogWriter | None = None):
+                 request_observer: ModelRequestObserver | None = None):
         self._repository = repository
         self._gateway = gateway
         self._control = control
-        self._prompt_log_writer = prompt_log_writer
+        self._request_observer = request_observer
         self._run = deepcopy(run)
         self._model_limits = deepcopy(model_limits)
         self._limits = control.limits
@@ -360,7 +360,7 @@ class LoopExecutionHost:
                 reasoning_resolution=self._run.reasoning_resolution,
                 messages=messages, max_output_tokens=output_tokens)
             try:
-                self._write_prompt(request, row.sequence)
+                self._observe_request(request, row.sequence)
                 await asyncio.to_thread(self._repository.append_run_event, self._run.id, RunEventType.MODEL_STARTED,
                     {"providerId": self._run.provider_id, "modelId": self._run.model_id, "responseMode": self._run.response_mode,
                      "maxOutputTokens": output_tokens, "contextTokens": self._counter.request(messages),
@@ -431,18 +431,13 @@ class LoopExecutionHost:
         await self.checkpoint()
         return result
 
-    def _write_prompt(self, request, sequence):
-        if self._run.log_full_prompts and self._prompt_log_writer is not None:
+    def _observe_request(self, request, sequence):
+        if self._request_observer is not None:
             try:
-                self._prompt_log_writer.write(
-                    run_id=self._run.id, created_at=datetime.now(UTC), request_sequence=sequence,
-                    request_kind=f"step-{sequence:03d}", provider_id=request.provider_id,
-                    model_id=request.model_id, response_mode=request.response_mode,
-                    reasoning_effort=request.reasoning_resolution.effective if request.reasoning_resolution else None,
-                    max_output_tokens=request.max_output_tokens, messages=request.messages)
-            except PromptLogError:
-                logging.getLogger("opensprite.agent.context").warning("prompt logging unavailable run_id=%s", self._run.id)
-                raise ExecutionFailed(INTERNAL_ERROR) from None
+                self._request_observer.record_request(run_id=self._run.id, created_at=datetime.now(UTC),
+                                                      request_sequence=sequence, request=request)
+            except Exception:
+                logging.getLogger("opensprite.agent.context").warning("request_observer_unavailable run_id=%s", self._run.id)
 
     async def save_summary(self, request):
         async with self._operation():
