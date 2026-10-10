@@ -242,7 +242,7 @@ wheels = [
 
 [[package]]
 name = "opensprite-backend"
-version = "0.21.43"
+version = "0.21.44"
 source = { editable = "." }
 
 [package.optional-dependencies]

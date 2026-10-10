@@ -1,0 +1,271 @@
+{
+  "kind": "core-product-boundary-verification",
+  "verifiedAtUtc": "2026-10-10T03:30:20.502064+00:00",
+  "deliveryVersion": "0.21.44",
+  "hostApiVersion": 5,
+  "regression": {
+    "backendPassed": 1053,
+    "backendVersion": "0.21.43",
+    "warningsAsErrors": true,
+    "frontendPassed": 482,
+    "frontendTypecheckAndBuild": true,
+    "backendExecutableSourcesIdentical": 128,
+    "windowsIsolatedInstallAndPreservingUninstallPassed": true,
+    "windowsRunner": "Windows PowerShell 5.1",
+    "linuxNonRootInstallationAndUnitValidationPassed": true,
+    "linuxInstallerUid": 10002,
+    "linuxFullUserServiceLifecycleExercised": false,
+    "sourceExampleTestsPassed": 3
+  },
+  "installedCoreProtocol": {
+    "core": {
+      "kind": "isolated-core-protocol",
+      "status": "completed",
+      "nonce": "4175f2e5-d5bf-401d-9fb4-e728bcac3c48",
+      "answer": "4175f2e5-d5bf-401d-9fb4-e728bcac3c48:17502",
+      "modelRequests": 1,
+      "sqliteReloadVerified": true,
+      "pluginId": "isolated_test",
+      "hostApiVersion": 5,
+      "installed": [
+        "opensprite-backend"
+      ],
+      "backendVersion": "0.21.44",
+      "sdkV5GoldenMatched": true
+    },
+    "externalV5Wheel": {
+      "kind": "isolated-core-protocol",
+      "status": "completed",
+      "nonce": "35906bfc-2de5-4122-be47-02bda30e719f",
+      "answer": "35906bfc-2de5-4122-be47-02bda30e719f:11886",
+      "modelRequests": 3,
+      "sqliteReloadVerified": true,
+      "pluginId": "example_review",
+      "hostApiVersion": 5,
+      "installed": [
+        "opensprite-backend",
+        "opensprite-execution-example"
+      ],
+      "backendVersion": "0.21.44",
+      "sdkV5GoldenMatched": true
+    },
+    "backendWheelSha256": "93315b9a4ada95567149dac840fdca1b60c090567c209cdf26c403ad037a05c6",
+    "exampleWheelSha256": "e75ed2849b131bf3c051885e6d68a290856a168b662d9a7c7df60b01b0c9b4b3",
+    "normalOfflineInstallation": true
+  },
+  "runtime": {
+    "kind": "deployed-core-product-boundary",
+    "version": "0.21.44",
+    "hostApiVersion": 5,
+    "wheelSha256": "e75ed2849b131bf3c051885e6d68a290856a168b662d9a7c7df60b01b0c9b4b3",
+    "runtimeManifestVerified": true,
+    "uid": 10001,
+    "authorArchiveSha256": "42d8613cb971065fb2b81750961658c54952fb0e78cc788b8aae468953be513c",
+    "health": "ok"
+  },
+  "readonlyRecordingFaultProtocol": {
+    "kind": "readonly-filesystem-protocol-fault",
+    "version": "0.21.44",
+    "runId": "730a7d88-a458-44a7-a25c-994fd57ae01c",
+    "actualWriteFailureVerified": true,
+    "recordingFailures": 2,
+    "status": "completed",
+    "variableAnswerVerified": true,
+    "mandatorySQLiteEventsAndResultVerified": true,
+    "diagnosticsContainNoPrompt": true,
+    "networkRequests": 0,
+    "verifiedAtUtc": "2026-10-10T03:27:52.670459+00:00"
+  },
+  "sigkillRecovery": {
+    "imageId": "sha256:dd62b75836097df08978cdae7eae4ee109cbab610f9e73a625375a03319e76f2",
+    "cases": [
+      {
+        "kind": "answer_stream",
+        "runId": "d90a1907-bb73-4994-933c-0ce3dda85e77",
+        "status": "interrupted",
+        "committedTextPreserved": true,
+        "transactionRollback": false,
+        "secondRestartIdentical": true
+      },
+      {
+        "kind": "draft_stream",
+        "runId": "643fc649-6fa9-441d-8fc6-d4467d655171",
+        "status": "interrupted",
+        "committedTextPreserved": true,
+        "transactionRollback": false,
+        "secondRestartIdentical": true
+      },
+      {
+        "kind": "summary_transaction",
+        "runId": "90cc3a85-9bd7-47e9-af9a-3a8d06fd57d2",
+        "status": "interrupted",
+        "committedTextPreserved": true,
+        "transactionRollback": true,
+        "secondRestartIdentical": true
+      },
+      {
+        "kind": "final_transaction",
+        "runId": "4c72eb19-ba1e-4054-a1f7-e288954aa07f",
+        "status": "interrupted",
+        "committedTextPreserved": true,
+        "transactionRollback": true,
+        "secondRestartIdentical": true
+      }
+    ],
+    "limits": "Committed SQLite data only; unflushed deltas and power-loss durability are not promised."
+  },
+  "actualModel": {
+    "providerId": "openrouter",
+    "requestedModelId": "openrouter/auto",
+    "transport": "NativeModelGateway through the built-in OpenRouter HTTPS endpoint",
+    "modelRequests": 5,
+    "runs": [
+      {
+        "plugin": "standard",
+        "runId": "68ada84b-a4ce-46ee-a446-64d4362af71c",
+        "conversationId": "4f3c330c-a45b-4f58-b98f-6705a06511b9",
+        "executionProfile": {
+          "apiVersion": 5,
+          "pluginId": "standard",
+          "pluginVersion": "0.2.0"
+        },
+        "status": "completed",
+        "startedAt": "2026-10-10T03:22:50.734813Z",
+        "finishedAt": "2026-10-10T03:22:55.468283Z",
+        "nonce": "80c3848f679d428db8520862ecf7abeb",
+        "expectedSum": 2988,
+        "actualAnswer": "80c3848f679d428db8520862ecf7abeb\n2988",
+        "modelRequests": 1,
+        "logFullPrompts": false,
+        "recording": {
+          "noOptionalPromptFilesWritten": true
+        },
+        "exactVariableAnswerVerified": true,
+        "privateDraftsExcludedFromConversation": true,
+        "sseVerified": true,
+        "replayVerified": true,
+        "mandatoryContextReceiptCount": 1,
+        "modelUsage": [
+          {
+            "inputTokens": 471,
+            "outputTokens": 98
+          }
+        ],
+        "steps": [
+          {
+            "channel": "answer",
+            "label": "answer",
+            "status": "completed",
+            "textSha256": "093ce770aaa3f65c2e957b144d8e99766c3d07e6018647295cecd8f241629f4f"
+          }
+        ]
+      },
+      {
+        "plugin": "no_recovery",
+        "runId": "bb7be861-3716-4616-be4c-c8d681b4269e",
+        "conversationId": "40d471ee-9b21-4592-8914-f0caa3f4bde4",
+        "executionProfile": {
+          "apiVersion": 5,
+          "pluginId": "no_recovery",
+          "pluginVersion": "0.2.0"
+        },
+        "status": "completed",
+        "startedAt": "2026-10-10T03:23:42.693978Z",
+        "finishedAt": "2026-10-10T03:23:46.303596Z",
+        "nonce": "8c8bd75a40a94258b8a6d73c6220fc5b",
+        "expectedSum": 5307,
+        "actualAnswer": "8c8bd75a40a94258b8a6d73c6220fc5b\n5307",
+        "modelRequests": 1,
+        "logFullPrompts": false,
+        "recording": {
+          "noOptionalPromptFilesWritten": true
+        },
+        "exactVariableAnswerVerified": true,
+        "privateDraftsExcludedFromConversation": true,
+        "sseVerified": true,
+        "replayVerified": true,
+        "mandatoryContextReceiptCount": 1,
+        "modelUsage": [
+          {
+            "inputTokens": 382,
+            "outputTokens": 157
+          }
+        ],
+        "steps": [
+          {
+            "channel": "answer",
+            "label": "answer",
+            "status": "completed",
+            "textSha256": "03ee00bddff6b4a072fbfb198cfb13fa4c2ee2cc67e083298ec477e611a75cba"
+          }
+        ]
+      },
+      {
+        "plugin": "example_review",
+        "runId": "01206c86-052c-41a1-ba76-532582376518",
+        "conversationId": "d14622bd-7c56-4bae-97d5-ba904be414ce",
+        "executionProfile": {
+          "apiVersion": 5,
+          "pluginId": "example_review",
+          "pluginVersion": "0.5.0"
+        },
+        "status": "completed",
+        "startedAt": "2026-10-10T03:23:47.856173Z",
+        "finishedAt": "2026-10-10T03:24:14.511708Z",
+        "nonce": "7ed45cd6f8bc4f948a0665bf2ebf5901",
+        "expectedSum": 3173,
+        "actualAnswer": "7ed45cd6f8bc4f948a0665bf2ebf5901\n3173",
+        "modelRequests": 3,
+        "logFullPrompts": true,
+        "recording": {
+          "systemPromptReceipts": 1,
+          "modelRequestReceipts": 3,
+          "pinnedSystemPrefixVerified": true,
+          "variableUserPromptVerified": true,
+          "ownerOnlyPermissionsVerified": true
+        },
+        "exactVariableAnswerVerified": true,
+        "privateDraftsExcludedFromConversation": true,
+        "sseVerified": true,
+        "replayVerified": true,
+        "mandatoryContextReceiptCount": 3,
+        "modelUsage": [
+          {
+            "inputTokens": 446,
+            "outputTokens": 171
+          },
+          {
+            "inputTokens": 491,
+            "outputTokens": 236
+          },
+          {
+            "inputTokens": 414,
+            "outputTokens": 173
+          }
+        ],
+        "steps": [
+          {
+            "channel": "draft",
+            "label": "draft",
+            "status": "completed",
+            "textSha256": "39a58498f9aa2a5ca4d8d8e84ad3b7e4c8d30b10bb8525deb0c0e4669680264b"
+          },
+          {
+            "channel": "draft",
+            "label": "review",
+            "status": "completed",
+            "textSha256": "39a58498f9aa2a5ca4d8d8e84ad3b7e4c8d30b10bb8525deb0c0e4669680264b"
+          },
+          {
+            "channel": "answer",
+            "label": "final",
+            "status": "completed",
+            "textSha256": "39a58498f9aa2a5ca4d8d8e84ad3b7e4c8d30b10bb8525deb0c0e4669680264b"
+          }
+        ]
+      }
+    ],
+    "restartPreservedRunsStepsEventsAndMessages": true,
+    "noReplayModelRequests": true
+  }
+}
