@@ -1,15 +1,33 @@
 ---
 title: OpenSprite Harness 架構提案
 documentType: architecture-proposal
-version: "0.3"
+version: "0.4"
 createdDate: "2026-10-19"
 lastUpdated: "2026-10-19"
-status: proposed
+status: implementation-in-progress
 ---
 
 # OpenSprite Harness 架構提案
 
 ## 1. 決策狀態與目標
+
+### 目前實作進度：桌面骨架 v0.1.0
+
+**階段 1 的首個 slice 已建立桌面骨架；不代表階段 1 全部完成。** Electron main 啟動私有 utility process Host，載入本機打包的 React 獨立視窗，提供狀態、錯誤／重試與停用的對話區。Windows 交付設定為目前使用者的 NSIS 安裝包、桌面／開始功能表捷徑，以及 `win-unpacked` 可執行目錄；目前是未簽署開發版。
+
+| 已固定的元件 | 版本／用途 |
+|---|---|
+| Electron | 44.9.0，隨包攜帶內嵌 Node.js 與 Chromium，使用者不用另裝 runtime |
+| React／React DOM | 19.3.1，獨立視窗中的 renderer |
+| TypeScript | 7.0.2，strict／ESM |
+| Fastify | 5.12.7，私有 loopback Host |
+| Vite | 8.3.4，本機 renderer bundle |
+| Ant Design／Icons | 6.6.6／6.3.4，狀態與介面元件 |
+| 套件與打包 | npm workspace、`package-lock.json`、electron-builder 26.15.3 |
+
+已落地的安全邊界：Host 僅綁 `127.0.0.1` 隨機 port；一次性 bootstrap token 經私有 IPC 傳遞，再交換記憶體 `HttpOnly`／`SameSite=Strict` cookie；窄 preload 僅提供版本／平台資訊；renderer 以 CSP 與請求攔截限制到自身 origin。main bootstrap 使用顯式 `node:http` agent 並設定 `proxyEnv: {}`；Chromium session 採 direct proxy 模式，Host 只繼承允許清單內的基本環境，不繼承代理、供應商 key 或 `NODE_OPTIONS`。
+
+**尚未建立模型、Session、SQLite、Outbound Broker 或工具。** `storage: not-initialized` 表示應用資料儲存尚未初始化；Electron 的 profile／session/cache 等桌面資料仍建立於 `.opensprite/desktop/`。本文以下長期架構中未列為已實作的功能仍屬規劃，不能當作現有功能或 OS 層網路隔離保證。命令、覆蓋範圍及待補驗證見 [本 slice 紀錄](../changes/2026-10-19-desktop-skeleton.md)。
 
 ### 已確認的要求
 
@@ -19,12 +37,12 @@ status: proposed
 - **第一版提供桌面應用程式：點 OpenSprite Harness 圖示即開啟獨立視窗，不開系統瀏覽器、不要求手動啟動 server 或輸入網址。**
 - 參考分析報告中的 Agent loop、工具流水線、Session 與 provider 分工，實作 OpenSprite Harness 的核心執行框架。
 - **不帶入任何向 DeepSeek／參考專案服務上傳的機制**；模型、搜尋、帳號、更新、diagnostics、analytics 等預設服務也不沿用。
-- 現在要交付架構與路線圖；本輪不實作產品、不安裝依賴、不 commit／push。
-- 規劃開始時確認 OpenSprite Harness checkout 只剩 .git，HEAD 為清空提交 ef23b354；目前新增的只有規劃文件，舊 checkout 架構不作為現行系統。
+- 使用者已授權從第一階段桌面骨架開始實作，測試通過後 commit／push；每個 slice 保留獨立紀錄。
+- 規劃開始時 checkout 只剩 .git，清空提交為 ef23b354；目前程式依本架構逐步建立，舊 checkout 架構不作為現行系統。
 
 ### 提議的產品範圍
 
-第一個版本為單一使用者、本機執行的桌面 coding-agent 工作台。建議以 Electron 攜帶 React 介面及私有 Host；先完成圖示啟動、獨立視窗、安裝包，再完成模型對話、受控工作區檔案操作、批准、取消、重開會話與失敗恢復。HTTP＋SSE 僅為桌面內部 transport，不代表使用者必須開瀏覽器。第一版不另交付獨立 browser 網頁版。
+第一個可用 Harness 為單一使用者、本機執行的桌面 coding-agent 工作台。已選定 Electron 攜帶 React 介面及私有 Host；先交付圖示啟動、獨立視窗、安裝包骨架，再完成模型對話、受控工作區檔案操作、批准、取消、重開會話與失敗恢復。目前 v0.1.0 只有骨架與狀態 API；HTTP 已實作、SSE 尚未加入，兩者皆為桌面內部 transport。第一版不另交付獨立 browser 網頁版。
 
 建議先以 Windows 為主要驗證平台，模組保留 Linux adapter 邊界。沒有通過實測的平台不得標示具有相同隔離保證。
 
@@ -55,12 +73,12 @@ Python 核心原先僅為討論備選；使用者已選 TypeScript，因此不�
 |---|---|---|
 | Runtime | Electron 固定版本所攜 Node.js runtime；開發 Node 另鎖相容版本 | Host／SQLite 必須在實際打包的 Electron utility process 測試，不依賴使用者安裝 Node |
 | Host | TypeScript strict、ESM、Fastify | HTTP schema 與序列化；不把 framework plugin 當產品權限模型 |
-| UI | React＋TypeScript＋Vite；建議 Ant Design | Ant Design 為提議，非已核准 UI 實作；字型／圖示與資源本機打包 |
+| UI | React＋TypeScript＋Vite＋Ant Design，已實作骨架 | 字型使用系統字型，圖示與資源本機打包 |
 | Contracts | 版本化 JSON Schema＋由同一來源產生 TS 型別 | 限可信編譯期 schema，不接受外部任意 schema 編譯執行 |
 | Persistence | SQLite，WAL＋foreign keys，關鍵提交使用 FULL durability 設定 | driver 依 Electron 內嵌 Node／native ABI、Windows 打包與維護狀態定案 |
 | API transport | 桌面 renderer 與私有 Host 的同源 HTTP commands＋SSE | 只綁 127.0.0.1 隨機 port；不開系統瀏覽器、不要求使用者操作網址 |
 | Tests | 單元／整合測試＋Playwright 重要使用流程 | 先 fake provider，真實 provider 僅顯式 opt-in |
-| Desktop | **第一版**，建議 Electron main＋窄 preload＋sandboxed React renderer | Host 使用受管理 utility process；Tauri 保留為未採用備選，避免現在另加 Rust／sidecar 工具鏈 |
+| Desktop | **第一版**，Electron main＋窄 preload＋sandboxed React renderer 已落地 | Host 使用受管理 utility process；不另加 Tauri／Rust／sidecar 工具鏈 |
 
 Fastify 官方提醒 schema 編譯屬應用程式碼，不應交給不可信使用者定義；因此契約只從版本庫打包載入。[官方文件](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/)
 
@@ -95,7 +113,7 @@ flowchart TD
 
 ### 3.1 第一階段目錄
 
-以下為提議目錄，尚未建立程式檔。先維持三個共用 workspace packages 與三個 apps，不把每個功能拆成獨立發布套件。
+以下是目標目錄。首個 slice 已建立 desktop、host、web、contracts 與相應的驗證／建置腳本；harness、platform 與各功能子目錄尚未建立。只在確實有責任要實作時才增加檔案，不為目標樹預先建立空模組。
 
 ```text
 apps/
@@ -405,7 +423,7 @@ CredentialStore 第一階段 memory-only；需要記住 key 時才加入獨立 O
 - HTML／Office／PDF viewer 延後至獨立安全設計；先純文字／Markdown／code／diff。
 - 無 crash-report sender、feedback uploader、DeepSeek 帳號或原產品更新 UI。
 
-Ant Design 提供 React／TypeScript 的基礎元件，作為提議的 UI 庫；不需要再同時引入第二套大型 UI。[官方介紹](https://ant.design/docs/react/introduce/)
+Ant Design 已作為桌面骨架的 UI 庫，不再同時引入第二套大型 UI。[官方介紹](https://ant.design/docs/react/introduce/)
 
 ## 11. 擴充次序
 
@@ -446,7 +464,7 @@ child 權限＝parent 可授予權限與 child preset 的交集；子代理不�
 - [Electron utilityProcess](https://www.electronjs.org/docs/latest/api/utility-process)
 - [Electron packaging](https://www.electronjs.org/docs/latest/tutorial/application-distribution)
 
-尚需在實作開始前鎖定：Electron／內嵌 Node 與開發工具版本、SQLite driver 與 native ABI、安裝打包工具、第一個實際模型 endpoint、是否需要持久憑證、Windows 任意工具程序隔離後端。這些未定項不妨礙本次架構提案，但不能被當成已實作或已通過測試。
+Electron、開發工具、npm 鎖檔與 Windows 打包工具已固定，詳見第 1 節。SQLite driver／native ABI、第一個實際模型 endpoint、持久憑證需求與 Windows 任意工具程序隔離後端仍待對應 slice 決定，不視為已實作或已通過測試。
 
 ## 13. 決策摘要
 
@@ -455,17 +473,19 @@ child 權限＝parent 可授予權限與 child preset 的交集；子代理不�
 | 正式產品名稱 OpenSprite Harness | 使用者已確認 |
 | TypeScript core＋React | 使用者已確認 |
 | 第一版獨立桌面視窗、圖示啟動、不開 browser | 使用者已確認 |
-| Electron main／preload／renderer＋私有 Host utility process | 本提案建議；選定版本與 ABI 待驗 |
+| Electron main／preload／renderer＋私有 Host utility process | 首個 slice 已實作，Electron 44.9.0；實測結果另記 |
 | 不向 DeepSeek／原服務傳送 | 使用者明確要求，不能當成可選預設 |
-| 單一本機 Host、SQLite、HTTP＋SSE、模組邊界 | 本提案建議，待審閱 |
+| 單一本機 Host、HTTP 與最小狀態 contracts | 首個 slice 已實作 |
+| SQLite、Session／Run、SSE、Outbound Broker | 仍為後續 slice，尚未實作 |
 | 先無任意 shell／MCP、無 Host 動態插件 | 為滿足出口要求的建議分期 |
-| Fastify／Vite／Ant Design | 工程建議，尚未安裝 |
-| 可執行產品、安全驗證、commit／push | 本輪沒有執行 |
+| Fastify／Vite／Ant Design | 已鎖版並用於目前骨架 |
+| 可執行產品、安全驗證、commit／push | 桌面骨架實作中；測試證據與提交狀態見本 slice 變更紀錄 |
 
 ## 14. 變更記錄
 
 | 版本 | 日期 | 內容 |
 |---|---|---|
+| 0.4 | 2026-10-19 | 記錄桌面骨架 v0.1.0 與已固定套件、私有認證、proxy 隔離；將已實作與後續架構分開 |
 | 0.3 | 2026-10-19 | 正式產品名稱統一為 OpenSprite Harness；保留儲存庫資料夾與 .opensprite 路徑 |
 | 0.2 | 2026-10-19 | 依使用者要求將桌面入口提前至第一版；補 Electron 邊界、內部認證、視窗／退出、安裝包與驗收 |
 | 0.1 | 2026-10-19 | TypeScript／React、單 Host、事件保存與出口政策初稿 |

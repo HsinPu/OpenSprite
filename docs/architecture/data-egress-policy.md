@@ -1,10 +1,10 @@
 ---
 title: OpenSprite Harness 資料外傳與權限政策提案
 documentType: architecture-policy-proposal
-version: "0.3"
+version: "0.4"
 createdDate: "2026-10-19"
 lastUpdated: "2026-10-19"
-status: proposed
+status: implementation-in-progress
 ---
 
 # 資料外傳與權限政策
@@ -15,7 +15,18 @@ status: proposed
 
 這包括對話、原始碼、工具參數／結果、Session events、路徑、附件、回饋、使用行為、硬體資訊、device/user id、crash report、帳號與更新檢查。禁止把原 sender 保留在預設 disabled 狀態，等待某次組合、fallback 或版本更新意外啟用。
 
-這是產品需求。以下條目是建議的實作政策，尚未實作／驗證。
+這是產品需求。以下條目保留完整目標政策；目前只有階段 1 首個 slice 的桌面骨架 v0.1.0，已實作部分見下節，不代表整份政策已驗收。
+
+### v0.1.0 已落地的桌面邊界
+
+- Electron 44.9.0 main 管理私有 utility process Host；React bundle、圖示、CSS 均由安裝包提供，沒有 CDN。
+- Host 綁 `127.0.0.1` 隨機 port，檢查 Host／Origin；private IPC 傳遞一次性 bootstrap token，交換 instance session cookie（`HttpOnly`／`SameSite=Strict`）。cookie 在獨立記憶體 session，沒有持久化 token。
+- renderer 啟用 sandbox、context isolation 與 CSP，只允許目前 Host origin；窄 preload 只有版本／平台資訊，IPC 驗 sender、主 frame 與 origin。任意導航、新視窗、下載與 Chromium 權限請求預設拒絕。
+- Chromium 使用 direct proxy 模式；main bootstrap 顯式使用 `node:http` agent 與 `proxyEnv: {}`，不經繼承的 proxy。Host 以基本環境允許清單啟動，不繼承 proxy、供應商 key、`NODE_OPTIONS` 或整份 `process.env`。
+- 沒有模型 adapter、Session／SQLite、Outbound Broker、任意 shell／MCP 或工具；也沒有 telemetry、uploader、feedback sender、outbox、原服務帳號與更新器。
+- Electron profile／session/cache／本機 crash dump 歸 `.opensprite/desktop/`；`storage: not-initialized` 是指應用資料儲存，不表示 Chromium 完全不寫桌面檔案。
+
+本 slice 的測試與證據範圍見 [桌面骨架變更紀錄](../changes/2026-10-19-desktop-skeleton.md)。不以應用層攔截或目前沒有 sender，推論已具備 OS／容器對全部程序的零網路強制保證。
 
 ### 完全不建立的部件
 
@@ -42,6 +53,8 @@ status: proposed
 產品畫面應顯示目前實際保障：哪些出口受 broker 控制、哪些程序受 OS 限制、哪些能力不可用。不能只用一個綠色 sandbox enabled 表達所有情況。
 
 ## 3. Outbound Broker
+
+**狀態：尚未實作。** v0.1.0 沒有模型或其他產品外部連線能力；本節是加入該能力前必須滿足的契約，不代表目前已有 broker 或 domain 拒絕清單執行器。
 
 ### 3.1 唯一網路入口
 
@@ -129,7 +142,7 @@ Adapter 不持有 EventStore 與 CredentialStore，不能直接讀檔或自行�
 
 ### 第一版桌面與 React 出口
 
-- 第一版即獨立桌面應用，建議 Electron；main、preload、renderer、Chromium network service 與 Host utility process 全部納入出口盤點，不只檢查 HTTP broker。
+- 第一版即獨立桌面應用，已採 Electron；main、preload、renderer、Chromium network service 與 Host utility process 全部納入出口盤點，不只檢查未來的 HTTP broker。
 - main 只為視窗／程序生命週期作受控本機連線，不直接呼叫 provider；bootstrap secret 經私有 IPC 與本機交換，不放 URL、argv、env、log 或 renderer。session cookie 為 instance-bound，使用獨立記憶體 session，不因 loopback 就省略認證。
 - renderer 只連自己的 Host；所有 scripts、fonts、images、icons、CSS 本機打包，無 CDN、analytics script。沒有啟動系統瀏覽器的應用流程，所有 runtime 隨安裝包附帶。
 - CSP connect-src 限同源；開發 HMR WebSocket 僅在 dev 配置明確開放。
@@ -160,6 +173,8 @@ Adapter 不持有 EventStore 與 CredentialStore，不能直接讀檔或自行�
 
 ### 分期
 
+目前 v0.1.0 尚無 provider key 輸入、CredentialStore 或持久憑證功能；以下從對話階段起逐步實作。
+
 1. 第一版 memory-only：每次 Host 啟動重新輸入，透過受保護本機 API 送到 Host；不持久化。
 2. 人類明確要求「記住」後，提議加 Windows Credential Manager／Linux Secret Service 的 CredentialStore adapter。
 3. vault unavailable／locked 時維持 memory-only 或提示解鎖；不退回 JSON／YAML 明文。
@@ -182,6 +197,8 @@ Credential reference 綁 provider＋正規化目的地；API 只提供 configure
 - Electron userData、sessionData、cache 與本機 crash dump 路徑亦由 PathResolver 統一指向 .opensprite 下的 desktop 區域，在建立對應 session／window 前設定；不讓 Electron 自建第二個產品資料根。認證 cookie 採非持久 session，provider key 不進 Chromium cache；啟用資料目錄權限與磁碟占用檢查。
 
 ## 7. 第一版驗收矩陣
+
+以下為完整可用 Harness 的目標矩陣；模型、Session、SQLite、工具與 OS runner 未加入的項目不得標為已通過。桌面骨架的實際驗證命令與結果另見 slice 紀錄。
 
 全部以受控本機測試端、假 DNS／mock transport 與測試憑證執行，不以真實 DeepSeek 服務作探測目標。
 
@@ -225,6 +242,7 @@ Credential reference 綁 provider＋正規化目的地；API 只提供 configure
 
 | 版本 | 日期 | 內容 |
 |---|---|---|
+| 0.4 | 2026-10-19 | 記錄桌面骨架 v0.1.0 已實作的本機認證與 renderer／proxy 邊界；明示無 broker、模型、工具與 OS 強制保證 |
 | 0.3 | 2026-10-19 | 正式產品名稱統一為 OpenSprite Harness；保留儲存庫資料夾與 .opensprite 路徑 |
 | 0.2 | 2026-10-19 | 第一版桌面入口：補 Electron 全程序出口、IPC／cookie、Chromium 路徑、打包與崩潰驗收；禁止原服務要求維持 |
 | 0.1 | 2026-10-19 | 初始外傳與權限政策 |

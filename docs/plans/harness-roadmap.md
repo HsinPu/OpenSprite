@@ -1,22 +1,24 @@
 ---
 title: OpenSprite Harness 分階段路線圖
 documentType: implementation-roadmap-proposal
-version: "0.3"
+version: "0.4"
 createdDate: "2026-10-19"
 lastUpdated: "2026-10-19"
-status: proposed
+status: implementation-in-progress
 ---
 
 # Harness 分階段路線圖
 
-這份路線圖配合 [架構提案](../architecture/harness-architecture.md) 與 [資料外傳政策](../architecture/data-egress-policy.md)。TypeScript＋React、第一版圖示啟動的獨立桌面視窗，以及禁止原服務傳送，已獲使用者確認；Electron 與其餘細節為建議工程方案。本輪只更新規劃，不開始產品實作或發布。
+這份路線圖配合 [架構提案](../architecture/harness-architecture.md) 與 [資料外傳政策](../architecture/data-egress-policy.md)。TypeScript＋React、第一版圖示啟動的獨立桌面視窗，以及禁止原服務傳送，已獲使用者確認。使用者已授權開始第一階段實作，測試通過後 commit／push。
+
+**目前進度：階段 1 首個 slice，桌面骨架 v0.1.0。** Electron、私有 Host、React 狀態介面與 Windows 打包設定已建立；完整階段 1 仍缺 SQLite、正式產品事件與 Outbound Broker 等後續 slice。驗證紀錄見 [桌面骨架](../changes/2026-10-19-desktop-skeleton.md)，不能以這個骨架宣稱完整 Harness 已可對話或執行工具。
 
 ## 1. 第一個可用版本
 
 第一個可用版本包含階段 1–4：
 
 - **安裝後點 OpenSprite Harness 圖示，直接開啟獨立桌面視窗；不需開瀏覽器、終端或手動輸入 localhost 網址。**
-- Electron 桌面外殼（建議選型）＋React 工作台＋私有 TypeScript Host；隨包攜帶執行環境。
+- Electron 桌面外殼＋React 工作台＋私有 TypeScript Host；隨包攜帶執行環境，已由首個 slice 開始落地。
 - 人類明確設定的 loopback model，之後才加入經批准的其他遠端 provider。
 - 多 Session、單 Session 單 Run、串流、停止、錯誤及重連。
 - 工作區受控讀取／搜尋與批准後 apply_patch。
@@ -30,8 +32,8 @@ status: proposed
 
 | 階段 | 交付成果 | 外部依賴 | 主要完成門檻 |
 |---|---|---|---|
-| 0：規劃與定案 | 本次文件、關鍵決策表 | 無應用執行 | TS／React、第一版桌面入口與禁止原服務要求已記錄 |
-| 1：桌面骨架、安裝包與出口 | Electron、Host、React、contracts、SQLite、私有認證、Windows 安裝包／圖示 | mock transport、打包 runtime | 點圖示即獨立視窗；不開 browser；無 provider 時無自動外連；第二次啟動喚回視窗 |
+| 0：規劃與定案 | 文件與關鍵決策表，已完成初稿 | 無應用執行 | TS／React、第一版桌面入口與禁止原服務要求已記錄 |
+| 1：桌面骨架、安裝包與出口 | 首個 slice 為 v0.1.0 桌面／Host／React／contracts／私有認證／Windows 打包；SQLite 與 broker 待續 | mock transport、打包 runtime | 點圖示即獨立視窗；不開 browser；無 provider 時無自動外連；第二次啟動喚回視窗；完整門檻見第 4 節 |
 | 2：單 Agent 對話 | loopback adapter、stream、cancel、Session UI | 人類設定的本機模型 | 可控 server 驗 request body；重連不重跑；取消不偷偷重試 |
 | 3：檔案工具與批准 | read/search/propose/apply patch、工具紀錄 | 已核准工作區 | 越界／secret path 拒絕，批准綁參數與 hash；無任意執行 |
 | 4：恢復與上下文 | interrupted／unknown outcome、snapshot、spill、backup、完整桌面打包驗收 | 本機 SQLite／files | crash／退出／重啟不重做未知操作；乾淨帳號安裝可用 |
@@ -43,27 +45,45 @@ status: proposed
 
 階段 5 與 6 是第一版完成後的優先序，不是彼此的技術強依賴。OS runner 未就緒時，階段 5 保持 unavailable；階段 6 仍可在原有受控內建工具範圍內獨立進行，不得讓 child 取得未驗證的任意程序能力。
 
-## 3. 階段 0：本次交付
+## 3. 階段 0：規劃與已確認選型
 
-目前已完成規劃文件，尚未執行其產品測試。
+規劃初稿已完成；本次依首個 slice 更新已採用的選型，不將未實作的目標當作現況。
 
 | 決策 | 狀態 | 影響 |
 |---|---|---|
 | 正式產品名稱 OpenSprite Harness | 使用者已確認 | 視窗、圖示、安裝包與文件一致 |
 | TypeScript＋React | 使用者已確認 | 不建立 Python 核心 |
 | 第一版圖示啟動的獨立桌面視窗 | 使用者已確認 | 不依賴系統瀏覽器；桌面打包列為首版 gate |
-| Electron＋utility process Host | 本次建議 | 先驗內嵌 Node／SQLite ABI 與打包內容 |
+| Electron＋utility process Host | 首個 slice 已採用，Electron 44.9.0 | 隨包攜帶 runtime；SQLite driver／ABI 仍待後續決定 |
 | 不包含原服務傳送機制 | 使用者明確要求 | 無 DeepSeek provider／telemetry sender／fallback |
-| 本機單人 Host | 建議，待審閱 | 暫不做公開遠端、多租戶 |
+| 本機單人 Host | 首個 slice 已實作私有 loopback Host | 不做公開遠端、多租戶 |
 | SQLite canonical events | 建議，待審閱 | 單 writer、事件與 projection 同交易 |
-| Fastify／Vite／Ant Design | 建議，待審閱 | 實作前鎖定版本與相容性 |
+| Fastify／Vite／Ant Design | 已採用 5.12.7／8.3.4／6.6.6 | 搭配 React 19.3.1、TypeScript 7.0.2 與 npm 鎖檔 |
 | memory-only credentials | 建議的首期方案 | 需要記住時另做 vault，不落明文 |
 | 任意 shell 延後 | 建議的安全分期 | 第一版不能自動跑 build/test |
-| Windows-first | 建議，待審閱 | Linux 另驗，不能宣稱等同保證 |
+| Windows-first | 本次首個 slice 的交付平台 | Linux 另驗，不能宣稱等同保證 |
 
 技術未定項在對應階段前決定，不要求為了開始空白骨架而一次決定全部擴充。
 
 ## 4. 階段 1：桌面骨架、安裝包與出口政策
+
+### 首個 slice：桌面骨架 v0.1.0
+
+本次只處理下列範圍：
+
+- npm workspace、strict TypeScript／ESM、固定套件版本與 `package-lock.json`。
+- Electron main／窄 preload／sandboxed renderer、受管理 Host utility process 與同源狀態 API。
+- `127.0.0.1` 隨機 port、private IPC 一次性 token、記憶體 `HttpOnly`／`SameSite=Strict` cookie、Host／Origin／IPC sender 檢查。
+- main bootstrap 直接本機 HTTP agent（`proxyEnv: {}`）、Chromium direct proxy、Host 環境允許清單；不繼承代理、金鑰或 `NODE_OPTIONS`。
+- React 載入／成功／失敗／重試、實際未設定狀態、停用的對話區；無假對話與可執行工具。
+- 自有圖示、Windows per-user NSIS 安裝包、桌面／開始功能表捷徑、完整 `win-unpacked` 目錄；未簽署開發版。
+- single instance、關窗退出、Host 關閉、失敗顯示與對應的安全／程序測試。
+
+本次不建立模型 adapter、Session／Run、SQLite、SSE、Outbound Broker、CredentialStore、檔案／shell／MCP 工具。`storage: not-initialized` 為應用資料尚未初始化；Electron 桌面 profile／cache 仍保存在 `.opensprite/desktop/`。
+
+開發與驗證入口：`npm ci`、`npm run typecheck`、`npm test`、`npm run test:desktop`、`npm start`、`npm run package:win`、`npm run dist:win`。一般使用者雙擊安裝包、再點桌面圖示即可；只有開發者需要 Node.js／npm。實際執行結果見本 slice 紀錄，由執行證據判定，不能從命令存在推論通過。
+
+下列「要交付」與「驗收」仍是**完整階段 1** 的目標，未在本 slice 實作的部分保留為待辦。
 
 ### 要交付
 
@@ -90,7 +110,7 @@ status: proposed
 - 安裝、重裝／升級與解除安裝不默默刪使用者 .opensprite；清除資料需明確人類選擇與範圍確認。安裝包完整性／簽章狀態明示。
 - 絕不為驗 P03 連真 DeepSeek；使用 mock transport／fake DNS。
 
-進階段 1 前需確定 Electron／內嵌 Node、開發 Node、SQLite driver／ABI、打包工具、套件管理器與具體版本，因為本階段已交付桌面骨架與安裝包。這些是可審查的工程選型，不在規劃中安裝。
+Electron、開發 Node 範圍、npm、打包工具與套件版本已固定。SQLite driver／ABI 在加入持久事件的 slice 前選定並驗證；目前未因使用 Electron utility process 就推論 SQLite 可打包或任意程序已隔離。
 
 ## 5. 階段 2：單 Agent 模型對話
 
@@ -218,32 +238,35 @@ status: proposed
 3. 實作並跑相關測試、typecheck／build；UI 變動要實際啟動檢查。
 4. 依影響補出口、憑證、取消與恢復的最小驗證。
 5. 在 docs/changes 記錄成果、限制與實際執行命令，不能以「有測試檔」宣稱通過。
-6. 一個可獨立審查的 slice 再提交；commit／push 僅在後續使用者授權的工作中執行。
+6. 一個可獨立審查的 slice 再提交；本次使用者已授權在確認測試通過後 commit／push。
 
-不為純文字規劃修改建立實作鏡像測試。本次只驗證文件連結、內容一致性與 Git diff。
+純文件更新檢查連結、內容一致性與 Git diff；實作 slice 另外執行其行為、安全與打包驗證，詳細結果寫入對應紀錄。
 
-## 12. 本次完成與待辦
+## 12. 目前實作與待辦
 
 已交付：
 
 - TypeScript／React 架構圖與模組邊界。
-- 第一版桌面入口、Electron 程序邊界、私有 Host、啟動／退出與安裝包規劃。
+- 桌面骨架 v0.1.0：第一版桌面入口、Electron 程序邊界、私有 Host、狀態畫面與 Windows 安裝包設定。
 - Session／Run／Step／Attempt、工具批准與恢復規則。
 - 明確禁止原服務的出口政策，以及應用層與 OS enforcement 的差別。
 - 分階段交付與驗收條件。
 
-尚未進行：
+後續待辦：
 
-- 建立應用 scaffold、安裝依賴或選定真實模型。
-- 執行任何產品功能／封包驗證。
-- commit／push 規劃文件。
+- 資料根單 writer／SQLite migrations、canonical events 與 projection transaction。
+- Outbound Broker 的固定 purpose、空允許清單、原服務拒絕與受控連線測試。
+- 模型／Session／Run／SSE、受控檔案工具與批准，依階段 2–4 分別交付。
+- 乾淨 Windows 帳號的完整安裝／升級／解除安裝與後續第一個可用 Harness 流程驗收。
+- OS／容器強制出口及任意程序工具，不在目前桌面骨架的保證內。
 
-下一步建議：先審閱本方案的單一 Host、SQLite 與第一版功能範圍，再把階段 1 拆成第一個實作 slice。開始實作時重新確認依賴與環境，不把本次文件當作執行期安全證據。
+本次測試、打包與提交狀態以 [桌面骨架變更紀錄](../changes/2026-10-19-desktop-skeleton.md) 為準。下一個 slice 在開始前選定單一目標與驗收，不把規劃中的能力當作已存在。
 
 ## 13. 變更記錄
 
 | 版本 | 日期 | 內容 |
 |---|---|---|
+| 0.4 | 2026-10-19 | 開始階段 1 首個 slice：桌面骨架 v0.1.0；記錄已採選型與命令、Windows 安裝設定，以及尚未完成的 SQLite／broker／工具範圍 |
 | 0.3 | 2026-10-19 | 正式產品名稱統一為 OpenSprite Harness；保留儲存庫資料夾與 .opensprite 路徑 |
 | 0.2 | 2026-10-19 | 桌面外殼、私有 Host、Windows 安裝包／圖示與打包驗收移入階段 1，第一版不需 browser |
 | 0.1 | 2026-10-19 | 初始 Harness 分期與驗收 |

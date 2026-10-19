@@ -1,0 +1,75 @@
+{
+  "name": "opensprite-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local desktop AI agent harness",
+  "productName": "OpenSprite Harness",
+  "main": "dist/apps/desktop/src/main.js",
+  "engines": {
+    "node": ">=24.15.0 <27"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node --import tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:desktop": "npm run build && playwright test",
+    "start": "npm run build && electron .",
+    "start:built": "electron .",
+    "package:win": "npm run build && electron-builder --win --dir",
+    "dist:win": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "antd": "6.6.6",
+    "@ant-design/icons": "6.3.4",
+    "fastify": "5.12.7",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  },
+  "build": {
+    "appId": "org.opensprite.harness",
+    "productName": "OpenSprite Harness",
+    "directories": {
+      "output": "release",
+      "buildResources": "apps/desktop/packaging"
+    },
+    "files": [
+      "dist/**/*",
+      "apps/desktop/packaging/icon.ico",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": "nsis",
+      "icon": "apps/desktop/packaging/icon.ico",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenSprite Harness",
+      "deleteAppDataOnUninstall": false
+    },
+    "artifactName": "OpenSprite-Harness-${version}-Setup.${ext}",
+    "publish": null
+  }
+}
